@@ -23,6 +23,7 @@ from forkserve.planner import (
     NGramResidual,
     PrefillChunk,
     SpeculatePlanner,
+    grammar_branches,
 )
 from forkserve.retention import RetentionManager
 from forkserve.router import TreeStickyRouter
@@ -95,9 +96,7 @@ class Engine:
         root = tree.open_root(tok)
         self.metrics[sid] = SessionMetrics()
         if prefill:
-            self.backend.prefill(
-                PrefillRequest(sid, root.id, tok, speculative=False, page_ids=())
-            )
+            self._issue_prefill(tree, root.id, tok, speculative=False)
             self.metrics[sid].committed_tokens += len(tok)
         return SessionHandle(id=sid, root=root.id, tip=root.id, tenant=tenant)
 
@@ -114,7 +113,9 @@ class Engine:
         tree = self.forest.get(SessionId(str(session)))
         known = self._tok(known_suffix)
         # Security: wrappers may carry placeholders; args are a later residual.
+        parent_node = tree.get(parent)
         node = tree.fork(parent, BranchId(bid), known)
+        self.priors.observe(str(parent_node.branch_id), str(bid))
         self.metrics[tree.session].forks += 1
         place = self.router.place_fork(tree.session, len(known), speculative=True)
         node.worker = int(place.worker)
@@ -191,6 +192,48 @@ class Engine:
             self.metrics[tree.session].speculates += 1
         return plan.chunks
 
+    def speculate_from_grammar(
+        self,
+        session: SessionId | str,
+        parent: NodeId,
+        masses: dict[str, float],
+        wrappers: dict[str, TokenSeq | str],
+        generic_wrapper: TokenSeq | str = (),
+        *,
+        t_idle_ms: float,
+    ) -> list[PrefillChunk]:
+        """Logprob / constrained-decoding mass: fork top-m wrappers, collapse the rest."""
+        tok_wrap = {k: self._tok(v) for k, v in wrappers.items()}
+        raw = grammar_branches(
+            masses,
+            tok_wrap,
+            self._tok(generic_wrapper),
+            top_m=self.config.grammar_top_m,
+        )
+        cands: list[Candidate] = []
+        for cand in raw:
+            nid = self.fork(session, parent, str(cand.branch_id), cand.known)
+            cand.node_id = nid
+            cands.append(cand)
+        return self.speculate_set(session, parent, cands, t_idle_ms=t_idle_ms)
+
+    def fork_context_xform(
+        self,
+        session: SessionId | str,
+        summary: TokenSeq | str,
+        *,
+        speculate: bool = True,
+        t_idle_ms: float = 1e9,
+    ) -> NodeId:
+        """Context transform as an extra child of the root; the spine stays abortable."""
+        tree = self.forest.get(SessionId(str(session)))
+        if tree.root is None:
+            raise InvariantError("empty session")
+        nid = self.fork(session, tree.root, "xform", summary, speculate=False)
+        if speculate:
+            self.speculate(session, nid, t_idle_ms=t_idle_ms)
+        return nid
+
     def commit(
         self,
         session: SessionId | str,
@@ -223,12 +266,12 @@ class Engine:
                     tenant=tree.tenant,
                 )
             )
-            self.backend.prefill(
-                PrefillRequest(
-                    tree.session, result.winner, result.tail, speculative=False, page_ids=()
-                )
-            )
+            self._issue_prefill(tree, result.winner, result.tail, speculative=False)
             self.metrics[tree.session].committed_tokens += len(result.tail)
+
+        winner = tree.get(result.winner)
+        self.ngrams.observe(str(winner.branch_id), winner.residual)
+        self.priors.observe(str(tree.get(parent).branch_id), str(winner.branch_id))
 
         ttft = (monotonic() - t0) * 1000.0
         # Plus residual prefill time already paid on the critical path only.
@@ -267,11 +310,7 @@ class Engine:
             parent=parent,
         )
         if result.tail:
-            self.backend.prefill(
-                PrefillRequest(
-                    tree.session, result.node_id, result.tail, speculative=False, page_ids=()
-                )
-            )
+            self._issue_prefill(tree, result.node_id, result.tail, speculative=False)
         self.metrics[tree.session].joins += 1
         return result
 
@@ -304,10 +343,26 @@ class Engine:
         tip = tree.get(tree.tip)
         if tip.mode is NodeMode.SPEC:
             raise InvariantError("refuse to sample a speculative node")
-        # Drain leftover budget into speculative chunks (decode slack, Insight 3).
+        # Committed decode takes token budget first; leftover is speculative slack.
+        self.scheduler.submit_committed(
+            CommittedJob(
+                session=tree.session,
+                node_id=tip.id,
+                tokens=n_tokens,
+                kind="decode",
+                slo_tokens_per_s=1000.0 / max(self.config.tbt_slo_ms, 1e-3),
+                tenant=tree.tenant,
+            )
+        )
         self.drain_slack()
         req = DecodeRequest(tree.session, tip.id, n_tokens, seed=seed)
-        out = self.backend.decode(req)
+        # vLLM (and other real engines) need the committed prompt; MockBackend
+        # can decode from a node id alone.
+        gen = getattr(self.backend, "generate_committed", None)
+        if callable(gen):
+            out = gen(tip.tokens, n_tokens, seed=seed)
+        else:
+            out = self.backend.decode(req)
         if out:
             tree.append_tokens(tip.id, tuple(out), committed=True)
             self.metrics[tree.session].committed_tokens += len(out)
@@ -329,11 +384,7 @@ class Engine:
             extra = chunk.tokens
             if chunk.kind is WorkKind.OBS_RESIDUAL:
                 tree.append_tokens(node.id, extra, committed=False)
-            self.backend.prefill(
-                PrefillRequest(
-                    chunk.session, node.id, extra, speculative=True, page_ids=()
-                )
-            )
+            self._issue_prefill(tree, node.id, extra, speculative=True)
             self.metrics[chunk.session].spec_tokens += len(extra)
             ran += len(extra)
         return ran
@@ -350,6 +401,27 @@ class Engine:
 
     def tree(self, session: SessionId | str) -> ContextTree:
         return self.forest.get(SessionId(str(session)))
+
+    def _issue_prefill(
+        self,
+        tree: ContextTree,
+        nid: NodeId,
+        tokens: TokenSeq,
+        *,
+        speculative: bool,
+    ) -> None:
+        node = tree.get(nid)
+        page_ids = tuple(int(p) for p in tree.pool.walk_pages(node.table, len(node.tokens)))
+        self.backend.prefill(
+            PrefillRequest(
+                tree.session,
+                nid,
+                tokens,
+                speculative,
+                page_ids,
+                full_prompt=node.tokens,
+            )
+        )
 
     def _tok(self, value: TokenSeq | str | None) -> TokenSeq:
         if value is None:

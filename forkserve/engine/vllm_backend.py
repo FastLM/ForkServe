@@ -1,12 +1,9 @@
-"""Optional vLLM v0.11 adapter.
+"""Optional vLLM adapter.
 
-The paper's engine delta (~4.8K LoC) lives inside vLLM's block manager and
-continuous batcher. This module is the *integration seam*: we tag requests
-Spec vs Commit, reuse vLLM's block-copy CUDA path for CoW rows, and pack
-leftover token budget with Algorithm 1 chunks.
-
-We do not vendor vLLM. When the extra is installed we talk to the public
-``LLMEngine`` / ``TokensPrompt`` surface and keep page identity in ForkServe.
+The paper's engine delta lives inside vLLM's block manager and continuous
+batcher. This module is the public-API seam: ForkServe owns page identity,
+admission, and the branch tree; vLLM owns kernels. Speculative 1-token
+warmups are never surfaced (Theorem 2).
 """
 
 from __future__ import annotations
@@ -46,10 +43,12 @@ class VllmBackend:
     max_model_len: int = 32768
     gpu_memory_utilization: float = 0.90
     enable_prefix_caching: bool = True
+    enforce_eager: bool = False
     _llm: Any = field(init=False, default=None)
     _SamplingParams: Any = field(init=False, default=None)
     _TokensPrompt: Any = field(init=False, default=None)
     pool: PagePool = field(init=False)
+    _prompts: dict[NodeId, list[int]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         vllm, LLM, SamplingParams, TokensPrompt = _try_import_vllm()
@@ -64,10 +63,12 @@ class VllmBackend:
             enable_prefix_caching=self.enable_prefix_caching,
             enable_chunked_prefill=True,
             max_num_batched_tokens=self.config.max_batched_tokens,
+            enforce_eager=self.enforce_eager,
         )
         # CoW identity is tracked here; kernels still go through vLLM pages.
         self.pool = PagePool(self.config, TokenKvStore())
         self._tokenizer = self._llm.get_tokenizer()
+        self._prompts = {}
 
     def tokenize(self, text: str) -> TokenSeq:
         ids = self._tokenizer.encode(text, add_special_tokens=False)
@@ -77,26 +78,24 @@ class VllmBackend:
         return self._tokenizer.decode(list(tokens))
 
     def prefill(self, req: PrefillRequest) -> float:
-        """Force a prefill-only step (max_tokens=0) so KV is warmed."""
+        """Warm KV via a 1-token generate. The extra token is discarded."""
         t0 = perf_counter()
+        seq = list(req.full_prompt) if req.full_prompt else (
+            list(self._prompts.get(req.node_id, [])) + list(req.tokens)
+        )
+        self._prompts[req.node_id] = seq
         params = self._SamplingParams(max_tokens=1, temperature=0.0)
-        prompt = self._TokensPrompt(prompt_token_ids=list(req.tokens))
-        # A 1-token decode is the cheapest public way to materialize KV.
-        # Speculative jobs must never surface this token (Theorem 2).
+        prompt = self._TokensPrompt(prompt_token_ids=seq)
         _ = self._llm.generate([prompt], params, use_tqdm=False)
         return (perf_counter() - t0) * 1000.0
 
     def decode(self, req: DecodeRequest) -> list[TokenId]:
-        params = self._SamplingParams(
-            max_tokens=req.n_tokens,
-            temperature=0.0,
-            seed=req.seed,
-        )
-        # Caller is responsible for passing the full committed sequence via
-        # a side channel; the Engine class does this from the tree.
-        raise RuntimeError("use Engine.generate() — decode needs the committed prompt")
+        seq = tuple(self._prompts.get(req.node_id, ()))
+        return self.generate_committed(seq, req.n_tokens, seed=req.seed)
 
-    def generate_committed(self, tokens: TokenSeq, max_tokens: int, seed: int | None = None) -> list[TokenId]:
+    def generate_committed(
+        self, tokens: TokenSeq, max_tokens: int, seed: int | None = None
+    ) -> list[TokenId]:
         params = self._SamplingParams(
             max_tokens=max_tokens,
             temperature=0.0,
@@ -126,6 +125,7 @@ class VllmBackend:
                     tokens=s.tokens,
                     speculative=True,
                     page_ids=(),
+                    full_prompt=s.tokens,
                 )
             )
             n += len(s.tokens)

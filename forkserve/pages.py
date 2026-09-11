@@ -143,27 +143,31 @@ class PagePool:
 
     def cow_if_needed(self, pid: PageId, owner: NodeId) -> PageId:
         """Write path: if shared or ro, copy valid tail rows into a fresh page."""
+        self.reload([pid])
         page = self._pages[pid]
         if page.ref == 1 and not page.ro:
             page.owner = owner
             return pid
         new_id = self.alloc_page(owner, tenant=page.tenant)
         new_page = self._pages[new_id]
-        if page.handle is not None:
-            new_page.handle = self.store.copy_rows(page.handle, page.n_valid)
+        src = self._resident_handle(page)
+        if src is not None:
+            new_page.handle = self.store.copy_rows(src, page.n_valid)
         new_page.n_valid = page.n_valid
         self.decref(pid)
         return new_id
 
     def split_at(self, pid: PageId, keep_valid: int, owner: NodeId) -> PageId:
         """Mid-page LCP split (§6.4): siblings keep the speculative tail."""
+        self.reload([pid])
         page = self._pages[pid]
         if keep_valid >= page.n_valid and page.ref == 1 and not page.ro:
             return pid
         new_id = self.alloc_page(owner, tenant=page.tenant)
         new_page = self._pages[new_id]
-        if page.handle is not None:
-            new_page.handle = self.store.copy_rows(page.handle, keep_valid)
+        src = self._resident_handle(page)
+        if src is not None:
+            new_page.handle = self.store.copy_rows(src, keep_valid)
         new_page.n_valid = keep_valid
         self.decref(pid)
         return new_id
@@ -172,8 +176,40 @@ class PagePool:
         page = self._pages[pid]
         if page.handle is None:
             raise RuntimeError(f"write to freed page {pid}")
-        self.store.write(page.handle, tokens, offset)
+        handle = self._resident_handle(page)
+        self.store.write(handle, tokens, offset)
         page.n_valid = max(page.n_valid, offset + len(tokens))
+
+    def offload(self, pids: Iterable[PageId]) -> int:
+        """Park residual handles in DRAM. Trunk pages pinned ``ro`` stay in HBM."""
+        n = 0
+        for pid in pids:
+            page = self._pages.get(pid)
+            if page is None or page.handle is None or page.ro:
+                continue
+            if isinstance(page.handle, tuple) and page.handle and page.handle[0] == "dram":
+                continue
+            page.handle = ("dram", page.handle)
+            n += 1
+        return n
+
+    def reload(self, pids: Iterable[PageId]) -> int:
+        n = 0
+        for pid in pids:
+            page = self._pages.get(pid)
+            if page is None:
+                continue
+            if isinstance(page.handle, tuple) and page.handle and page.handle[0] == "dram":
+                page.handle = page.handle[1]
+                n += 1
+        return n
+
+    @staticmethod
+    def _resident_handle(page: PhysicalPage) -> object:
+        handle = page.handle
+        if isinstance(handle, tuple) and handle and handle[0] == "dram":
+            return handle[1]
+        return handle
 
     def walk_pages(self, table: LogicalTable, length: int) -> list[PageId]:
         """Materialize the page-id spine for attention over ``length`` tokens."""

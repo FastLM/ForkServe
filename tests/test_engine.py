@@ -52,3 +52,52 @@ def test_fanout_cow_memory(eng: Engine) -> None:
     assert live == trunk + extra
     # clone would be 4*trunk + extra
     assert live < 2 * trunk
+
+
+def test_prior_and_ngram_observe_on_fork_commit(eng: Engine) -> None:
+    h = eng.open("trunk history")
+    wrap = "<tool_response>\n"
+    happy = eng.fork(h.id, h.tip, "bash", wrap)
+    eng.speculate(h.id, happy, t_idle_ms=1000)
+    eng.drain_slack()
+    eng.commit(h.id, h.tip, wrap + '{"ok": true}', preferred_bid="bash")
+    mass = eng.priors.mass("root", ["bash", "err"])
+    assert mass["bash"] > mass["err"]
+    guessed = eng.ngrams.predict("bash")
+    assert guessed  # observed the committed residual
+
+
+def test_grammar_forks_materialize_nodes(eng: Engine) -> None:
+    h = eng.open("trunk")
+    chunks = eng.speculate_from_grammar(
+        h.id,
+        h.tip,
+        {"bash": 0.7, "edit": 0.2, "search": 0.1},
+        {"bash": "<tool_response>\n", "edit": "<edit>\n", "search": "<search>\n"},
+        generic_wrapper="<other>\n",
+        t_idle_ms=5000,
+    )
+    assert chunks
+    assert all(c.node_id is not None for c in chunks)
+    tree = eng.tree(h.id)
+    kids = tree.children_of(h.tip)
+    assert len(kids) >= 3
+
+
+def test_generate_charges_committed_budget(eng: Engine) -> None:
+    h = eng.open("trunk")
+    happy = eng.fork(h.id, h.tip, "bash", "wrap ")
+    eng.speculate(h.id, happy, t_idle_ms=1e9)
+    # Saturate the tick with committed decode so spec is not admitted this tick.
+    eng.config.max_batched_tokens = 4
+    out = eng.generate(h.id, 4)
+    assert out
+    assert eng.scheduler.pending_spec_tokens() > 0
+
+
+def test_context_xform_forks_from_root(eng: Engine) -> None:
+    h = eng.open("long trunk tokens here")
+    xform = eng.fork_context_xform(h.id, "summary of trunk", speculate=False)
+    tree = eng.tree(h.id)
+    assert tree.get(xform).parent == tree.root
+    assert tree.get(h.tip).mode is not NodeMode.DEAD

@@ -1,42 +1,30 @@
 # ForkServe
 
-Branch-aware speculative prefilling and copy-on-write KV state for agentic LLM serving.
+**Branch-aware speculative prefilling and copy-on-write KV state for agentic LLM serving.**
 
-The next LLM call in a production agent is almost never unique. A ReAct step chooses among tools; a planner fans out to specialists; Tree-of-Thoughts expands siblings. Those branches share a long trunk and differ in a short residual. ForkServe makes the **branch** the first-class serving object.
+Dong Liu, Chuan Wu, and contributors
+
+Production agents do not issue a unique next prompt. A ReAct step chooses among tools, a planner fans out to specialists, Tree-of-Thoughts expands siblings, a failed call opens recovery. Those branches share a long trunk and differ in a short residual, yet engines still recompute the trunk, serialize the fan-out, or wait until the chosen child is fully known before prefilling.
+
+ForkServe makes the **branch** the first-class serving object: a forkable context tree, speculative prefill of known suffixes (and, when profitable, observation residuals), and a two-class scheduler that spends only idle GPU cycles.
 
 ```
-harness  --open/fork/speculate/commit/join/abort-->  Engine
-                                                       ├─ SpeculatePlanner   Algorithm 1
-                                                       ├─ TwoClassScheduler  committed ≻ spec
-                                                       ├─ ContextTree + CoW pages
-                                                       └─ LCP commit (Theorem 2)
+harness  -- open / fork / speculate / commit / join / abort -->  Engine
+                                                                  ├─ SpeculatePlanner     Algorithm 1
+                                                                  ├─ TwoClassScheduler    committed ≻ spec
+                                                                  ├─ ContextTree + CoW    Definition 1
+                                                                  └─ LCP commit           Theorem 2
 ```
 
-## What is implemented
+`commit` is the only verb on the critical path of user-visible tokens. Speculative KV is an input-side cache: decode attends only to the committed sequence. No speculative output token is ever shown or fed back.
 
-| Paper | Code |
-|---|---|
-| Definition 1 context tree | `forkserve/tree.py` |
-| CoW pages, Lemma 3 abort cost, Eq. (3) | `forkserve/pages.py` |
-| Algorithm 1 + Eq. (4)(5) + Prop. 1 | `forkserve/planner.py` |
-| LCP commit, Theorem 2 | `forkserve/commit.py` |
-| Two-class token budget Eq. (6)(7) | `forkserve/scheduler.py` |
-| Node TTL Eq. (1), leaf idleness Eq. (2) | `forkserve/retention.py` |
-| Tree-sticky routing + residual steal | `forkserve/router.py` |
-| Join scaffolds | `forkserve/join.py` |
-| ReAct / LangGraph / OpenHands / ToT | `forkserve/adapters/` |
-| vLLM seam (optional extra) | `forkserve/engine/vllm_backend.py` |
+## Mechanisms
 
-Correctness is by construction: speculative KV is an input-side cache. Decode of committed tokens uses only KV that matches the committed token sequence. No speculative output token is ever shown or fed back.
+1. **Forkable CoW tree.** `fork` aliases parent pages in O(1). Writes allocate residual pages. Abort cost is residual-only, independent of trunk length. Join reuses the shared trunk plus a scaffold; unused children die at residual cost.
 
-## Install
+2. **Speculative prefill.** During tool idle and decode slack, admit work that maximizes expected TTFT reduction subject to idle horizon, residual HBM, and committed TBT margin. Known suffixes (`p=1`) starve guessed residuals (`p<1`). Candidates come from the harness, constrained-decoding mass (top-`m`), and a session-local prior that never invents a branch id.
 
-```bash
-pip install -e ".[dev]"
-pytest -q
-```
-
-vLLM is optional (`pip install -e ".[vllm]"`). The core algorithms and adapters run on the mock backend without a GPU.
+3. **Two-class schedule.** Committed decode / commit-tail / root prefill take token budget first. Speculative chunks fill the remainder, are preemptible at `C_spec`, and are cancelled on generation mismatch. Under saturation `B^s_t = 0`: retention + CoW fan-out only.
 
 ## API
 
@@ -51,26 +39,56 @@ happy = eng.fork(h.id, h.tip, "bash", wrap)   # p = 1 known suffix
 fail  = eng.fork(h.id, h.tip, "err", recov)
 eng.speculate(h.id, happy, t_idle_ms=2900)
 eng.speculate(h.id, fail, priority=0.2, t_idle_ms=2900)
-eng.drain_slack()                            # leftover SM / tool pause
+eng.drain_slack()
 
 cr = eng.commit(h.id, h.tip, wrap + observation)  # LCP binds
-eng.generate(h.id, 128)                      # committed decode only
+eng.generate(h.id, 128)                            # committed decode only
 ```
 
-`commit` is the only verb on the critical path of user-visible tokens.
+Harness adapters lower ReAct, LangGraph `Send`, OpenHands / SWE, and Tree-of-Thoughts onto these verbs. They announce structure; they do not rewrite prompts.
 
-## Design principles (paper §4.3)
+## Paper → code
 
-1. **Correctness by construction** — speculation never enters the sampler.
-2. **Known before guessed** — p=1 suffixes starve p<1 residuals.
-3. **Misses cost residual, not trunk** — CoW is what makes multi-child speculation rational.
-4. **Speculation is slack, not load** — under saturation `B^s_t = 0` and the system degrades to retention + CoW fan-out.
-5. **No workflow oracle** — branch ids and known suffixes come from the harness at the moment they exist.
+| Paper | Code |
+|---|---|
+| Definition 1 context tree, prefix / spec-isolation invariants | `forkserve/tree.py` |
+| CoW pages, abort cost, \(M_\mathrm{CoW} = b(L+\sum \ell_i)\) | `forkserve/pages.py` |
+| Algorithm 1, \(G(w)\) / \(C(w)\), Proposition 1, grammar + prior + n-gram | `forkserve/planner.py` |
+| LCP commit, Theorem 2 (output identity) | `forkserve/commit.py` |
+| \(B^c_t\), \(B^s_t\), PLAS, VTC \(\kappa=0.25\) | `forkserve/scheduler.py` |
+| Node TTL on residual, leaf-first relative offload | `forkserve/retention.py` |
+| Tree-sticky routing, residual-only steal | `forkserve/router.py` |
+| Join scaffolds (all / first / k-of-n / winner) | `forkserve/join.py` |
+| ReAct / LangGraph / OpenHands / ToT | `forkserve/adapters/` |
+| vLLM public-API seam | `forkserve/engine/vllm_backend.py` |
 
-## Defaults
-
-Paper §9 knobs: page size `P=16`, speculative chunk `C_spec=512`, `λ` such that 1 ms TBT ≡ 4 ms TTFT, grammar top-`m` ≤ 3, branch cap 6, `q_min=0.35`.
+Defaults: page size \(P=16\), \(C_\mathrm{spec}=512\), \(\lambda\) such that 1 ms TBT ≡ 4 ms TTFT, grammar top-\(m\) ≤ 3, branch cap 6, \(q_\min=0.35\).
 
 ## Status
 
-This repository is a complete, testable implementation of the ForkServe control plane (state, planner, scheduler, commit, adapters). The vLLM backend is an integration seam: production kernels still live in vLLM's PagedAttention / chunked-prefill path; ForkServe owns page identity, admission, and the branch tree.
+This repository is the ForkServe **control plane**: tree, CoW identity, planner, two-class admission, LCP commit, adapters. Production kernels remain in vLLM's PagedAttention / chunked-prefill path. The vLLM backend talks to public `LLM` / `TokensPrompt` so the algorithms are testable without vendoring the engine.
+
+Still engine-side, not in this repo:
+
+- CoW bit inside vLLM's block manager (logical pages here; physical blocks still cloned by prefix cache)
+- Two-class scheduler inside the vLLM engine loop
+- Prefill/decode disaggregation (soft-deadline known-suffix shipping)
+- Real HBM↔DRAM tensor movement (offload currently parks residual handles)
+
+Degradation: planner crash → committed CoW trees still serve; no `fork` from the harness → Continuum-style TTL + MORI ranking on a one-node tree; saturation → \(B^s_t=0\).
+
+## Install
+
+```bash
+pip install -e ".[dev]"
+pytest -q
+```
+
+vLLM is optional (`pip install -e ".[vllm]"`). Core algorithms run on `MockBackend` without a GPU.
+
+```python
+from forkserve.engine.vllm_backend import VllmBackend
+
+backend = VllmBackend(ForkServeConfig(), model="/path/to/model", gpu_memory_utilization=0.45)
+eng = Engine(backend)
+```

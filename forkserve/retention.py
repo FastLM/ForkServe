@@ -127,6 +127,8 @@ class RetentionManager:
             bytes_free = len(node.residual) * self.cfg.bytes_per_token
             if dest == "abort":
                 tree.abort(node.id)
+            else:
+                tree.pool.offload(node.table.residual)
             live -= bytes_free
             decisions.append(
                 OffloadDecision(node.id, str(tree.session), _key[1], dest, len(node.residual))

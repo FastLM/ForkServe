@@ -21,6 +21,9 @@ class PrefillRequest:
     tokens: TokenSeq
     speculative: bool
     page_ids: Sequence[int]
+    # Full committed/speculative sequence for prefix-cache backends (vLLM).
+    # Mock backends ignore this and apply ``tokens`` as a residual delta.
+    full_prompt: TokenSeq = ()
 
 
 @dataclass(slots=True)

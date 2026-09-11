@@ -62,3 +62,17 @@ def test_expire_drops_spec_not_trunk() -> None:
     dead = mgr.expire()
     assert child.id in dead
     assert tree.get(root.id).mode is not NodeMode.DEAD
+
+
+def test_dram_offload_parks_idle_residual() -> None:
+    cfg = ForkServeConfig(page_size=8, bytes_per_token=1.0, hbm_capacity_bytes=8.0)
+    pool = PagePool(cfg, TokenKvStore())
+    forest = Forest(pool, cfg)
+    tree = forest.create(SessionId("s"))
+    root = tree.open_root(tuple(range(16)))
+    idle = tree.fork(root.id, "idle", tuple(range(20, 36)), mode=NodeMode.COMMIT)
+    tree.set_mode(idle.id, NodeMode.IDLE)
+    mgr = RetentionManager(forest, cfg)
+    decisions = mgr.plan_offload(hbm_target_bytes=1.0)
+    assert any(d.dest == "dram" for d in decisions)
+    assert tree.get(idle.id).mode is NodeMode.IDLE
