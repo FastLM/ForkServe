@@ -1,11 +1,11 @@
 """System comparison: vLLM recompute vs APC vs ForkServe on 2/4 GPUs.
 
-Three agent workloads, same prompts:
+Workloads
 
-* ``tot`` — Tree-of-Thoughts fan-out: one long trunk, B thought prefixes.
-* ``react`` — tool-idle TTFT: known wrapper is speculatively prefills during
-  idle; observation residual is the only critical-path prefill.
-* ``multi`` — S concurrent ToT sessions (engine batching / TP scaling).
+* ``gsm8k`` — grade-school math, ToT / self-consistency fan-out on a shared stem.
+* ``game24`` — ToT paper 24-game; high branching, tiny trunk.
+* ``humaneval`` — function completion + pytest tool-idle (ReAct wrappers).
+* ``tot`` / ``react`` / ``multi`` — synthetic microbenchmarks of the same verbs.
 
 Baselines (offline ``vllm.LLM.generate``):
 
@@ -28,7 +28,7 @@ from typing import Any, Callable, Sequence
 
 
 SYSTEMS = ("vllm_recompute", "vllm_apc", "forkserve")
-WORKLOADS = ("tot", "react", "multi")
+WORKLOADS = ("gsm8k", "game24", "humaneval", "tot", "react", "multi")
 
 
 @dataclass
@@ -260,6 +260,7 @@ def run_tot_forkserve(
     *,
     decode_n: int,
     idle_ms: float,
+    workload: str = "tot",
 ) -> RunMetrics:
     t0 = _now()
     h = eng.open(trunk)
@@ -277,7 +278,7 @@ def run_tot_forkserve(
     m = eng.metrics[h.id]
     return RunMetrics(
         system="forkserve",
-        workload="tot",
+        workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
         fanout_ms=(t_fan - t_open) * 1000.0,
@@ -303,11 +304,16 @@ def run_react_forkserve(
     *,
     decode_n: int,
     idle_ms: float,
+    wrap: str | None = None,
+    recov: str | None = None,
+    obs: str | None = None,
+    workload: str = "react",
 ) -> RunMetrics:
     from forkserve.adapters.react import ReActAdapter
     from forkserve.adapters.templates import ToolWrappers
 
-    wrap, recov, obs = react_strings()
+    if wrap is None or recov is None or obs is None:
+        wrap, recov, obs = react_strings()
     t0 = _now()
     h = eng.open(trunk)
     tree = eng.tree(h.id)
@@ -335,7 +341,7 @@ def run_react_forkserve(
     m = eng.metrics[h.id]
     return RunMetrics(
         system="forkserve",
-        workload="react",
+        workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
         fanout_ms=spec_ms,
@@ -455,6 +461,7 @@ def run_tot_vllm(
     *,
     decode_n: int,
     prefix_cache: bool,
+    workload: str = "tot",
 ) -> RunMetrics:
     from forkserve.config import ForkServeConfig
     from forkserve.pages import clone_memory_bytes, cow_memory_bytes
@@ -482,7 +489,7 @@ def run_tot_vllm(
     clone = _mib(clone_memory_bytes(trunk_n, residuals, cfg_bpt, k))
     return RunMetrics(
         system=system,
-        workload="tot",
+        workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
         fanout_ms=(t_fan - t_open) * 1000.0,
@@ -511,8 +518,13 @@ def run_react_vllm(
     decode_n: int,
     idle_ms: float,
     prefix_cache: bool,
+    wrap: str | None = None,
+    recov: str | None = None,
+    obs: str | None = None,
+    workload: str = "react",
 ) -> RunMetrics:
-    wrap, recov, obs = react_strings()
+    if wrap is None or recov is None or obs is None:
+        wrap, recov, obs = react_strings()
     trunk_ids = _tok_ids(llm, trunk)
     wrap_ids = _tok_ids(llm, wrap)
     recov_ids = _tok_ids(llm, recov)
@@ -534,7 +546,7 @@ def run_react_vllm(
     peak = len(full) if not prefix_cache else (len(full))
     return RunMetrics(
         system=system,
-        workload="react",
+        workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
         ttft_from_obs_ms=ttft,
@@ -609,6 +621,140 @@ def run_multi_vllm(
     )
 
 
+def _merge_metrics(parts: list[RunMetrics], workload: str) -> RunMetrics:
+    n = len(parts)
+    if n == 0:
+        raise ValueError("no runs to merge")
+    head = parts[0]
+    residuals: list[int] = []
+    for p in parts:
+        residuals.extend(p.residual_tokens)
+    clone = sum(p.m_clone_mib for p in parts) / n
+    cow = sum(p.m_cow_mib for p in parts) / n
+    return RunMetrics(
+        system=head.system,
+        workload=workload,
+        tp=head.tp,
+        e2e_ms=sum(p.e2e_ms for p in parts),
+        fanout_ms=sum(p.fanout_ms for p in parts),
+        decode_ms=sum(p.decode_ms for p in parts),
+        ttft_from_obs_ms=sum(p.ttft_from_obs_ms for p in parts) / n,
+        spec_ms=sum(p.spec_ms for p in parts),
+        idle_ms=head.idle_ms,
+        trunk_tokens=int(sum(p.trunk_tokens for p in parts) / n),
+        residual_tokens=residuals,
+        peak_kv_tokens=max(p.peak_kv_tokens for p in parts),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
+        gpu_mem_mib=parts[-1].gpu_mem_mib,
+        known_suffix_hit_rate=sum(p.known_suffix_hit_rate for p in parts) / n,
+        decode_tokens=sum(p.decode_tokens for p in parts),
+        sessions=n,
+        branching=head.branching,
+        notes=f"{n} items; {head.notes}",
+    )
+
+
+def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
+    from forkserve.bench_tasks import GSM8K_SLICE, gsm8k_thoughts, gsm8k_trunk, take
+
+    thoughts = gsm8k_thoughts(args.branching)
+    parts: list[RunMetrics] = []
+    for item in take(GSM8K_SLICE, args.limit):
+        parts.append(
+            run_tot_forkserve(
+                eng, cfg, gsm8k_trunk(item), thoughts,
+                decode_n=args.decode, idle_ms=args.idle_ms, workload="gsm8k",
+            )
+        )
+        _close_all(eng)
+    return _merge_metrics(parts, "gsm8k")
+
+
+def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
+    from forkserve.bench_tasks import GAME24_SLICE, game24_thoughts, game24_trunk, take
+
+    thoughts = game24_thoughts(args.branching)
+    parts: list[RunMetrics] = []
+    for item in take(GAME24_SLICE, args.limit):
+        parts.append(
+            run_tot_forkserve(
+                eng, cfg, game24_trunk(item), thoughts,
+                decode_n=args.decode, idle_ms=args.idle_ms, workload="game24",
+            )
+        )
+        _close_all(eng)
+    return _merge_metrics(parts, "game24")
+
+
+def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
+    from forkserve.bench_tasks import HUMANEVAL_SLICE, humaneval_react_strings, humaneval_trunk, take
+
+    parts: list[RunMetrics] = []
+    for item in take(HUMANEVAL_SLICE, args.limit):
+        wrap, recov, obs = humaneval_react_strings(item)
+        parts.append(
+            run_react_forkserve(
+                eng, cfg, humaneval_trunk(item),
+                decode_n=args.decode, idle_ms=args.idle_ms,
+                wrap=wrap, recov=recov, obs=obs, workload="humaneval",
+            )
+        )
+        _close_all(eng)
+    return _merge_metrics(parts, "humaneval")
+
+
+def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
+    from forkserve.bench_tasks import GSM8K_SLICE, gsm8k_thoughts, gsm8k_trunk, take
+
+    thoughts = gsm8k_thoughts(args.branching)
+    prefix = system == "vllm_apc"
+    parts = [
+        run_tot_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+            gsm8k_trunk(item), thoughts,
+            decode_n=args.decode, prefix_cache=prefix, workload="gsm8k",
+        )
+        for item in take(GSM8K_SLICE, args.limit)
+    ]
+    return _merge_metrics(parts, "gsm8k")
+
+
+def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
+    from forkserve.bench_tasks import GAME24_SLICE, game24_thoughts, game24_trunk, take
+
+    thoughts = game24_thoughts(args.branching)
+    prefix = system == "vllm_apc"
+    parts = [
+        run_tot_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+            game24_trunk(item), thoughts,
+            decode_n=args.decode, prefix_cache=prefix, workload="game24",
+        )
+        for item in take(GAME24_SLICE, args.limit)
+    ]
+    return _merge_metrics(parts, "game24")
+
+
+def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
+    from forkserve.bench_tasks import HUMANEVAL_SLICE, humaneval_react_strings, humaneval_trunk, take
+
+    prefix = system == "vllm_apc"
+    parts: list[RunMetrics] = []
+    for item in take(HUMANEVAL_SLICE, args.limit):
+        wrap, recov, obs = humaneval_react_strings(item)
+        parts.append(
+            run_react_vllm(
+                llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+                humaneval_trunk(item),
+                decode_n=args.decode, idle_ms=args.idle_ms, prefix_cache=prefix,
+                wrap=wrap, recov=recov, obs=obs, workload="humaneval",
+            )
+        )
+    return _merge_metrics(parts, "humaneval")
+
+
 # ----- mock accounting (no GPU) ---------------------------------------------
 
 def run_mock(args: argparse.Namespace) -> list[RunMetrics]:
@@ -622,6 +768,16 @@ def run_mock(args: argparse.Namespace) -> list[RunMetrics]:
         for i in range(args.sessions)
     ]
     rows: list[RunMetrics] = []
+    if "gsm8k" in args.workloads:
+        rows.append(run_gsm8k_forkserve(eng, cfg, args))
+        eng, cfg = _mock_engine(bpt)
+    if "game24" in args.workloads:
+        rows.append(run_game24_forkserve(eng, cfg, args))
+        eng, cfg = _mock_engine(bpt)
+    if "humaneval" in args.workloads:
+        he = argparse.Namespace(**{**vars(args), "idle_ms": 0.0})
+        rows.append(run_humaneval_forkserve(eng, cfg, he))
+        eng, cfg = _mock_engine(bpt)
     if "tot" in args.workloads:
         rows.append(run_tot_forkserve(eng, cfg, trunk, thoughts, decode_n=args.decode, idle_ms=args.idle_ms))
         # Rebuild engine so sessions do not accumulate.
@@ -679,6 +835,15 @@ def worker_main(args: argparse.Namespace) -> int:
 
     if system == "forkserve":
         assert eng is not None and cfg is not None
+        if "gsm8k" in args.workloads:
+            rows.append(run_gsm8k_forkserve(eng, cfg, args))
+            _close_all(eng)
+        if "game24" in args.workloads:
+            rows.append(run_game24_forkserve(eng, cfg, args))
+            _close_all(eng)
+        if "humaneval" in args.workloads:
+            rows.append(run_humaneval_forkserve(eng, cfg, args))
+            _close_all(eng)
         if "tot" in args.workloads:
             rows.append(run_tot_forkserve(eng, cfg, trunk, thoughts, decode_n=args.decode, idle_ms=args.idle_ms))
             _close_all(eng)
@@ -689,6 +854,12 @@ def worker_main(args: argparse.Namespace) -> int:
             rows.append(run_multi_forkserve(eng, cfg, trunks, thoughts, decode_n=args.decode, idle_ms=args.idle_ms))
             _close_all(eng)
     else:
+        if "gsm8k" in args.workloads:
+            rows.append(run_gsm8k_vllm(llm, SamplingParams, TokensPrompt, system, bpt, args))
+        if "game24" in args.workloads:
+            rows.append(run_game24_vllm(llm, SamplingParams, TokensPrompt, system, bpt, args))
+        if "humaneval" in args.workloads:
+            rows.append(run_humaneval_vllm(llm, SamplingParams, TokensPrompt, system, bpt, args))
         if "tot" in args.workloads:
             rows.append(
                 run_tot_vllm(
@@ -827,6 +998,8 @@ def orchestrate(args: argparse.Namespace) -> int:
                 str(args.gpu_util),
                 "--workloads",
                 ",".join(args.workloads),
+                "--limit",
+                str(args.limit),
                 "--out",
                 str(shard),
             ]
@@ -884,7 +1057,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--max-batched-tokens", type=int, default=2048)
     p.add_argument("--gpu-util", type=float, default=float(os.environ.get("FORKSERVE_GPU_UTIL", "0.90")))
     p.add_argument("--enforce-eager", action="store_true")
-    p.add_argument("--workloads", type=lambda s: _csv_list(s, WORKLOADS), default=list(WORKLOADS))
+    p.add_argument("--limit", type=int, default=4, help="problems per gsm8k/game24/humaneval slice")
+    p.add_argument("--workloads", type=lambda s: _csv_list(s, WORKLOADS), default=["gsm8k", "game24", "humaneval"])
     p.add_argument("--out", default="logs/bench_gpu.json")
     args = p.parse_args(argv)
     if args.tp is None:

@@ -71,6 +71,50 @@ def test_mock_react_known_suffix_hit() -> None:
     assert react.branching == 2
 
 
+def test_mock_gsm8k_cow_saves_kv() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "gsm8k",
+            "--branching", "4", "--limit", "2", "--decode", "2",
+            "--out", "/tmp/forkserve-bench-gsm8k.json",
+        ]
+    )
+    rows = run_mock(args)
+    gsm = rows[0]
+    assert gsm.workload == "gsm8k"
+    assert gsm.sessions == 2
+    assert gsm.kv_saving > 0.3
+    assert gsm.peak_kv_tokens < gsm.branching * gsm.trunk_tokens
+
+
+def test_mock_game24_fanout() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "game24",
+            "--branching", "4", "--limit", "2", "--decode", "2",
+            "--out", "/tmp/forkserve-bench-game24.json",
+        ]
+    )
+    game = run_mock(args)[0]
+    assert game.workload == "game24"
+    assert game.branching == 4
+    assert game.m_cow_mib < game.m_clone_mib
+
+
+def test_mock_humaneval_tool_idle_hit() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "humaneval",
+            "--limit", "2", "--decode", "2",
+            "--out", "/tmp/forkserve-bench-he.json",
+        ]
+    )
+    he = run_mock(args)[0]
+    assert he.workload == "humaneval"
+    assert he.known_suffix_hit_rate == 1.0
+    assert he.sessions == 2
+
+
 def test_format_table_speedup() -> None:
     rows = [
         {
