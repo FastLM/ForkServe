@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Wait until the GPU jobs that are running *right now* finish, then start ForkServe.
+# Wait until the GPU jobs that are running *right now* finish, then run the
+# ForkServe vs vLLM multi-GPU comparison (tensor parallel 2 and/or 4).
 #
 # Usage:
 #   ./scripts/wait_gpu_then_run.sh
-#   ./scripts/wait_gpu_then_run.sh -- python examples/gpu_demo.py
-#   POLL_SEC=15 MEM_FREE_MIB=1024 ./scripts/wait_gpu_then_run.sh
+#   CUDA_VISIBLE_DEVICES=0,1 ./scripts/wait_gpu_then_run.sh
+#   ./scripts/wait_gpu_then_run.sh -- python -m forkserve.bench --tp 2
 #
 # Env:
-#   POLL_SEC          poll interval in seconds (default: 30)
-#   MEM_FREE_MIB      per-GPU used-memory threshold treated as idle (default: 1024)
-#   CUDA_VISIBLE_DEVICES  GPUs ForkServe will use (default: 0)
-#   FORKSERVE_MODEL / FORKSERVE_TP / FORKSERVE_GPU_UTIL  see examples/gpu_demo.py
+#   POLL_SEC / MEM_FREE_MIB   wait loop
+#   CUDA_VISIBLE_DEVICES      GPUs to claim (default: 0,1,2,3)
+#   FORKSERVE_MODEL / FORKSERVE_TP / FORKSERVE_GPU_UTIL
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,7 +19,9 @@ PYTHON="${ENV_BIN}/python"
 SITE="${ENV_BIN%/bin}/lib/python3.12/site-packages"
 POLL_SEC="${POLL_SEC:-30}"
 MEM_FREE_MIB="${MEM_FREE_MIB:-1024}"
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
+export FORKSERVE_MODEL="${FORKSERVE_MODEL:-$HOME/models/Qwen3-8B}"
+export FORKSERVE_TP="${FORKSERVE_TP:-2,4}"
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
@@ -125,7 +127,7 @@ while true; do
   break
 done
 
-log "GPU ${CUDA_VISIBLE_DEVICES} is free — starting ForkServe"
+log "GPU ${CUDA_VISIBLE_DEVICES} is free — starting ForkServe vs vLLM bench"
 snapshot_gpu | while IFS= read -r line; do log "  $line"; done
 
 [[ -x "$PYTHON" ]] || die "python not found: $PYTHON"
@@ -136,5 +138,8 @@ if [[ $# -gt 0 ]]; then
   exec "$@"
 fi
 
-log "exec: $PYTHON examples/gpu_demo.py"
-exec "$PYTHON" examples/gpu_demo.py
+log "exec: $PYTHON -m forkserve.bench --tp ${FORKSERVE_TP} --model ${FORKSERVE_MODEL}"
+exec "$PYTHON" -m forkserve.bench \
+  --tp "${FORKSERVE_TP}" \
+  --model "${FORKSERVE_MODEL}" \
+  --out "${ROOT}/logs/bench_gpu.json"
