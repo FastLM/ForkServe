@@ -64,3 +64,33 @@ def test_lcp_selects_matching_wrapper() -> None:
     assert winner is not None
     assert winner.branch_id == "ok"
     assert n == 32 + 3
+
+
+def test_cascade_abort_when_all_children_die() -> None:
+    """Figure 3: C's four leaves die ⇒ C1, C2, then C; Root lives via A, B."""
+    t = _tree()
+    root = t.root
+    assert root is not None
+    a = t.fork(root, "A", (10,))
+    b = t.fork(root, "B", (20,))
+    c = t.fork(root, "C", (30,))
+    c1 = t.fork(c.id, "C1", (31,))
+    c2 = t.fork(c.id, "C2", (32,))
+    c1a = t.fork(c1.id, "C1a", (311,))
+    c1b = t.fork(c1.id, "C1b", (312,))
+    c2a = t.fork(c2.id, "C2a", (321,))
+    c2b = t.fork(c2.id, "C2b", (322,))
+
+    t.abort(c1a.id)
+    assert t.get(c1.id).mode is NodeMode.SPEC  # C1b still live
+    t.abort(c1b.id)
+    assert t.get(c1.id).mode is NodeMode.DEAD
+    assert t.get(c.id).mode is NodeMode.SPEC  # C2 still live
+
+    t.abort(c2a.id)
+    t.abort(c2b.id)
+    assert t.get(c2.id).mode is NodeMode.DEAD
+    assert t.get(c.id).mode is NodeMode.DEAD
+    assert t.get(root).mode is NodeMode.COMMIT
+    assert t.get(a.id).mode is NodeMode.SPEC
+    assert t.get(b.id).mode is NodeMode.SPEC

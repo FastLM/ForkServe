@@ -319,6 +319,15 @@ class Engine:
         n = tree.abort(node)
         self.scheduler.cancel_node(node)
         self.metrics[tree.session].aborts += 1
+        # Spec ancestors that cascade-died also drop in-flight chunks.
+        cur = tree.get(node).parent
+        while cur is not None:
+            parent = tree.get(cur)
+            if parent.mode is not NodeMode.DEAD:
+                break
+            self.scheduler.cancel_node(cur)
+            self.metrics[tree.session].aborts += 1
+            cur = parent.parent
         return n
 
     def close(self, session: SessionId | str) -> None:

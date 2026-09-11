@@ -51,7 +51,7 @@ Harness adapters lower ReAct, LangGraph `Send`, OpenHands / SWE, and Tree-of-Tho
 
 | Paper | Code |
 |---|---|
-| Definition 1 context tree, prefix / spec-isolation invariants | `forkserve/tree.py` |
+| Definition 1 context tree, prefix / spec-isolation / cascade abort | `forkserve/tree.py` |
 | CoW pages, abort cost, \(M_\mathrm{CoW} = b(L+\sum \ell_i)\) | `forkserve/pages.py` |
 | Algorithm 1, \(G(w)\) / \(C(w)\), Proposition 1, grammar + prior + n-gram | `forkserve/planner.py` |
 | LCP commit, Theorem 2 (output identity) | `forkserve/commit.py` |

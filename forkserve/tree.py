@@ -7,6 +7,8 @@ Invariants
 * Spec isolation: Spec nodes are invisible to sampling
 * Liveness: page refcount = # of non-Dead nodes mapping the page
 * Generation: commit increments g_u; stale speculative jobs drop in O(1)
+* Cascade abort: a Spec node with no live children is aborted; walk stops at
+  the committed spine or a parent that still has a live child (Figure 3)
 """
 
 from __future__ import annotations
@@ -211,14 +213,25 @@ class ContextTree:
         node.last_decode_at = monotonic()
         self.last_decode_at = node.last_decode_at
 
-    def abort(self, nid: NodeId) -> int:
+    def abort(self, nid: NodeId, *, cascade: bool = True) -> int:
         """Mark v and descendants Dead; free residual pages (Lemma 3).
 
         Post-order: children release their fork-time alias increfs before the
         parent drops its own residual, so a live grandchild cannot see a freed trunk.
+
+        If ``cascade`` and aborting ``nid`` leaves a Spec ancestor with no live
+        children, abort that ancestor and continue upward. The walk stops at the
+        root, a committed/idle spine node, or a parent that still has a live child
+        (Figure 3: C's four leaves die ⇒ C1, C2, then C; Root lives via A, B).
         """
         if nid not in self._nodes:
             return 0
+        freed = self._abort_down(nid)
+        if cascade:
+            freed += self._cascade_orphans(nid)
+        return freed
+
+    def _abort_down(self, nid: NodeId) -> int:
         order: list[NodeId] = []
         stack = [nid]
         seen: set[NodeId] = set()
@@ -237,6 +250,26 @@ class ContextTree:
             freed += self._release_node(node)
             node.mode = NodeMode.DEAD
             node.counters.cancelled += 1
+        return freed
+
+    def _cascade_orphans(self, nid: NodeId) -> int:
+        """Abort Spec ancestors that no longer have any live child."""
+        if nid not in self._nodes:
+            return 0
+        freed = 0
+        parent_id = self._nodes[nid].parent
+        while parent_id is not None and parent_id != self.root:
+            parent = self._nodes[parent_id]
+            if parent.mode is NodeMode.DEAD:
+                parent_id = parent.parent
+                continue
+            if parent.mode is not NodeMode.SPEC:
+                break
+            if self.children_of(parent.id, live_only=True):
+                break
+            next_id = parent.parent
+            freed += self._abort_down(parent.id)
+            parent_id = next_id
         return freed
 
     def bump_generation(self, nid: NodeId) -> int:
