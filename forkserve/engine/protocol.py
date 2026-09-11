@@ -24,6 +24,7 @@ class PrefillRequest:
     # Full committed/speculative sequence for prefix-cache backends (vLLM).
     # Mock backends ignore this and apply ``tokens`` as a residual delta.
     full_prompt: TokenSeq = ()
+    parent_node: NodeId | None = None
 
 
 @dataclass(slots=True)

@@ -369,7 +369,7 @@ class Engine:
         # can decode from a node id alone.
         gen = getattr(self.backend, "generate_committed", None)
         if callable(gen):
-            out = gen(tip.tokens, n_tokens, seed=seed)
+            out = gen(tip.tokens, n_tokens, seed=seed, node_id=tip.id)
         else:
             out = self.backend.decode(req)
         if out:
@@ -429,6 +429,7 @@ class Engine:
                 speculative,
                 page_ids,
                 full_prompt=node.tokens,
+                parent_node=node.parent,
             )
         )
 

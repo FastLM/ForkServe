@@ -60,22 +60,19 @@ Harness adapters lower ReAct, LangGraph `Send`, OpenHands / SWE, and Tree-of-Tho
 | Tree-sticky routing, residual-only steal | `forkserve/router.py` |
 | Join scaffolds (all / first / k-of-n / winner) | `forkserve/join.py` |
 | ReAct / LangGraph / OpenHands / ToT | `forkserve/adapters/` |
-| vLLM public-API seam | `forkserve/engine/vllm_backend.py` |
+| vLLM engine loop: CoW bit + two-class ``schedule()`` | `forkserve/engine/vllm_loop.py` |
+| vLLM backend (tags requests, installs the loop) | `forkserve/engine/vllm_backend.py` |
 
 Defaults: page size \(P=16\), \(C_\mathrm{spec}=512\), \(\lambda\) such that 1 ms TBT ≡ 4 ms TTFT, grammar top-\(m\) ≤ 3, branch cap 6, \(q_\min=0.35\).
 
 ## Status
 
-This repository is the ForkServe **control plane**: tree, CoW identity, planner, two-class admission, LCP commit, adapters. Production kernels remain in vLLM's PagedAttention / chunked-prefill path. The vLLM backend talks to public `LLM` / `TokensPrompt` so the algorithms are testable without vendoring the engine.
+This repository is the ForkServe control plane plus a **vLLM V1 engine-loop comparison substrate**:
 
-Still engine-side, not in this repo:
+- **CoW bit** — `install_vllm_cow()` wraps `BlockPool.touch` so any block with `ref_cnt > 1` is pinned read-only. A child that still finds its parent in `req_to_blocks` aliases those blocks in O(1) (`get_computed_blocks`) instead of hashing the trunk. Abort decrefs; the trunk stays while a sibling holds a ref.
+- **Two-class scheduler** — `TwoClassVllmScheduler` subclasses vLLM's iteration scheduler and reorders `running` / `waiting` so committed work takes the token budget first; speculative requests (`extra_args['forkserve_class']='speculative'`) fill the leftover. Saturation ⇒ spec not scheduled.
 
-- CoW bit inside vLLM's block manager (logical pages here; physical blocks still cloned by prefix cache)
-- Two-class scheduler inside the vLLM engine loop
-- Prefill/decode disaggregation (soft-deadline known-suffix shipping)
-- Real HBM↔DRAM tensor movement (offload currently parks residual handles)
-
-Degradation: planner crash → committed CoW trees still serve; no `fork` from the harness → Continuum-style TTL + MORI ranking on a one-node tree; saturation → \(B^s_t=0\).
+Still out of tree: prefill/decode disaggregation, and real HBM↔DRAM tensor movement.
 
 ## Install
 
@@ -89,6 +86,12 @@ vLLM is optional (`pip install -e ".[vllm]"`). Core algorithms run on `MockBacke
 ```python
 from forkserve.engine.vllm_backend import VllmBackend
 
-backend = VllmBackend(ForkServeConfig(), model="/path/to/model", gpu_memory_utilization=0.45)
+backend = VllmBackend(
+    ForkServeConfig(),
+    model="/path/to/model",
+    gpu_memory_utilization=0.45,
+    two_class=True,
+    cow_blocks=True,
+)
 eng = Engine(backend)
 ```

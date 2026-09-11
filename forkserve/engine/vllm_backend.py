@@ -1,9 +1,8 @@
-"""Optional vLLM adapter.
+"""vLLM backend: CoW block-pool bit + two-class scheduler in the engine loop.
 
-The paper's engine delta lives inside vLLM's block manager and continuous
-batcher. This module is the public-API seam: ForkServe owns page identity,
-admission, and the branch tree; vLLM owns kernels. Speculative 1-token
-warmups are never surfaced (Theorem 2).
+``LLM(..., scheduler_cls=TwoClassVllmScheduler)`` is the comparison
+substrate. Speculative 1-token warmups are tagged and never surfaced
+(Theorem 2).
 """
 
 from __future__ import annotations
@@ -18,6 +17,11 @@ from forkserve.engine.protocol import (
     BackendBatchResult,
     DecodeRequest,
     PrefillRequest,
+)
+from forkserve.engine.vllm_loop import (
+    forkserve_extra,
+    get_two_class_scheduler,
+    install_vllm_cow,
 )
 from forkserve.pages import PagePool, TokenKvStore
 from forkserve.planner import PrefillChunk
@@ -34,7 +38,7 @@ def _try_import_vllm() -> Any:
 
 @dataclass
 class VllmBackend:
-    """Thin wrapper. One ``LLM`` owns the GPU; ForkServe owns the tree."""
+    """One ``LLM`` owns the GPU and the engine loop; ForkServe owns the tree."""
 
     config: ForkServeConfig
     model: str
@@ -44,6 +48,8 @@ class VllmBackend:
     gpu_memory_utilization: float = 0.90
     enable_prefix_caching: bool = True
     enforce_eager: bool = False
+    two_class: bool = True
+    cow_blocks: bool = True
     _llm: Any = field(init=False, default=None)
     _SamplingParams: Any = field(init=False, default=None)
     _TokensPrompt: Any = field(init=False, default=None)
@@ -51,10 +57,12 @@ class VllmBackend:
     _prompts: dict[NodeId, list[int]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
+        if self.cow_blocks:
+            install_vllm_cow()
         vllm, LLM, SamplingParams, TokensPrompt = _try_import_vllm()
         self._SamplingParams = SamplingParams
         self._TokensPrompt = TokensPrompt
-        self._llm = LLM(
+        llm_kwargs: dict[str, Any] = dict(
             model=self.model,
             tensor_parallel_size=self.tensor_parallel,
             dtype=self.dtype,
@@ -65,7 +73,9 @@ class VllmBackend:
             max_num_batched_tokens=self.config.max_batched_tokens,
             enforce_eager=self.enforce_eager,
         )
-        # CoW identity is tracked here; kernels still go through vLLM pages.
+        if self.two_class:
+            llm_kwargs["scheduler_cls"] = get_two_class_scheduler()
+        self._llm = LLM(**llm_kwargs)
         self.pool = PagePool(self.config, TokenKvStore())
         self._tokenizer = self._llm.get_tokenizer()
         self._prompts = {}
@@ -77,28 +87,57 @@ class VllmBackend:
     def detokenize(self, tokens: TokenSeq) -> str:
         return self._tokenizer.decode(list(tokens))
 
+    def _params(
+        self,
+        max_tokens: int,
+        *,
+        speculative: bool,
+        node_id: NodeId | None,
+        parent_node: NodeId | None = None,
+        seed: int | None = None,
+    ) -> Any:
+        return self._SamplingParams(
+            max_tokens=max_tokens,
+            temperature=0.0,
+            seed=seed,
+            extra_args=forkserve_extra(
+                speculative=speculative,
+                node_id=int(node_id) if node_id is not None else None,
+                parent_node=int(parent_node) if parent_node is not None else None,
+            ),
+        )
+
     def prefill(self, req: PrefillRequest) -> float:
-        """Warm KV via a 1-token generate. The extra token is discarded."""
         t0 = perf_counter()
         seq = list(req.full_prompt) if req.full_prompt else (
             list(self._prompts.get(req.node_id, [])) + list(req.tokens)
         )
         self._prompts[req.node_id] = seq
-        params = self._SamplingParams(max_tokens=1, temperature=0.0)
+        params = self._params(
+            1,
+            speculative=req.speculative,
+            node_id=req.node_id,
+            parent_node=req.parent_node,
+        )
         prompt = self._TokensPrompt(prompt_token_ids=seq)
         _ = self._llm.generate([prompt], params, use_tqdm=False)
         return (perf_counter() - t0) * 1000.0
 
     def decode(self, req: DecodeRequest) -> list[TokenId]:
         seq = tuple(self._prompts.get(req.node_id, ()))
-        return self.generate_committed(seq, req.n_tokens, seed=req.seed)
+        return self.generate_committed(seq, req.n_tokens, seed=req.seed, node_id=req.node_id)
 
     def generate_committed(
-        self, tokens: TokenSeq, max_tokens: int, seed: int | None = None
+        self,
+        tokens: TokenSeq,
+        max_tokens: int,
+        seed: int | None = None,
+        node_id: NodeId | None = None,
     ) -> list[TokenId]:
-        params = self._SamplingParams(
-            max_tokens=max_tokens,
-            temperature=0.0,
+        params = self._params(
+            max_tokens,
+            speculative=False,
+            node_id=node_id,
             seed=seed,
         )
         prompt = self._TokensPrompt(prompt_token_ids=list(tokens))
