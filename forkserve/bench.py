@@ -657,11 +657,11 @@ def _merge_metrics(parts: list[RunMetrics], workload: str) -> RunMetrics:
 
 
 def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
-    from forkserve.bench_tasks import GSM8K_SLICE, gsm8k_thoughts, gsm8k_trunk, take
+    from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
-    for item in take(GSM8K_SLICE, args.limit):
+    for item in load_gsm8k(args.limit):
         parts.append(
             run_tot_forkserve(
                 eng, cfg, gsm8k_trunk(item), thoughts,
@@ -673,11 +673,11 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
 
 
 def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
-    from forkserve.bench_tasks import GAME24_SLICE, game24_thoughts, game24_trunk, take
+    from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
-    for item in take(GAME24_SLICE, args.limit):
+    for item in load_game24(args.limit):
         parts.append(
             run_tot_forkserve(
                 eng, cfg, game24_trunk(item), thoughts,
@@ -689,10 +689,10 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
 
 
 def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
-    from forkserve.bench_tasks import HUMANEVAL_SLICE, humaneval_react_strings, humaneval_trunk, take
+    from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
     parts: list[RunMetrics] = []
-    for item in take(HUMANEVAL_SLICE, args.limit):
+    for item in load_humaneval(args.limit):
         wrap, recov, obs = humaneval_react_strings(item)
         parts.append(
             run_react_forkserve(
@@ -706,7 +706,7 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
 
 
 def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
-    from forkserve.bench_tasks import GSM8K_SLICE, gsm8k_thoughts, gsm8k_trunk, take
+    from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
     thoughts = gsm8k_thoughts(args.branching)
     prefix = system == "vllm_apc"
@@ -716,13 +716,13 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
             gsm8k_trunk(item), thoughts,
             decode_n=args.decode, prefix_cache=prefix, workload="gsm8k",
         )
-        for item in take(GSM8K_SLICE, args.limit)
+        for item in load_gsm8k(args.limit)
     ]
     return _merge_metrics(parts, "gsm8k")
 
 
 def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
-    from forkserve.bench_tasks import GAME24_SLICE, game24_thoughts, game24_trunk, take
+    from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
     thoughts = game24_thoughts(args.branching)
     prefix = system == "vllm_apc"
@@ -732,17 +732,17 @@ def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: st
             game24_trunk(item), thoughts,
             decode_n=args.decode, prefix_cache=prefix, workload="game24",
         )
-        for item in take(GAME24_SLICE, args.limit)
+        for item in load_game24(args.limit)
     ]
     return _merge_metrics(parts, "game24")
 
 
 def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
-    from forkserve.bench_tasks import HUMANEVAL_SLICE, humaneval_react_strings, humaneval_trunk, take
+    from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
     prefix = system == "vllm_apc"
     parts: list[RunMetrics] = []
-    for item in take(HUMANEVAL_SLICE, args.limit):
+    for item in load_humaneval(args.limit):
         wrap, recov, obs = humaneval_react_strings(item)
         parts.append(
             run_react_vllm(

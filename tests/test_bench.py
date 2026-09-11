@@ -115,6 +115,21 @@ def test_mock_humaneval_tool_idle_hit() -> None:
     assert he.sessions == 2
 
 
+def test_loads_local_benchmark_files() -> None:
+    from forkserve.bench_tasks import benchmarks_dir, load_game24, load_gsm8k, load_humaneval
+
+    root = benchmarks_dir()
+    assert (root / "gsm8k" / "test.jsonl").is_file()
+    gsm = load_gsm8k(1)
+    assert gsm[0].question
+    assert gsm[0].answer
+    he = load_humaneval(1)
+    assert he[0].entry_point
+    assert "def " in he[0].prompt
+    game = load_game24(1)
+    assert "24" in game[0].question
+
+
 def test_format_table_speedup() -> None:
     rows = [
         {

@@ -14,9 +14,24 @@ visible against vLLM recompute / APC.
 
 from __future__ import annotations
 
+import json
+import os
+from csv import DictReader
 from dataclasses import dataclass
+from pathlib import Path
 
 from forkserve.adapters.templates import ToolWrappers
+
+
+def benchmarks_dir() -> Path:
+    """Prefer ``~/benchmarks``, then ``FORKSERVE_BENCHMARKS``, then the repo."""
+    env = os.environ.get("FORKSERVE_BENCHMARKS") or os.environ.get("BENCHMARKS_DIR")
+    if env:
+        return Path(env).expanduser()
+    home = Path.home() / "benchmarks"
+    if home.is_dir():
+        return home
+    return Path(__file__).resolve().parents[1] / "benchmarks"
 
 
 @dataclass(frozen=True)
@@ -237,6 +252,91 @@ def humaneval_react_strings(item: CodeItem) -> tuple[str, str, str]:
     return wrap, recov, obs
 
 
-def take(items: tuple, limit: int) -> list:
+def take(items: tuple | list, limit: int) -> list:
     n = max(1, int(limit))
     return list(items[:n])
+
+
+def _gsm8k_final_answer(answer: str) -> str:
+    if "####" in answer:
+        return answer.rsplit("####", 1)[-1].strip().replace(",", "")
+    return answer.strip()
+
+
+def load_gsm8k(limit: int, split: str = "test") -> list[MathItem]:
+    path = benchmarks_dir() / "gsm8k" / f"{split}.jsonl"
+    if not path.is_file():
+        return take(GSM8K_SLICE, limit)
+    items: list[MathItem] = []
+    with path.open() as fh:
+        for i, line in enumerate(fh):
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            items.append(
+                MathItem(
+                    item_id=f"gsm8k-{split}-{i}",
+                    question=str(row["question"]).strip(),
+                    answer=_gsm8k_final_answer(str(row["answer"])),
+                )
+            )
+            if len(items) >= max(1, int(limit)):
+                break
+    return items or take(GSM8K_SLICE, limit)
+
+
+def load_game24(limit: int) -> list[MathItem]:
+    path = benchmarks_dir() / "game24" / "24.csv"
+    if not path.is_file():
+        return take(GAME24_SLICE, limit)
+    items: list[MathItem] = []
+    with path.open() as fh:
+        for row in DictReader(fh):
+            puzzle = (row.get("Puzzles") or row.get("puzzle") or "").strip()
+            if not puzzle:
+                continue
+            nums = puzzle.replace(",", " ")
+            rank = (row.get("Rank") or str(len(items) + 1)).strip()
+            items.append(
+                MathItem(
+                    item_id=f"24-{rank}-{nums.replace(' ', '-')}",
+                    question=f"Use {', '.join(nums.split())} each once with + - * / to make 24.",
+                    answer="24",
+                )
+            )
+            if len(items) >= max(1, int(limit)):
+                break
+    return items or take(GAME24_SLICE, limit)
+
+
+def load_humaneval(limit: int) -> list[CodeItem]:
+    path = benchmarks_dir() / "humaneval" / "HumanEval.jsonl"
+    if not path.is_file():
+        gz = path.with_suffix(path.suffix + ".gz")
+        if gz.is_file():
+            import gzip
+
+            text = gzip.open(gz, "rt").read()
+            lines = text.splitlines()
+        else:
+            return take(HUMANEVAL_SLICE, limit)
+    else:
+        lines = path.read_text().splitlines()
+    items: list[CodeItem] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        items.append(
+            CodeItem(
+                item_id=str(row.get("task_id", f"HumanEval/{len(items)}")),
+                prompt=str(row["prompt"]),
+                entry_point=str(row["entry_point"]),
+                tests=str(row.get("test") or row.get("canonical_solution") or ""),
+            )
+        )
+        if len(items) >= max(1, int(limit)):
+            break
+    return items or take(HUMANEVAL_SLICE, limit)
