@@ -1,7 +1,7 @@
-# ForkServe RL improve — round 2
+# ForkServe RL improve — round 3
 
 Verdict: **FAIL** — generation quality dropped vs vLLM
-Bench JSON: `/home/dliu/ForkServe/logs/rl_improve_round_2.json`
+Bench JSON: `/home/dliu/ForkServe/logs/rl_improve_round_3.json`
 
 You are editing the ForkServe repo on this machine. GPUs are occupied
 by `occupy_gpus.py` so another user cannot steal them. Do **not** start
@@ -25,12 +25,12 @@ Focus on serving path: CoW / two-class scheduler / speculative prefill
 Do not rewrite occupy scripts unless required.
 
 ## Pair results
-- tp=2 game24: ok — lat 3559.9 vs 3593.2 (-0.9%); peak_kv 638 vs recompute 1508 / apc 638; success_rate 1.000 vs 1.000 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
-- tp=2 gsm8k: ok — lat 6983.7 vs 7012.8 (-0.4%); peak_kv 659 vs recompute 1844 / apc 659; accuracy 0.750 vs 0.750 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
-- tp=2 humaneval: ok — lat 3595.0 vs 3590.0 (+0.1%); peak_kv 739 vs recompute 1406 / apc 739; pass_at_1 0.500 vs 0.250 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
-- tp=4 game24: ok — lat 2191.2 vs 2235.2 (-2.0%); peak_kv 638 vs recompute 1508 / apc 638; success_rate 1.000 vs 1.000 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
-- tp=4 gsm8k: ok — lat 4282.7 vs 4311.4 (-0.7%); peak_kv 659 vs recompute 1844 / apc 659; accuracy 0.750 vs 0.750 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
-- tp=4 humaneval: NEED FIX — lat 2229.0 vs 2230.0 (-0.0%); peak_kv 739 vs recompute 1406 / apc 739; pass_at_1 0.250 vs 0.500 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=True)
+- tp=2 game24: ok — lat 3557.8 vs 3583.1 (-0.7%); peak_kv 390 vs recompute 1508 / apc 638; success_rate 1.000 vs 1.000 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
+- tp=2 gsm8k: ok — lat 6992.0 vs 7010.8 (-0.3%); peak_kv 459 vs recompute 1844 / apc 659; accuracy 0.750 vs 0.750 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
+- tp=2 humaneval: ok — lat 3568.1 vs 3565.7 (+0.1%); peak_kv 695 vs recompute 1406 / apc 739; pass_at_1 0.750 vs 0.750 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
+- tp=4 game24: ok — lat 2188.0 vs 2233.5 (-2.0%); peak_kv 390 vs recompute 1508 / apc 638; success_rate 1.000 vs 1.000 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
+- tp=4 gsm8k: NEED FIX — lat 4292.4 vs 4308.1 (-0.4%); peak_kv 459 vs recompute 1844 / apc 659; accuracy 0.750 vs 1.000 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=True)
+- tp=4 humaneval: ok — lat 2236.3 vs 2226.7 (+0.4%); peak_kv 695 vs recompute 1406 / apc 739; pass_at_1 0.750 vs 0.750 (vllm_apc) (efficiency_beats=True, perf_drop=False, quality_drop=False)
 
 After you finish editing, if this file was written for `--edit wait`,
 create `/home/dliu/ForkServe/logs/rl_improve/CONTINUE` so the loop can re-occupy and re-bench.
