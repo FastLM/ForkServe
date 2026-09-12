@@ -379,7 +379,7 @@ class Engine:
                 n_tokens,
                 seed=seed,
                 node_id=tip.id,
-                parent_node=tip.parent,
+                parent_node=None,
             )
         else:
             out = self.backend.decode(req)
@@ -420,7 +420,9 @@ class Engine:
             tips.append((tree, tip))
             seqs.append(tip.tokens)
             node_ids.append(tip.id)
-            parents.append(tip.parent)
+            # Do not CoW-alias the root onto decode: that overrides APC and
+            # recomputes a speculated wrap. Hash the full committed prompt.
+            parents.append(None)
         gen = getattr(self.backend, "generate_committed_many", None)
         if not callable(gen):
             return [self.generate(session, n_tokens, seed=seed) for session in sessions]

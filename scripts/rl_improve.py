@@ -240,15 +240,15 @@ class GpuHold:
             text=True,
         )
         t0 = time.time()
-        while time.time() - t0 < 120:
+        while time.time() - t0 < 6 * 3600:
             if self.proc.poll() is not None:
                 raise RuntimeError(f"occupy exited early rc={self.proc.returncode}")
             used = _gpu_used_mib()
-            if used and all(u > 2048 for u in used.values()):
+            if used and all(u > 2048 for u in used.values()) and _pid_on_all_gpus(self.proc.pid):
                 log(f"occupy held used_mib={used}")
                 return
-            time.sleep(0.4)
-        log("occupy start timed out; continuing anyway")
+            time.sleep(1.0)
+        raise RuntimeError("occupy did not claim all GPUs within 6h")
 
     def stop(self) -> None:
         pids: set[int] = set()
@@ -294,6 +294,23 @@ def _gpu_used_mib() -> dict[int, int]:
         if want is None or idx in want:
             used[idx] = int(float(parts[1]))
     return used
+
+
+def _pid_on_all_gpus(pid: int) -> bool:
+    try:
+        raw = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-compute-apps=pid",
+                "--format=csv,noheader",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    seen = [int(x.strip()) for x in raw.splitlines() if x.strip().isdigit()]
+    return seen.count(pid) >= max(len(_gpu_used_mib()), 1)
 
 
 def stop_foreign_occupy() -> None:
@@ -449,11 +466,16 @@ def main(argv: list[str] | None = None) -> int:
             hold.start()
             time.sleep(2.0)
             hold.stop()
-            bench_path = run_bench(args, rnd)
-            rows = load_rows(bench_path)
-            verdict = judge_rows(
-                rows, kv_gain=args.kv_gain, perf_drop=args.perf_drop, peak_slack=args.peak_slack
-            )
+            try:
+                bench_path = run_bench(args, rnd)
+                rows = load_rows(bench_path)
+                verdict = judge_rows(
+                    rows, kv_gain=args.kv_gain, perf_drop=args.perf_drop, peak_slack=args.peak_slack
+                )
+            except Exception as exc:
+                log(f"bench failed: {exc}")
+                verdict = RoundVerdict(ok=False, reason=f"bench crashed: {exc}")
+                bench_path = ROOT / "logs" / f"rl_improve_round_{rnd}.json"
             print(json.dumps(verdict.to_dict(), indent=2), flush=True)
             prompt = write_cursor_prompt(rnd, verdict, bench_path)
             if verdict.ok:

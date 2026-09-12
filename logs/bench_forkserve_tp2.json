@@ -8,9 +8,9 @@
       "system": "forkserve",
       "workload": "gsm8k",
       "tp": 2,
-      "e2e_ms": 662.2423203662038,
-      "fanout_ms": 65.27600530534983,
-      "decode_ms": 550.7184839807451,
+      "e2e_ms": 266.86110394075513,
+      "fanout_ms": 65.19527081400156,
+      "decode_ms": 159.71940197050571,
       "ttft_from_obs_ms": 0.0,
       "spec_ms": 0.0,
       "idle_ms": 0.0,
@@ -44,7 +44,7 @@
         0
       ],
       "known_suffix_hit_rate": 0.0,
-      "decode_tokens": 256,
+      "decode_tokens": 64,
       "sessions": 4,
       "branching": 4,
       "notes": "4 items; one CoW fan-out generate + one winner decode"
@@ -53,9 +53,9 @@
       "system": "forkserve",
       "workload": "game24",
       "tp": 2,
-      "e2e_ms": 612.0511069893837,
-      "fanout_ms": 45.56140396744013,
-      "decode_ms": 536.3983679562807,
+      "e2e_ms": 236.871886998415,
+      "fanout_ms": 49.712665379047394,
+      "decode_ms": 149.50584061443806,
       "ttft_from_obs_ms": 0.0,
       "spec_ms": 0.0,
       "idle_ms": 0.0,
@@ -89,7 +89,7 @@
         0
       ],
       "known_suffix_hit_rate": 0.0,
-      "decode_tokens": 256,
+      "decode_tokens": 64,
       "sessions": 4,
       "branching": 4,
       "notes": "4 items; one CoW fan-out generate + one winner decode"
@@ -98,11 +98,11 @@
       "system": "forkserve",
       "workload": "humaneval",
       "tp": 2,
-      "e2e_ms": 2665.8670967444777,
-      "fanout_ms": 37.595170084387064,
-      "decode_ms": 611.1085689626634,
-      "ttft_from_obs_ms": 611.1085689626634,
-      "spec_ms": 37.595170084387064,
+      "e2e_ms": 2256.8876747973263,
+      "fanout_ms": 34.71862571313977,
+      "decode_ms": 206.34228130802512,
+      "ttft_from_obs_ms": 206.34228130802512,
+      "spec_ms": 34.71862571313977,
       "idle_ms": 2000.0,
       "trunk_tokens": 222,
       "residual_tokens": [
@@ -119,7 +119,7 @@
         27,
         210
       ],
-      "peak_kv_tokens": 2151,
+      "peak_kv_tokens": 1895,
       "m_cow_mib": 273.375,
       "m_clone_mib": 1147.5,
       "kv_saving": 0.7617647058823529,
@@ -130,7 +130,7 @@
         0
       ],
       "known_suffix_hit_rate": 1.0,
-      "decode_tokens": 256,
+      "decode_tokens": 64,
       "sessions": 4,
       "branching": 2,
       "notes": "4 items; speculate wrap in idle; one TTFT generate"

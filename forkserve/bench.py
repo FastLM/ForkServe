@@ -770,6 +770,7 @@ def run_react_forest_forkserve(
     t_obs = _now()
     for h, wrap, recov, obs in handles:
         ad.bind_observation(h.id, h.tip, "bash", obs, ok=True)
+    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
         n_out = sum(len(o) for o in outs)
@@ -779,13 +780,11 @@ def run_react_forest_forkserve(
     t1 = _now()
     residuals: list[int] = []
     trunk_n = 0
-    peak = 0
     for h, wrap, recov, obs in handles:
         tree = eng.tree(h.id)
         parent = h.tip
         trunk_n = len(tree.get(parent).tokens)
         residuals.extend([len(eng._tok(wrap)), len(eng._tok(recov)), len(eng._tok(obs))])
-        peak += int(tree.live_kv_tokens())
     cow, clone, saving = _peak_memory(
         cfg, trunk_n * len(handles), residuals, 2 * len(handles)
     )
