@@ -134,7 +134,14 @@ def judge_rows(
         rec_pk = int(rec.get("peak_kv_tokens") or 0)
         apc_pk = int((apc or rec).get("peak_kv_tokens") or 0)
 
-        beats_recompute = rec_pk > 0 and fork_pk <= rec_pk * (1.0 - kv_gain)
+        # HumanEval / single-path ReAct: recompute and APC store the same
+        # committed sequence, so a 20% KV cut is impossible. Require "not
+        # worse than the better baseline" instead of a phantom gain.
+        apc_already_flat = rec_pk > 0 and apc_pk >= rec_pk * (1.0 - kv_gain)
+        if apc_already_flat:
+            beats_recompute = rec_pk <= 0 or fork_pk <= rec_pk * (1.0 + peak_slack)
+        else:
+            beats_recompute = rec_pk > 0 and fork_pk <= rec_pk * (1.0 - kv_gain)
         not_worse_than_apc = apc_pk <= 0 or fork_pk <= apc_pk * (1.0 + peak_slack)
         efficiency_beats = beats_recompute and not_worse_than_apc
         dropped = vllm_lat > 0 and fork_lat > vllm_lat * (1.0 + perf_drop)

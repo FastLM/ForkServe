@@ -1,7 +1,8 @@
 """vLLM backend: one ``LLM.generate`` per serving phase, CoW alias, stock async.
 
-Prefills queue and flush as one batch (APC shape). Speculative siblings are
-dropped on the committed decode path — they must not steal HumanEval TTFT.
+Queued prefills coalesce: a trunk row that is a prefix of a child is dropped
+so fan-out is one generate (APC pays trunk + fan-out). Speculative siblings
+are dropped on the committed decode path — they must not steal HumanEval TTFT.
 Custom ``scheduler_cls`` is off by default: the two-class reorder only helps
 when spec and committed share a step, and a non-Async hook disables vLLM
 async scheduling (the 2/4-GPU decode tax).
@@ -51,6 +52,28 @@ def _rides_decode(seq: Sequence[int], targets: Sequence[Sequence[int]]) -> bool:
     return any(len(t) >= n and list(t[:n]) == list(seq) for t in targets)
 
 
+def _is_prefix(short: Sequence[int], long: Sequence[int]) -> bool:
+    n = len(short)
+    return n > 0 and len(long) > n and list(long[:n]) == list(short)
+
+
+def drop_covered_prefills(pending: Sequence[PrefillRequest]) -> list[PrefillRequest]:
+    """Drop a row whose prompt is a proper prefix of another queued row.
+
+    Trunk ``open()`` and child residuals used to be two ``LLM.generate``
+    rounds. Children already send ``trunk+residual``, so the trunk row is
+    dead weight: one batched generate populates the same KV.
+    """
+    seqs = [prompt_ids_of(r) for r in pending]
+    keep: list[PrefillRequest] = []
+    for i, req in enumerate(pending):
+        seq = seqs[i]
+        if any(_is_prefix(seq, other) for j, other in enumerate(seqs) if j != i):
+            continue
+        keep.append(req)
+    return keep
+
+
 def split_pending_for_decode(
     pending: Sequence[PrefillRequest],
     decode_seqs: Sequence[Sequence[int]],
@@ -61,7 +84,7 @@ def split_pending_for_decode(
     dropped_spec: list[PrefillRequest] = []
     for req in pending:
         seq = prompt_ids_of(req)
-        if _rides_decode(seq, decode_seqs):
+        if _rides_decode(seq, decode_seqs) or any(_is_prefix(seq, t) for t in decode_seqs):
             fused.append(req)
         elif req.speculative:
             dropped_spec.append(req)
@@ -220,7 +243,7 @@ class VllmBackend:
             reqs = [r for r in self._pending if r.speculative]
             keep = [r for r in self._pending if not r.speculative]
         else:
-            reqs = list(self._pending)
+            reqs = drop_covered_prefills(self._pending)
             keep = []
         self._pending = keep
         if not reqs:
@@ -265,10 +288,11 @@ class VllmBackend:
         parent_nodes: Sequence[NodeId | None] | None = None,
     ) -> list[list[TokenId]]:
         fused, committed_rest, dropped = split_pending_for_decode(self._pending, seqs)
-        # Known-suffix / commit-tail ride this generate; spec siblings stay off
-        # the critical path (paper: commit is the only user-visible verb).
+        # Known-suffix / commit-tail / covered trunks ride this generate.
+        # Spec siblings stay off the critical path (commit is the only
+        # user-visible verb).
         _ = fused, dropped
-        self._pending = list(committed_rest)
+        self._pending = drop_covered_prefills(committed_rest)
         if self._pending:
             self.flush_prefills()
         return self._generate(

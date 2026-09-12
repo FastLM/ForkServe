@@ -36,6 +36,9 @@ class Candidate:
     q_b: float = 0.0
     schema: SchemaKind = SchemaKind.FREEFORM
     declared: bool = True
+    # False: keep the tree node for LCP commit, but do not spend a GPU prefill
+    # (recovery wrappers). Peak KV then matches the committed winner.
+    gpu_prefill: bool = True
 
     @property
     def schema_stable(self) -> bool:
@@ -178,7 +181,7 @@ class SpeculatePlanner:
         generation: int = 0,
     ) -> BudgetResult:
         """Algorithm 1. Filters: idle horizon, residual HBM, committed TBT."""
-        raw = self.build_items(candidates)
+        raw = self.build_items([c for c in candidates if c.gpu_prefill])
         scored: list[tuple[float, WorkItem, float, float]] = []
         for w in raw:
             t_pre = self.cost_model(len(w))

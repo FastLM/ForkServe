@@ -126,6 +126,13 @@ class Engine:
             self.speculate(tree.session, node.id, priority=priority)
         return node.id
 
+    def queue_known_prefill(self, session: SessionId | str, node: NodeId) -> None:
+        """Queue a committed prefill of ``node.residual`` (no GPU flush)."""
+        tree = self.forest.get(SessionId(str(session)))
+        child = tree.get(node)
+        if child.residual:
+            self._issue_prefill(tree, child.id, child.residual, speculative=False)
+
     def speculate(
         self,
         session: SessionId | str,
@@ -314,15 +321,29 @@ class Engine:
             parent=parent,
         )
         if result.tail:
+            # Queue only — the next generate() fuses the tail (no extra GPU step).
             self._issue_prefill(tree, result.node_id, result.tail, speculative=False)
-            self._flush_backend()
         self.metrics[tree.session].joins += 1
         return result
+
+    def promote(self, session: SessionId | str, node: NodeId) -> NodeId:
+        """Make ``node`` the committed tip without a join fork (keeps CoW snapshot)."""
+        tree = self.forest.get(SessionId(str(session)))
+        tip = tree.get(node)
+        if tip.mode is NodeMode.DEAD:
+            raise InvariantError("cannot promote a dead node")
+        if tip.mode is NodeMode.SPEC:
+            tree.set_mode(node, NodeMode.COMMIT)
+        tree.tip = node
+        return node
 
     def abort(self, session: SessionId | str, node: NodeId) -> int:
         tree = self.forest.get(SessionId(str(session)))
         n = tree.abort(node)
         self.scheduler.cancel_node(node)
+        cancel = getattr(self.backend, "cancel_prefill", None)
+        if callable(cancel):
+            cancel(node)
         self.metrics[tree.session].aborts += 1
         # Spec ancestors that cascade-died also drop in-flight chunks.
         cur = tree.get(node).parent
@@ -368,10 +389,10 @@ class Engine:
                 tenant=tree.tenant,
             )
         )
-        self.drain_slack()
         req = DecodeRequest(tree.session, tip.id, n_tokens, seed=seed)
         # vLLM (and other real engines) need the committed prompt; MockBackend
-        # can decode from a node id alone.
+        # can decode from a node id alone. Alias this tip's snapshotted blocks
+        # (thought / wrap), not the root — that would recompute the residual.
         gen = getattr(self.backend, "generate_committed", None)
         if callable(gen):
             out = gen(
@@ -379,7 +400,7 @@ class Engine:
                 n_tokens,
                 seed=seed,
                 node_id=tip.id,
-                parent_node=None,
+                parent_node=tip.id,
             )
         else:
             out = self.backend.decode(req)
@@ -420,9 +441,8 @@ class Engine:
             tips.append((tree, tip))
             seqs.append(tip.tokens)
             node_ids.append(tip.id)
-            # Do not CoW-alias the root onto decode: that overrides APC and
-            # recomputes a speculated wrap. Hash the full committed prompt.
-            parents.append(None)
+            # Alias the tip's own snapshot (trunk+thought or trunk+wrap).
+            parents.append(tip.id)
         gen = getattr(self.backend, "generate_committed_many", None)
         if not callable(gen):
             return [self.generate(session, n_tokens, seed=seed) for session in sessions]
@@ -441,6 +461,16 @@ class Engine:
                 self.metrics[tree.session].committed_tokens += len(tokens)
             result.append(tokens)
         return result
+
+    def queue_known_prefill(self, session: SessionId | str, node: NodeId) -> None:
+        """Queue a child's residual (trunk is already in ``full_prompt``).
+
+        ToT thoughts are committed residuals, not tool-idle speculation.
+        The backend drops a covered trunk row so one ``flush()`` fans out.
+        """
+        tree = self.forest.get(SessionId(str(session)))
+        child = tree.get(node)
+        self._issue_prefill(tree, node, child.residual or child.tokens, speculative=False)
 
     def flush(self) -> None:
         """Push queued prefills in one backend batch (open / fork fan-out)."""
@@ -465,7 +495,9 @@ class Engine:
             self._issue_prefill(tree, node.id, extra, speculative=True)
             self.metrics[chunk.session].spec_tokens += len(extra)
             ran += len(extra)
-        self._flush_backend(speculative_only=True)
+        # One generate with any leftover committed trunks: covered prefixes
+        # are dropped inside the backend so this is still a single fan-out.
+        self._flush_backend(speculative_only=False)
         return ran
 
     def mark_tool_idle(self, session: SessionId | str, node: NodeId, tool_s: float) -> float:

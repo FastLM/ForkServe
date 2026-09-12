@@ -47,13 +47,26 @@ def test_judge_fails_on_latency_drop() -> None:
 
 def test_judge_fails_when_kv_not_better_than_recompute() -> None:
     rows = [
-        _row("vllm_recompute", 2, "gsm8k", 700, 223),
+        _row("vllm_recompute", 2, "gsm8k", 700, 694),
         _row("vllm_apc", 2, "gsm8k", 680, 223),
-        _row("forkserve", 2, "gsm8k", 680, 223),
+        _row("forkserve", 2, "gsm8k", 680, 600),
     ]
     v = rl.judge_rows(rows, kv_gain=0.20)
     assert not v.ok
     assert not v.pairs[0].efficiency_beats
+
+
+def test_judge_humaneval_flat_baseline_matches_apc() -> None:
+    """Recompute == APC (single committed path): 20% KV cut is not required."""
+    rows = [
+        _row("vllm_recompute", 2, "humaneval", 8000, 1807, ttft=210),
+        _row("vllm_apc", 2, "humaneval", 8000, 1807, ttft=210),
+        _row("forkserve", 2, "humaneval", 8000, 1807, ttft=200),
+    ]
+    v = rl.judge_rows(rows, kv_gain=0.20, perf_drop=0.10)
+    assert v.ok
+    assert v.pairs[0].efficiency_beats
+    assert not v.pairs[0].perf_drop
 
 
 def test_humaneval_uses_ttft() -> None:

@@ -179,11 +179,12 @@ def install_vllm_cow() -> None:
     def _touch(self, blocks):  # type: ignore[no-untyped-def]
         _orig_touch(self, blocks)
         table = cow_of(self)
+        pin = table.ro.add
         for block in blocks:
             if getattr(block, "is_null", False):
                 continue
             if block.ref_cnt > 1:
-                table.pin_ro(block.block_id)
+                pin(int(block.block_id))
 
     def _get_computed(self, request):  # type: ignore[no-untyped-def]
         aliased = _alias_parent_blocks(self, request)
@@ -193,6 +194,9 @@ def install_vllm_cow() -> None:
 
     def _cache_blocks(self, request, num_computed_tokens):  # type: ignore[no-untyped-def]
         _orig_cache_blocks(self, request, num_computed_tokens)
+        extra = extra_of(request)
+        if extra.get("forkserve_node") is None:
+            return
         try:
             _snapshot_node_blocks(self, request)
         except Exception:
@@ -337,17 +341,22 @@ def get_two_class_scheduler() -> type:
             return super().add_request(request)
 
         def schedule(self, throttle_prefills: bool = False):  # type: ignore[no-untyped-def]
-            self.running = committed_first(self.running)
+            # Skip the partition when the batch is uniform (common decode).
+            running = self.running
+            if running and any(is_speculative(r) for r in running):
+                self.running = committed_first(running)
             waiting = self.waiting
             if isinstance(waiting, FCFSRequestQueue) and waiting:
-                ordered = committed_first(list(waiting))
-                waiting.clear()
-                waiting.extend(ordered)
+                raw = list(waiting)
+                if any(is_speculative(r) for r in raw):
+                    waiting.clear()
+                    waiting.extend(committed_first(raw))
             skipped = getattr(self, "skipped_waiting", None)
             if isinstance(skipped, FCFSRequestQueue) and skipped:
-                ordered = committed_first(list(skipped))
-                skipped.clear()
-                skipped.extend(ordered)
+                raw = list(skipped)
+                if any(is_speculative(r) for r in raw):
+                    skipped.clear()
+                    skipped.extend(committed_first(raw))
             return super().schedule(throttle_prefills)
 
     _TwoClassVllmScheduler.__name__ = "TwoClassVllmScheduler"

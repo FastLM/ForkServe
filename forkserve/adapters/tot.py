@@ -57,6 +57,8 @@ class ToTAdapter:
         for i, cid in enumerate(children):
             if i != winner:
                 self.engine.abort(session, cid)
+        if hasattr(self.engine, "promote"):
+            return self.engine.promote(session, keep)
         result = self.engine.join(
             session,
             [keep],

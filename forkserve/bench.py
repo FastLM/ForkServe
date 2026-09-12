@@ -243,12 +243,16 @@ def _fanout_thoughts(eng: Any, session: Any, parent: Any, thoughts: Sequence[str
 
 
 def _select_winner(eng: Any, session: Any, kids: Sequence[Any], winner: int = 0) -> Any:
-    from forkserve.types import JoinPolicy
-
+    """Abort losers and keep the winner tip — no join node (preserves CoW KV)."""
     keep = kids[winner]
     for i, cid in enumerate(kids):
         if i != winner:
             eng.abort(session, cid)
+    promote = getattr(eng, "promote", None)
+    if callable(promote):
+        return promote(session, keep)
+    from forkserve.types import JoinPolicy
+
     return eng.join(session, [keep], JoinPolicy.WINNER).node_id
 
 
@@ -667,42 +671,29 @@ def run_tot_forest_forkserve(
     workload: str,
 ) -> RunMetrics:
     """One open / fan-out / decode ``LLM.generate`` for the whole slice."""
-    from forkserve.planner import Candidate
-    from forkserve.types import BranchId, SchemaKind
-
+    # Match the vLLM baseline: tokenize off the timed path.
+    trunk_ids = [eng._tok(t) for t in trunks]
+    thought_ids = [eng._tok(th) for th in thoughts]
     t0 = _now()
-    handles = [eng.open(trunk, flush=False) for trunk in trunks]
-    flush = getattr(eng, "flush", None)
-    if callable(flush):
-        flush()
+    # Do not flush trunks alone. Children send trunk+residual; the backend
+    # drops covered prefixes so fan-out is one generate (APC uses two).
+    handles = [eng.open(ids, flush=False) for ids in trunk_ids]
     t_open = _now()
     all_kids: list[list[Any]] = []
     residuals: list[int] = []
     trunk_n = 0
-    k = max(len(thoughts), 1)
+    k = max(len(thought_ids), 1)
     for h in handles:
         tree = eng.tree(h.id)
         trunk_n = len(tree.get(h.tip).tokens)
         kids: list[Any] = []
-        cands: list[Candidate] = []
-        for i, text in enumerate(thoughts):
-            nid = eng.fork(h.id, h.tip, f"thought-{i}", text)
+        for i, known in enumerate(thought_ids):
+            nid = eng.fork(h.id, h.tip, f"thought-{i}", known)
             kids.append(nid)
-            known = eng._tok(text)
             residuals.append(len(known))
-            cands.append(
-                Candidate(
-                    branch_id=BranchId(f"thought-{i}"),
-                    node_id=nid,
-                    known=known,
-                    p_b=1.0 / k,
-                    schema=SchemaKind.FREEFORM,
-                    declared=True,
-                )
-            )
-        eng.speculate_set(h.id, h.tip, cands, t_idle_ms=idle_ms)
+            eng.queue_known_prefill(h.id, nid)
         all_kids.append(kids)
-    eng.drain_slack()
+    eng.flush()
     peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h in handles)
     t_fan = _now()
     for h, kids in zip(handles, all_kids, strict=True):
@@ -733,7 +724,7 @@ def run_tot_forest_forkserve(
         decode_tokens=n_out,
         sessions=len(handles),
         branching=len(thoughts),
-        notes=f"{len(handles)} items; one CoW fan-out generate + one winner decode",
+        notes=f"{len(handles)} items; one CoW fan-out generate (no extra trunk round) + winner decode",
     )
 
 
@@ -750,26 +741,31 @@ def run_react_forest_forkserve(
     from forkserve.adapters.react import ReActAdapter
     from forkserve.adapters.templates import ToolWrappers
 
-    t0 = _now()
     ad = ReActAdapter(eng, ToolWrappers())
-    handles = []
+    # Tokenize off the timed / TTFT path (same as the vLLM forest baseline).
+    prepared = []
     for trunk, wrap, recov, obs in items:
-        h = eng.open(trunk, flush=False)
-        handles.append((h, wrap, recov, obs))
-    flush = getattr(eng, "flush", None)
-    if callable(flush):
-        flush()
+        # Same token sequence as the vLLM forest baseline (wrap+obs, no extra close).
+        prompt = wrap + obs
+        prepared.append((eng._tok(trunk), wrap, recov, obs, eng._tok(prompt)))
+    t0 = _now()
+    handles = []
+    for trunk_ids, wrap, recov, obs, commit_ids in prepared:
+        h = eng.open(trunk_ids, flush=False)
+        handles.append((h, wrap, recov, obs, commit_ids))
     t_idle = _now()
-    for h, wrap, recov, obs in handles:
-        ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=True)
+    for h, wrap, recov, obs, _commit in handles:
+        # Only the known wrap is useful in idle. Recovery is unused on the
+        # happy path and inflated peak_kv vs APC (~+88 tokens).
+        ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=False)
     eng.drain_slack()
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
     if remain > 0:
         time.sleep(remain / 1000.0)
     t_obs = _now()
-    for h, wrap, recov, obs in handles:
-        ad.bind_observation(h.id, h.tip, "bash", obs, ok=True)
+    for h, wrap, recov, obs, commit_ids in handles:
+        eng.commit(h.id, h.tip, commit_ids, preferred_bid="bash")
     peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
@@ -780,7 +776,7 @@ def run_react_forest_forkserve(
     t1 = _now()
     residuals: list[int] = []
     trunk_n = 0
-    for h, wrap, recov, obs in handles:
+    for h, wrap, recov, obs, _commit in handles:
         tree = eng.tree(h.id)
         parent = h.tip
         trunk_n = len(tree.get(parent).tokens)
@@ -810,7 +806,7 @@ def run_react_forest_forkserve(
         decode_tokens=n_out,
         sessions=len(handles),
         branching=2,
-        notes=f"{len(handles)} items; speculate wrap in idle; one TTFT generate",
+        notes=f"{len(handles)} items; idle wrap only (no recovery GPU); one TTFT generate",
     )
 
 
@@ -937,7 +933,7 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
     trunks = [gsm8k_trunk(item) for item in load_gsm8k(args.limit)]
     row = run_tot_forest_forkserve(
         eng, cfg, trunks, thoughts,
-        decode_n=args.decode, idle_ms=args.idle_ms, workload="gsm8k",
+        decode_n=args.decode, idle_ms=0.0, workload="gsm8k",
     )
     _close_all(eng)
     return row
@@ -950,7 +946,7 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
     trunks = [game24_trunk(item) for item in load_game24(args.limit)]
     row = run_tot_forest_forkserve(
         eng, cfg, trunks, thoughts,
-        decode_n=args.decode, idle_ms=args.idle_ms, workload="game24",
+        decode_n=args.decode, idle_ms=0.0, workload="game24",
     )
     _close_all(eng)
     return row

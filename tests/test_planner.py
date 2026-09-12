@@ -113,3 +113,22 @@ def test_chunking_bounds_cancel_loss() -> None:
     )
     assert len(plan.chunks) == 4
     assert all(len(c.tokens) <= 8 for c in plan.chunks)
+
+
+def test_gpu_prefill_false_skips_recovery() -> None:
+    cfg = ForkServeConfig(bytes_per_token=1.0)
+    planner = SpeculatePlanner(cfg)
+    cands = [
+        Candidate(BranchId("bash"), NodeId(1), known=(1, 2, 3), gpu_prefill=True),
+        Candidate(BranchId("err"), NodeId(2), known=(8, 8), p_b=0.2, gpu_prefill=False),
+    ]
+    plan = planner.allocate(
+        SessionId("s"),
+        NodeId(0),
+        cands,
+        t_idle_ms=1e9,
+        gamma_ms=1e9,
+        m_free=1e12,
+        parent_mode=NodeMode.IDLE,
+    )
+    assert [c.branch_id for c in plan.chunks] == ["bash"]

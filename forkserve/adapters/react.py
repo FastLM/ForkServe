@@ -41,6 +41,8 @@ class ReActAdapter:
         ]
         if include_recovery:
             fail = self.engine.fork(session, parent, "err", recov)
+            # Fork for LCP / bind(ok=False) only. GPU-prefilling recovery is
+            # what pushed HumanEval peak_kv above APC (idle wrap is enough).
             cands.append(
                 Candidate(
                     branch_id=BranchId("err"),
@@ -49,6 +51,7 @@ class ReActAdapter:
                     p_b=0.2,
                     schema=SchemaKind.FREEFORM,
                     declared=True,
+                    gpu_prefill=False,
                 )
             )
         self.engine.speculate_set(session, parent, cands, t_idle_ms=t_idle_ms)
@@ -64,8 +67,10 @@ class ReActAdapter:
         ok: bool,
     ) -> NodeId:
         wrap = self.wrappers.observation(tool) if ok else self.wrappers.recovery(tool)
-        close = self.wrappers.close_observation() if ok else self.wrappers.close_observation()
-        prompt = wrap + observation + close
+        close = self.wrappers.close_observation()
+        prompt = wrap + observation
+        if not observation.endswith(close):
+            prompt += close
         cr = self.engine.commit(
             session, parent, prompt, preferred_bid=tool if ok else "err"
         )

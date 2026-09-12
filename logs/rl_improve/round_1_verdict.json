@@ -1,0 +1,78 @@
+{
+  "ok": false,
+  "reason": "efficiency did not beat vLLM; clear latency drop vs vLLM",
+  "pairs": [
+    {
+      "tp": 2,
+      "workload": "game24",
+      "fork_latency_ms": 239.80571515858173,
+      "vllm_latency_ms": 222.9546788148582,
+      "fork_peak_kv": 818,
+      "vllm_recompute_peak_kv": 2228,
+      "vllm_apc_peak_kv": 818,
+      "efficiency_beats": true,
+      "perf_drop": false,
+      "notes": "lat 239.8 vs 223.0 (+7.6%); peak_kv 818 vs recompute 2228 / apc 818"
+    },
+    {
+      "tp": 2,
+      "workload": "gsm8k",
+      "fork_latency_ms": 270.2098982408643,
+      "vllm_latency_ms": 243.01315238699317,
+      "fork_peak_kv": 815,
+      "vllm_recompute_peak_kv": 2468,
+      "vllm_apc_peak_kv": 815,
+      "efficiency_beats": true,
+      "perf_drop": true,
+      "notes": "lat 270.2 vs 243.0 (+11.2%); peak_kv 815 vs recompute 2468 / apc 815"
+    },
+    {
+      "tp": 2,
+      "workload": "humaneval",
+      "fork_latency_ms": 219.68210116028786,
+      "vllm_latency_ms": 210.8252071775496,
+      "fork_peak_kv": 1895,
+      "vllm_recompute_peak_kv": 1807,
+      "vllm_apc_peak_kv": 1807,
+      "efficiency_beats": false,
+      "perf_drop": false,
+      "notes": "lat 219.7 vs 210.8 (+4.2%); peak_kv 1895 vs recompute 1807 / apc 1807"
+    },
+    {
+      "tp": 4,
+      "workload": "game24",
+      "fork_latency_ms": 175.0973709858954,
+      "vllm_latency_ms": 155.78110190108418,
+      "fork_peak_kv": 818,
+      "vllm_recompute_peak_kv": 2228,
+      "vllm_apc_peak_kv": 818,
+      "efficiency_beats": true,
+      "perf_drop": true,
+      "notes": "lat 175.1 vs 155.8 (+12.4%); peak_kv 818 vs recompute 2228 / apc 818"
+    },
+    {
+      "tp": 4,
+      "workload": "gsm8k",
+      "fork_latency_ms": 205.90896205976605,
+      "vllm_latency_ms": 182.66390915960073,
+      "fork_peak_kv": 815,
+      "vllm_recompute_peak_kv": 2468,
+      "vllm_apc_peak_kv": 815,
+      "efficiency_beats": true,
+      "perf_drop": true,
+      "notes": "lat 205.9 vs 182.7 (+12.7%); peak_kv 815 vs recompute 2468 / apc 815"
+    },
+    {
+      "tp": 4,
+      "workload": "humaneval",
+      "fork_latency_ms": 144.20159673318267,
+      "vllm_latency_ms": 136.0984039492905,
+      "fork_peak_kv": 1895,
+      "vllm_recompute_peak_kv": 1807,
+      "vllm_apc_peak_kv": 1807,
+      "efficiency_beats": false,
+      "perf_drop": false,
+      "notes": "lat 144.2 vs 136.1 (+6.0%); peak_kv 1895 vs recompute 1807 / apc 1807"
+    }
+  ]
+}

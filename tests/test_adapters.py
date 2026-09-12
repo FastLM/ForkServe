@@ -37,6 +37,17 @@ def test_react_bind(eng: Engine) -> None:
     assert eng.tree(h.id).get(fail).mode is NodeMode.DEAD
 
 
+def test_react_bind_does_not_double_close(eng: Engine) -> None:
+    wrap = ToolWrappers()
+    ad = ReActAdapter(eng, wrap)
+    h = eng.open("sys")
+    ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=500)
+    closed = "body" + wrap.close_observation()
+    winner = ad.bind_observation(h.id, h.tip, "bash", closed, ok=True)
+    text = eng.backend.detokenize(eng.tree(h.id).get(winner).tokens)
+    assert text.count(wrap.close_observation()) == 1
+
+
 def test_langgraph_send_join(eng: Engine) -> None:
     ad = LangGraphAdapter(eng, ToolWrappers())
     h = eng.open("planner trunk")

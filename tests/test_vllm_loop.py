@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from forkserve.engine.vllm_backend import (
+    drop_covered_prefills,
     partition_fused,
     prompt_ids_of,
     split_pending_for_decode,
@@ -128,3 +129,51 @@ def test_split_pending_drops_spec_siblings() -> None:
     assert fused == [tail]
     assert committed == []
     assert dropped == [recov]
+
+
+def test_drop_covered_prefills_kills_trunk_round() -> None:
+    sid = SessionId("s")
+    trunk = PrefillRequest(
+        session=sid,
+        node_id=NodeId(0),
+        tokens=tuple(range(8)),
+        speculative=False,
+        page_ids=(),
+        full_prompt=tuple(range(8)),
+    )
+    child_a = PrefillRequest(
+        session=sid,
+        node_id=NodeId(1),
+        tokens=(8, 9),
+        speculative=True,
+        page_ids=(),
+        full_prompt=tuple(range(10)),
+    )
+    child_b = PrefillRequest(
+        session=sid,
+        node_id=NodeId(2),
+        tokens=(8, 11),
+        speculative=True,
+        page_ids=(),
+        full_prompt=tuple(range(8)) + (11, 12),
+    )
+    kept = drop_covered_prefills([trunk, child_a, child_b])
+    assert trunk not in kept
+    assert child_a in kept and child_b in kept
+
+
+def test_split_pending_fuses_covered_trunk() -> None:
+    sid = SessionId("s")
+    trunk = PrefillRequest(
+        session=sid,
+        node_id=NodeId(0),
+        tokens=tuple(range(4)),
+        speculative=False,
+        page_ids=(),
+        full_prompt=tuple(range(4)),
+    )
+    decode = tuple(range(8))
+    fused, committed, dropped = split_pending_for_decode([trunk], [decode])
+    assert fused == [trunk]
+    assert committed == []
+    assert dropped == []

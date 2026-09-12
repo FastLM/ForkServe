@@ -33,6 +33,34 @@ def test_open_fork_speculate_commit_roundtrip(eng: Engine) -> None:
     assert m.known_suffix_hit_rate == 1.0
 
 
+def test_promote_keeps_winner_without_join(eng: Engine) -> None:
+    h = eng.open("trunk history")
+    a = eng.fork(h.id, h.tip, "thought-0", "plan a")
+    b = eng.fork(h.id, h.tip, "thought-1", "plan b")
+    eng.abort(h.id, b)
+    tip = eng.promote(h.id, a)
+    tree = eng.tree(h.id)
+    assert tip == a
+    assert tree.tip == a
+    assert tree.get(a).mode is NodeMode.COMMIT
+    assert tree.get(b).mode is NodeMode.DEAD
+    # No extra join child of the root.
+    live = [n for n in tree.live_nodes() if n.parent == h.tip]
+    assert [n.id for n in live] == [a]
+
+
+def test_queue_known_prefill_then_flush(eng: Engine) -> None:
+    a = eng.open("trunk alpha", flush=False)
+    b = eng.open("trunk beta", flush=False)
+    ka = eng.fork(a.id, a.tip, "t0", "plan a")
+    kb = eng.fork(b.id, b.tip, "t0", "plan b")
+    eng.queue_known_prefill(a.id, ka)
+    eng.queue_known_prefill(b.id, kb)
+    eng.flush()
+    assert eng.tree(a.id).get(ka).residual
+    assert eng.tree(b.id).get(kb).residual
+
+
 def test_generate_many_batches_committed_decode(eng: Engine) -> None:
     a = eng.open("trunk alpha", flush=False)
     b = eng.open("trunk beta", flush=False)
