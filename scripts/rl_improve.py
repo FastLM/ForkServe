@@ -216,6 +216,12 @@ def write_cursor_prompt(round_id: int, verdict: RoundVerdict, bench_path: Path) 
         "and keep **task quality** almost unchanged vs APC: GSM8K accuracy,",
         "Game24 success rate, HumanEval pass@1 (not token overlap).",
         "",
+        "Quality is only informative if each winner can finish. Pass `--decode`",
+        "through to bench (default 256 **per item**, not 16). JSON `decode_tokens`",
+        "is n_items × decode — do not treat 64 as 64 tokens per problem.",
+        "HumanEval pass@1 must score official function-body completions",
+        "(`prompt + body + check(entry)`), not the ReAct/chat tail.",
+        "",
         "Focus on serving path: CoW / two-class scheduler / speculative prefill",
         "(`forkserve/engine/`, `forkserve/bench.py` worker). Keep unit tests green.",
         "Do not rewrite occupy scripts unless required.",
@@ -386,6 +392,8 @@ def run_bench(args: argparse.Namespace, round_id: int) -> Path:
         args.workloads,
         "--limit",
         str(args.limit),
+        "--decode",
+        str(args.decode),
         "--out",
         str(out),
     ]
@@ -465,6 +473,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--model", default=os.environ.get("FORKSERVE_MODEL", str(Path.home() / "models/Qwen3-8B")))
     p.add_argument("--workloads", default="gsm8k,game24,humaneval")
     p.add_argument("--limit", type=int, default=4)
+    p.add_argument(
+        "--decode",
+        type=int,
+        default=int(os.environ.get("FORKSERVE_DECODE", "256")),
+        help="tokens per winner/item (bench JSON decode_tokens is n_items × this)",
+    )
     p.add_argument("--kv-gain", type=float, default=0.20, help="ForkServe peak_kv must be this fraction below recompute")
     p.add_argument("--perf-drop", type=float, default=0.10, help="latency slack vs vLLM APC (or recompute)")
     p.add_argument("--peak-slack", type=float, default=0.05, help="allowed peak_kv above APC")

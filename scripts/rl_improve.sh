@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./scripts/rl_improve.sh
-#   ./scripts/rl_improve.sh --max-rounds 100 --tp 2,4 --limit 4
+#   ./scripts/rl_improve.sh --max-rounds 100 --tp 2,4 --limit 4 --decode 256
 #   ./scripts/rl_improve.sh --from-json logs/bench_gpu.json   # judge only
 #   RL_EDIT=wait ./scripts/rl_improve.sh                     # occupy, wait for CONTINUE
 #   RL_EDIT=cursor CURSOR_API_KEY=... ./scripts/rl_improve.sh

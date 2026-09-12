@@ -97,6 +97,11 @@ def test_judge_ignores_missing_quality() -> None:
     assert not v.pairs[0].quality_drop
 
 
+def test_decode_default_is_long_enough_for_answers() -> None:
+    args = rl.parse_args([])
+    assert args.decode >= 256
+
+
 def test_humaneval_uses_ttft() -> None:
     rows = [
         _row("vllm_recompute", 2, "humaneval", 8000, 588, ttft=100),

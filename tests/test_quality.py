@@ -40,6 +40,14 @@ def test_humaneval_pass_at_1_runs_hidden_tests() -> None:
     scored = score_task("humaneval", [good, bad], [tests, tests], [prompt, prompt])
     assert scored.metric == "pass_at_1"
     assert scored.score == 0.5
+    official = (
+        "\nMETADATA = {'author': 't'}\n\n"
+        "def check(candidate):\n"
+        "    assert candidate(2, 3) == 5\n"
+    )
+    chatty = "</think>\n\n```python\n    return a + b\n```\n<|eot_id|>"
+    assert humaneval_pass(chatty, official, prompt)
+    assert not humaneval_pass("    return a - b\n", official, prompt)
 
 
 def test_annotate_scores_each_system_and_delta() -> None:

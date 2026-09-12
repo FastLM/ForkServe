@@ -489,6 +489,29 @@ def _set_golds(row: RunMetrics, golds: Sequence[str], texts: Sequence[str], prom
     return row
 
 
+def _humaneval_complete_forkserve(eng: Any, problems: Sequence[Any], decode_n: int) -> tuple[list[str], list[list[int]]]:
+    """Official HumanEval completion (function body), not the ReAct/chat tail."""
+    handles = [eng.open(item.prompt, flush=True) for item in problems]
+    if hasattr(eng, "generate_many"):
+        outs = eng.generate_many([h.id for h in handles], decode_n)
+    else:
+        outs = [eng.generate(h.id, decode_n) for h in handles]
+    ids = [[int(t) for t in o] for o in outs]
+    return _fs_texts(eng, ids), ids
+
+
+def _humaneval_complete_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    problems: Sequence[Any],
+    decode_n: int,
+) -> tuple[list[str], list[list[int]]]:
+    prompts = [_tok_ids(llm, item.prompt) for item in problems]
+    decoded = _gen(llm, SamplingParams, TokensPrompt, prompts, decode_n)
+    return _vllm_texts(llm, decoded), decoded
+
+
 def _warmup_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any) -> None:
     _gen(llm, SamplingParams, TokensPrompt, [[1, 2, 3, 4]], 1)
 
@@ -1045,12 +1068,9 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
         eng, cfg, items,
         decode_n=args.decode, idle_ms=args.idle_ms, workload="humaneval",
     )
-    _set_golds(
-        row,
-        [p.tests for p in problems],
-        _fs_texts(eng, row.decode_ids),
-        [p.prompt for p in problems],
-    )
+    texts, _ids = _humaneval_complete_forkserve(eng, problems, args.decode)
+    row.notes = (row.notes + "; quality=official HumanEval completion").strip("; ")
+    _set_golds(row, [p.tests for p in problems], texts, [p.prompt for p in problems])
     _close_all(eng)
     return row
 
@@ -1096,12 +1116,11 @@ def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system:
         decode_n=args.decode, idle_ms=args.idle_ms,
         prefix_cache=(system == "vllm_apc"), workload="humaneval",
     )
-    return _set_golds(
-        row,
-        [p.tests for p in problems],
-        _vllm_texts(llm, row.decode_ids),
-        [p.prompt for p in problems],
+    texts, _ids = _humaneval_complete_vllm(
+        llm, SamplingParams, TokensPrompt, problems, args.decode
     )
+    row.notes = (row.notes + "; quality=official HumanEval completion").strip("; ")
+    return _set_golds(row, [p.tests for p in problems], texts, [p.prompt for p in problems])
 
 
 # ----- mock accounting (no GPU) ---------------------------------------------
@@ -1491,7 +1510,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--tp", type=lambda s: [int(x) for x in s.split(",") if x.strip()], default=None)
     p.add_argument("--backend", choices=("vllm", "mock"), default="vllm")
     p.add_argument("--model", default=os.environ.get("FORKSERVE_MODEL", "/home/dliu/models/Qwen3-8B"))
-    p.add_argument("--decode", type=int, default=16)
+    p.add_argument(
+        "--decode",
+        type=int,
+        default=int(os.environ.get("FORKSERVE_DECODE", "256")),
+        help="tokens generated per winner/item; JSON decode_tokens is the sum across items",
+    )
     p.add_argument("--idle-ms", type=float, default=2000.0)
     p.add_argument("--branching", type=int, default=4)
     p.add_argument("--sessions", type=int, default=2)

@@ -25,6 +25,8 @@ from typing import Any, Sequence
 _NUM = re.compile(r"-?\d+(?:,\d{3})*(?:\.\d+)?")
 _CARD = re.compile(r"\d+(?:\.\d+)?")
 _FENCE = re.compile(r"```(?:python)?\n?(.*?)```", re.DOTALL | re.IGNORECASE)
+_CHAT_MARK = re.compile(r"<\|[^|]*\|>")
+_DEF = re.compile(r"def\s+(\w+)\s*\(")
 
 
 @dataclass(frozen=True)
@@ -140,16 +142,33 @@ def game24_correct(text: str, gold: str) -> bool:
 
 
 def extract_python(text: str) -> str:
-    fences = _FENCE.findall(text)
+    """Pull a function body / fenced snippet out of chat or think residue."""
+    raw = (text or "").replace("\\n", "\n")
+    if "</think>" in raw:
+        raw = raw.split("</think>")[-1]
+    raw = _CHAT_MARK.sub("", raw)
+    fences = _FENCE.findall(raw)
     if fences:
         return max(fences, key=len).strip("\n")
-    return text
+    return raw.strip("\n")
+
+
+def humaneval_entry(prompt: str) -> str:
+    m = _DEF.search(prompt or "")
+    return m.group(1) if m else ""
 
 
 def humaneval_pass(completion: str, tests: str, prompt: str = "") -> bool:
-    """pass@1: exec prompt + completion + hidden tests (Chen et al. 2021)."""
+    """pass@1: official HumanEval is prompt + body + tests + check(entry)."""
     body = extract_python(completion)
-    src = f"{prompt}\n{body}\n{tests}"
+    entry = humaneval_entry(prompt)
+    defined = _DEF.search(body)
+    if entry and defined and defined.group(1) == entry:
+        src = f"{body}\n{tests}"
+    else:
+        src = f"{prompt}\n{body}\n{tests}"
+    if entry and re.search(r"def\s+check\s*\(", tests):
+        src += f"\ncheck({entry})\n"
     ns: dict[str, Any] = {"__builtins__": __builtins__}
     try:
         exec(src, ns, ns)  # noqa: S102 — HumanEval hidden-test exec

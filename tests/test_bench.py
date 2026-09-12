@@ -120,6 +120,11 @@ def test_mock_humaneval_tool_idle_hit() -> None:
     assert he.peak_kv_tokens < 2 * he.trunk_tokens * he.sessions
 
 
+def test_decode_default_is_per_item_not_sixteen() -> None:
+    args = parse_args(["--out", "/tmp/forkserve-decode-default.json"])
+    assert args.decode >= 256
+
+
 def test_loads_local_benchmark_files() -> None:
     from forkserve.bench_tasks import benchmarks_dir, load_game24, load_gsm8k, load_humaneval
 
