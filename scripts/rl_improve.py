@@ -430,7 +430,7 @@ def edit_round(args: argparse.Namespace, hold: GpuHold, prompt_path: Path) -> No
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="RL loop: occupy → bench → Cursor edit → occupy → bench")
-    p.add_argument("--max-rounds", type=int, default=int(os.environ.get("RL_MAX_ROUNDS", "5")))
+    p.add_argument("--max-rounds", type=int, default=int(os.environ.get("RL_MAX_ROUNDS", "100")))
     p.add_argument("--tp", default=os.environ.get("FORKSERVE_TP", "2,4"))
     p.add_argument("--model", default=os.environ.get("FORKSERVE_MODEL", str(Path.home() / "models/Qwen3-8B")))
     p.add_argument("--workloads", default="gsm8k,game24,humaneval")
