@@ -33,6 +33,15 @@ def test_open_fork_speculate_commit_roundtrip(eng: Engine) -> None:
     assert m.known_suffix_hit_rate == 1.0
 
 
+def test_generate_many_batches_committed_decode(eng: Engine) -> None:
+    a = eng.open("trunk alpha", flush=False)
+    b = eng.open("trunk beta", flush=False)
+    eng.flush()
+    outs = eng.generate_many([a.id, b.id], 2)
+    assert len(outs) == 2
+    assert all(len(o) >= 1 for o in outs)
+
+
 def test_generate_refuses_spec_tip(eng: Engine) -> None:
     h = eng.open("trunk")
     spec = eng.fork(h.id, h.tip, "x", "suffix")

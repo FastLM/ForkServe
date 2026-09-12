@@ -69,8 +69,9 @@ Defaults: page size \(P=16\), \(C_\mathrm{spec}=512\), \(\lambda\) such that 1 m
 
 This repository is the ForkServe control plane plus a **vLLM V1 engine-loop comparison substrate**:
 
-- **CoW bit** — `install_vllm_cow()` wraps `BlockPool.touch` so any block with `ref_cnt > 1` is pinned read-only. A child that still finds its parent in `req_to_blocks` aliases those blocks in O(1) (`get_computed_blocks`) instead of hashing the trunk. Abort decrefs; the trunk stays while a sibling holds a ref.
-- **Two-class scheduler** — `TwoClassVllmScheduler` subclasses vLLM's iteration scheduler and reorders `running` / `waiting` so committed work takes the token budget first; speculative requests (`extra_args['forkserve_class']='speculative'`) fill the leftover. Saturation ⇒ spec not scheduled.
+- **One generate per phase** — open, CoW fan-out, and winner decode each map to one `LLM.generate` for the whole slice (same shape as APC). `generate_committed_many` fuses commit-tails and **drops speculative siblings** so HumanEval TTFT is not a recovery prefill.
+- **CoW bit** — `install_vllm_cow()` snapshots + extra-pins parent **prompt** blocks (not the extra sampled token from `max_tokens=1`). Children alias complete pages only. Abort decrefs residuals; the trunk stays while a sibling holds a ref.
+- **Stock async scheduler by default** — two-class reorder is opt-in. Passing a factory as `scheduler_cls` made vLLM treat it as `Scheduler` and disable async scheduling (the 2/4-GPU decode tax). When enabled, we pass the `AsyncScheduler` subclass itself.
 
 Still out of tree: prefill/decode disaggregation, and real HBM↔DRAM tensor movement.
 
@@ -90,7 +91,7 @@ backend = VllmBackend(
     ForkServeConfig(),
     model="/path/to/model",
     gpu_memory_utilization=0.45,
-    two_class=True,
+    two_class=False,
     cow_blocks=True,
 )
 eng = Engine(backend)

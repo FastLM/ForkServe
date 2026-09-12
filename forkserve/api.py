@@ -89,6 +89,7 @@ class Engine:
         session: str | None = None,
         tenant: str = "default",
         prefill: bool = True,
+        flush: bool = True,
     ) -> SessionHandle:
         sid = SessionId(session or f"s-{uuid4().hex[:10]}")
         tok = self._tok(tokens)
@@ -97,6 +98,8 @@ class Engine:
         self.metrics[sid] = SessionMetrics()
         if prefill:
             self._issue_prefill(tree, root.id, tok, speculative=False)
+            if flush:
+                self._flush_backend()
             self.metrics[sid].committed_tokens += len(tok)
         return SessionHandle(id=sid, root=root.id, tip=root.id, tenant=tenant)
 
@@ -266,6 +269,7 @@ class Engine:
                     tenant=tree.tenant,
                 )
             )
+            # Queue only — generate_committed fuses this tail into one vLLM call.
             self._issue_prefill(tree, result.winner, result.tail, speculative=False)
             self.metrics[tree.session].committed_tokens += len(result.tail)
 
@@ -311,6 +315,7 @@ class Engine:
         )
         if result.tail:
             self._issue_prefill(tree, result.node_id, result.tail, speculative=False)
+            self._flush_backend()
         self.metrics[tree.session].joins += 1
         return result
 
@@ -369,13 +374,75 @@ class Engine:
         # can decode from a node id alone.
         gen = getattr(self.backend, "generate_committed", None)
         if callable(gen):
-            out = gen(tip.tokens, n_tokens, seed=seed, node_id=tip.id)
+            out = gen(
+                tip.tokens,
+                n_tokens,
+                seed=seed,
+                node_id=tip.id,
+                parent_node=tip.parent,
+            )
         else:
             out = self.backend.decode(req)
         if out:
             tree.append_tokens(tip.id, tuple(out), committed=True)
             self.metrics[tree.session].committed_tokens += len(out)
         return tuple(out)
+
+    def generate_many(
+        self,
+        sessions: Iterable[SessionId | str],
+        n_tokens: int,
+        *,
+        seed: int | None = None,
+    ) -> list[TokenSeq]:
+        """One committed decode batch — same ``LLM.generate`` shape as the APC baseline."""
+        tips: list[tuple[ContextTree, object]] = []
+        seqs: list[TokenSeq] = []
+        node_ids: list[NodeId] = []
+        parents: list[NodeId | None] = []
+        for session in sessions:
+            tree = self.forest.get(SessionId(str(session)))
+            if tree.tip is None:
+                raise InvariantError("empty session")
+            tip = tree.get(tree.tip)
+            if tip.mode is NodeMode.SPEC:
+                raise InvariantError("refuse to sample a speculative node")
+            self.scheduler.submit_committed(
+                CommittedJob(
+                    session=tree.session,
+                    node_id=tip.id,
+                    tokens=n_tokens,
+                    kind="decode",
+                    slo_tokens_per_s=1000.0 / max(self.config.tbt_slo_ms, 1e-3),
+                    tenant=tree.tenant,
+                )
+            )
+            tips.append((tree, tip))
+            seqs.append(tip.tokens)
+            node_ids.append(tip.id)
+            parents.append(tip.parent)
+        gen = getattr(self.backend, "generate_committed_many", None)
+        if not callable(gen):
+            return [self.generate(session, n_tokens, seed=seed) for session in sessions]
+        outs = gen(
+            seqs,
+            n_tokens,
+            seed=seed,
+            node_ids=node_ids,
+            parent_nodes=parents,
+        )
+        result: list[TokenSeq] = []
+        for (tree, tip), out in zip(tips, outs, strict=True):
+            tokens = tuple(out)
+            if tokens:
+                tree.append_tokens(tip.id, tokens, committed=True)
+                self.metrics[tree.session].committed_tokens += len(tokens)
+            result.append(tokens)
+        return result
+
+    def flush(self) -> None:
+        """Push queued prefills in one backend batch (open / fork fan-out)."""
+        self._flush_backend()
 
     def drain_slack(self) -> int:
         """Run leftover token budget as speculative prefills. No-op if saturated."""
@@ -396,6 +463,7 @@ class Engine:
             self._issue_prefill(tree, node.id, extra, speculative=True)
             self.metrics[chunk.session].spec_tokens += len(extra)
             ran += len(extra)
+        self._flush_backend(speculative_only=True)
         return ran
 
     def mark_tool_idle(self, session: SessionId | str, node: NodeId, tool_s: float) -> float:
@@ -432,6 +500,11 @@ class Engine:
                 parent_node=node.parent,
             )
         )
+
+    def _flush_backend(self, *, speculative_only: bool = False) -> None:
+        flush = getattr(self.backend, "flush_prefills", None)
+        if callable(flush):
+            flush(speculative_only=speculative_only)
 
     def _tok(self, value: TokenSeq | str | None) -> TokenSeq:
         if value is None:

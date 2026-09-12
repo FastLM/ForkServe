@@ -78,7 +78,21 @@ def others_on_gpu() -> list[tuple[int, str]]:
     return rows
 
 
+def bench_lock_path() -> str:
+    root = os.environ.get("FORKSERVE_ROOT", os.path.expanduser("~/ForkServe"))
+    return os.environ.get(
+        "FORKSERVE_BENCH_LOCK",
+        os.path.join(root, "logs", ".forkserve_bench.lock"),
+    )
+
+
+def bench_running() -> bool:
+    return os.path.isfile(bench_lock_path())
+
+
 def gpus_idle(max_used_mib: int) -> bool:
+    if bench_running():
+        return False
     if others_on_gpu():
         return False
     used = query_used_mib()
@@ -90,7 +104,7 @@ def wait_idle(poll_sec: float, max_used_mib: int) -> None:
     while True:
         others = others_on_gpu()
         used = query_used_mib()
-        msg = f"used_mib={used} others={others[:4]}"
+        msg = f"used_mib={used} others={others[:4]} bench_lock={bench_running()}"
         if msg != last:
             log(f"waiting {msg}")
             last = msg

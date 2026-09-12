@@ -1,12 +1,20 @@
 from types import SimpleNamespace
 
+from forkserve.engine.vllm_backend import (
+    partition_fused,
+    prompt_ids_of,
+    split_pending_for_decode,
+)
+from forkserve.engine.protocol import PrefillRequest
 from forkserve.engine.vllm_loop import (
     CowBlockTable,
     committed_first,
     extra_of,
     forkserve_extra,
     is_speculative,
+    select_full_blocks,
 )
+from forkserve.types import NodeId, SessionId
 
 
 def _req(spec: bool, rid: str = "r") -> SimpleNamespace:
@@ -37,7 +45,9 @@ def test_committed_first_engine_loop_order() -> None:
 
 def test_cow_bit_pins_shared_blocks() -> None:
     table = CowBlockTable()
+    table.pin_ro(9)
     table.pin_ro([10, 11])
+    assert not table.writable(9, ref_cnt=1)
     assert not table.writable(10, ref_cnt=1)
     assert table.writable(12, ref_cnt=1)
     assert not table.writable(12, ref_cnt=2)
@@ -53,3 +63,68 @@ def test_cow_bind_parent_lookup() -> None:
     table.bind_node(4, "req-parent")
     assert table.req_for_node(4) == "req-parent"
     assert extra_of(_req(False))["forkserve_class"] == "committed"
+
+
+def test_select_full_blocks_keeps_complete_last_page() -> None:
+    blocks = [SimpleNamespace(block_id=i) for i in range(4)]
+    # 64 tokens / page 16 → 4 full pages; do not drop the last.
+    use, n = select_full_blocks(blocks, 16, 64)
+    assert [b.block_id for b in use] == [0, 1, 2, 3]
+    assert n == 64
+
+
+def test_select_full_blocks_drops_partial_tail() -> None:
+    blocks = [SimpleNamespace(block_id=i) for i in range(3)]
+    use, n = select_full_blocks(blocks, 16, 40)  # 2 full + 8 remainder
+    assert [b.block_id for b in use] == [0, 1]
+    assert n == 32
+
+
+def test_partition_fused_commit_tail_rides_decode() -> None:
+    trunk = list(range(10))
+    full = trunk + [99, 100]
+    req = PrefillRequest(
+        session=SessionId("s"),
+        node_id=NodeId(1),
+        tokens=(99, 100),
+        speculative=False,
+        page_ids=(),
+        full_prompt=tuple(full),
+    )
+    sibling = PrefillRequest(
+        session=SessionId("s"),
+        node_id=NodeId(2),
+        tokens=(7,),
+        speculative=True,
+        page_ids=(),
+        full_prompt=tuple(trunk + [7]),
+    )
+    fused, rest = partition_fused([req, sibling], full)
+    assert fused == [req]
+    assert rest == [sibling]
+    assert prompt_ids_of(req) == full
+
+
+def test_split_pending_drops_spec_siblings() -> None:
+    trunk = list(range(10))
+    full = trunk + [99, 100]
+    tail = PrefillRequest(
+        session=SessionId("s"),
+        node_id=NodeId(1),
+        tokens=(99, 100),
+        speculative=False,
+        page_ids=(),
+        full_prompt=tuple(full),
+    )
+    recov = PrefillRequest(
+        session=SessionId("s"),
+        node_id=NodeId(2),
+        tokens=(7, 8),
+        speculative=True,
+        page_ids=(),
+        full_prompt=tuple(trunk + [7, 8]),
+    )
+    fused, committed, dropped = split_pending_for_decode([tail, recov], [full])
+    assert fused == [tail]
+    assert committed == []
+    assert dropped == [recov]

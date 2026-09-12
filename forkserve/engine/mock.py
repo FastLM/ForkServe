@@ -91,6 +91,9 @@ class MockBackend:
         seq.extend(req.tokens)
         return (perf_counter() - t0) * 1000.0 + self.config.prefill_ms(len(req.tokens))
 
+    def flush_prefills(self, *, speculative_only: bool = False) -> float:
+        return 0.0
+
     def decode(self, req: DecodeRequest) -> list[TokenId]:
         script = self.decode_script.get(req.node_id, [])
         take = script[: req.n_tokens]

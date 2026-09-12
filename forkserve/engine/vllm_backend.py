@@ -1,8 +1,10 @@
-"""vLLM backend: CoW block-pool bit + two-class scheduler in the engine loop.
+"""vLLM backend: one ``LLM.generate`` per serving phase, CoW alias, stock async.
 
-``LLM(..., scheduler_cls=TwoClassVllmScheduler)`` is the comparison
-substrate. Speculative 1-token warmups are tagged and never surfaced
-(Theorem 2).
+Prefills queue and flush as one batch (APC shape). Speculative siblings are
+dropped on the committed decode path — they must not steal HumanEval TTFT.
+Custom ``scheduler_cls`` is off by default: the two-class reorder only helps
+when spec and committed share a step, and a non-Async hook disables vLLM
+async scheduling (the 2/4-GPU decode tax).
 """
 
 from __future__ import annotations
@@ -36,6 +38,47 @@ def _try_import_vllm() -> Any:
     return vllm, LLM, SamplingParams, TokensPrompt
 
 
+def prompt_ids_of(req: PrefillRequest) -> list[int]:
+    if req.full_prompt:
+        return list(req.full_prompt)
+    return list(req.tokens)
+
+
+def _rides_decode(seq: Sequence[int], targets: Sequence[Sequence[int]]) -> bool:
+    if not seq:
+        return False
+    n = len(seq)
+    return any(len(t) >= n and list(t[:n]) == list(seq) for t in targets)
+
+
+def split_pending_for_decode(
+    pending: Sequence[PrefillRequest],
+    decode_seqs: Sequence[Sequence[int]],
+) -> tuple[list[PrefillRequest], list[PrefillRequest], list[PrefillRequest]]:
+    """Fused prefixes ride decode; speculative leftovers are dropped (not flushed)."""
+    fused: list[PrefillRequest] = []
+    committed_rest: list[PrefillRequest] = []
+    dropped_spec: list[PrefillRequest] = []
+    for req in pending:
+        seq = prompt_ids_of(req)
+        if _rides_decode(seq, decode_seqs):
+            fused.append(req)
+        elif req.speculative:
+            dropped_spec.append(req)
+        else:
+            committed_rest.append(req)
+    return fused, committed_rest, dropped_spec
+
+
+def partition_fused(
+    pending: Sequence[PrefillRequest],
+    decode_tokens: Sequence[int],
+) -> tuple[list[PrefillRequest], list[PrefillRequest]]:
+    """Pending rows whose prompt is a prefix of decode can ride the decode generate()."""
+    fused, committed_rest, dropped = split_pending_for_decode(pending, [decode_tokens])
+    return fused, committed_rest + dropped
+
+
 @dataclass
 class VllmBackend:
     """One ``LLM`` owns the GPU and the engine loop; ForkServe owns the tree."""
@@ -48,13 +91,15 @@ class VllmBackend:
     gpu_memory_utilization: float = 0.90
     enable_prefix_caching: bool = True
     enforce_eager: bool = False
-    two_class: bool = True
+    two_class: bool = False
     cow_blocks: bool = True
     _llm: Any = field(init=False, default=None)
     _SamplingParams: Any = field(init=False, default=None)
     _TokensPrompt: Any = field(init=False, default=None)
     pool: PagePool = field(init=False)
     _prompts: dict[NodeId, list[int]] = field(init=False, default_factory=dict)
+    _pending: list[PrefillRequest] = field(init=False, default_factory=list)
+    generate_calls: int = field(init=False, default=0)
 
     def __post_init__(self) -> None:
         if self.cow_blocks:
@@ -72,13 +117,18 @@ class VllmBackend:
             enable_chunked_prefill=True,
             max_num_batched_tokens=self.config.max_batched_tokens,
             enforce_eager=self.enforce_eager,
+            disable_log_stats=True,
         )
         if self.two_class:
+            # Pass the AsyncScheduler subclass, not the factory — vLLM's
+            # issubclass check otherwise falls back to sync Scheduler.
             llm_kwargs["scheduler_cls"] = get_two_class_scheduler()
         self._llm = LLM(**llm_kwargs)
         self.pool = PagePool(self.config, TokenKvStore())
         self._tokenizer = self._llm.get_tokenizer()
         self._prompts = {}
+        self._pending = []
+        self.generate_calls = 0
 
     def tokenize(self, text: str) -> TokenSeq:
         ids = self._tokenizer.encode(text, add_special_tokens=False)
@@ -107,20 +157,82 @@ class VllmBackend:
             ),
         )
 
+    def _generate(
+        self,
+        seqs: Sequence[Sequence[int]],
+        max_tokens: int,
+        *,
+        speculative: Sequence[bool] | bool = False,
+        node_ids: Sequence[NodeId | None] | None = None,
+        parent_nodes: Sequence[NodeId | None] | None = None,
+        seed: int | None = None,
+    ) -> list[list[int]]:
+        if not seqs:
+            return []
+        n = len(seqs)
+        spec_flags = (
+            [bool(speculative)] * n
+            if isinstance(speculative, bool)
+            else list(speculative)
+        )
+        nodes = list(node_ids) if node_ids is not None else [None] * n
+        parents = list(parent_nodes) if parent_nodes is not None else [None] * n
+        prompts = [self._TokensPrompt(prompt_token_ids=list(s)) for s in seqs]
+        params = [
+            self._params(
+                max_tokens,
+                speculative=spec_flags[i],
+                node_id=nodes[i],
+                parent_node=parents[i],
+                seed=seed,
+            )
+            for i in range(n)
+        ]
+        self.generate_calls += 1
+        outs = self._llm.generate(prompts, params, use_tqdm=False)
+        result: list[list[int]] = []
+        for o in outs:
+            result.append([int(t) for t in o.outputs[0].token_ids])
+        return result
+
     def prefill(self, req: PrefillRequest) -> float:
-        t0 = perf_counter()
-        seq = list(req.full_prompt) if req.full_prompt else (
-            list(self._prompts.get(req.node_id, [])) + list(req.tokens)
-        )
+        seq = prompt_ids_of(req)
+        if not seq:
+            seq = list(self._prompts.get(req.node_id, [])) + list(req.tokens)
         self._prompts[req.node_id] = seq
-        params = self._params(
-            1,
-            speculative=req.speculative,
-            node_id=req.node_id,
-            parent_node=req.parent_node,
+        self._pending.append(
+            PrefillRequest(
+                session=req.session,
+                node_id=req.node_id,
+                tokens=req.tokens,
+                speculative=req.speculative,
+                page_ids=req.page_ids,
+                full_prompt=tuple(seq),
+                parent_node=req.parent_node,
+            )
         )
-        prompt = self._TokensPrompt(prompt_token_ids=seq)
-        _ = self._llm.generate([prompt], params, use_tqdm=False)
+        return 0.0
+
+    def flush_prefills(self, *, speculative_only: bool = False) -> float:
+        if not self._pending:
+            return 0.0
+        if speculative_only:
+            reqs = [r for r in self._pending if r.speculative]
+            keep = [r for r in self._pending if not r.speculative]
+        else:
+            reqs = list(self._pending)
+            keep = []
+        self._pending = keep
+        if not reqs:
+            return 0.0
+        t0 = perf_counter()
+        self._generate(
+            [prompt_ids_of(r) for r in reqs],
+            1,
+            speculative=[r.speculative for r in reqs],
+            node_ids=[r.node_id for r in reqs],
+            parent_nodes=[r.parent_node for r in reqs],
+        )
         return (perf_counter() - t0) * 1000.0
 
     def decode(self, req: DecodeRequest) -> list[TokenId]:
@@ -133,17 +245,64 @@ class VllmBackend:
         max_tokens: int,
         seed: int | None = None,
         node_id: NodeId | None = None,
+        parent_node: NodeId | None = None,
     ) -> list[TokenId]:
-        params = self._params(
+        outs = self.generate_committed_many(
+            [tokens],
+            max_tokens,
+            seed=seed,
+            node_ids=[node_id],
+            parent_nodes=[parent_node],
+        )
+        return outs[0] if outs else []
+
+    def generate_committed_many(
+        self,
+        seqs: Sequence[TokenSeq],
+        max_tokens: int,
+        seed: int | None = None,
+        node_ids: Sequence[NodeId | None] | None = None,
+        parent_nodes: Sequence[NodeId | None] | None = None,
+    ) -> list[list[TokenId]]:
+        fused, committed_rest, dropped = split_pending_for_decode(self._pending, seqs)
+        # Known-suffix / commit-tail ride this generate; spec siblings stay off
+        # the critical path (paper: commit is the only user-visible verb).
+        _ = fused, dropped
+        self._pending = list(committed_rest)
+        if self._pending:
+            self.flush_prefills()
+        return self._generate(
+            [list(s) for s in seqs],
             max_tokens,
             speculative=False,
-            node_id=node_id,
+            node_ids=node_ids,
+            parent_nodes=parent_nodes,
             seed=seed,
         )
-        prompt = self._TokensPrompt(prompt_token_ids=list(tokens))
-        outs = self._llm.generate([prompt], params, use_tqdm=False)
-        text_ids = outs[0].outputs[0].token_ids
-        return [int(t) for t in text_ids]
+
+    def shutdown(self) -> None:
+        llm = self._llm
+        self._llm = None
+        if llm is None:
+            return
+        for name in ("shutdown", "close"):
+            closer = getattr(llm, name, None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+                break
+        del llm
+        import gc
+
+        gc.collect()
+        try:
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
 
     def run_batch(
         self,
@@ -168,14 +327,19 @@ class VllmBackend:
                 )
             )
             n += len(s.tokens)
+        self.flush_prefills()
+        decoded: list[TokenId] = []
+        for d in committed_decodes:
+            decoded.extend(self.decode(d))
         return BackendBatchResult(
             prefilled=n,
-            decoded=[],
+            decoded=decoded,
             elapsed_ms=(perf_counter() - t0) * 1000.0,
             tbt_headroom_ms=self.tbt_headroom_ms(),
         )
 
     def cancel_prefill(self, node_id: NodeId) -> None:
+        self._pending = [r for r in self._pending if r.node_id != node_id]
         return None
 
     def tbt_headroom_ms(self) -> float:

@@ -188,7 +188,7 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
         gpu_memory_utilization=args.gpu_util,
         enable_prefix_caching=True,
         enforce_eager=args.enforce_eager,
-        two_class=True,
+        two_class=False,
         cow_blocks=True,
     )
     return Engine(backend, cfg), backend, cfg
@@ -656,103 +656,358 @@ def _merge_metrics(parts: list[RunMetrics], workload: str) -> RunMetrics:
     )
 
 
+def run_tot_forest_forkserve(
+    eng: Any,
+    cfg: Any,
+    trunks: Sequence[str],
+    thoughts: Sequence[str],
+    *,
+    decode_n: int,
+    idle_ms: float,
+    workload: str,
+) -> RunMetrics:
+    """One open / fan-out / decode ``LLM.generate`` for the whole slice."""
+    from forkserve.planner import Candidate
+    from forkserve.types import BranchId, SchemaKind
+
+    t0 = _now()
+    handles = [eng.open(trunk, flush=False) for trunk in trunks]
+    flush = getattr(eng, "flush", None)
+    if callable(flush):
+        flush()
+    t_open = _now()
+    all_kids: list[list[Any]] = []
+    residuals: list[int] = []
+    trunk_n = 0
+    k = max(len(thoughts), 1)
+    for h in handles:
+        tree = eng.tree(h.id)
+        trunk_n = len(tree.get(h.tip).tokens)
+        kids: list[Any] = []
+        cands: list[Candidate] = []
+        for i, text in enumerate(thoughts):
+            nid = eng.fork(h.id, h.tip, f"thought-{i}", text)
+            kids.append(nid)
+            known = eng._tok(text)
+            residuals.append(len(known))
+            cands.append(
+                Candidate(
+                    branch_id=BranchId(f"thought-{i}"),
+                    node_id=nid,
+                    known=known,
+                    p_b=1.0 / k,
+                    schema=SchemaKind.FREEFORM,
+                    declared=True,
+                )
+            )
+        eng.speculate_set(h.id, h.tip, cands, t_idle_ms=idle_ms)
+        all_kids.append(kids)
+    eng.drain_slack()
+    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h in handles)
+    t_fan = _now()
+    for h, kids in zip(handles, all_kids, strict=True):
+        _select_winner(eng, h.id, kids, winner=0)
+    if hasattr(eng, "generate_many"):
+        outs = eng.generate_many([h.id for h in handles], decode_n)
+        n_out = sum(len(o) for o in outs)
+    else:
+        n_out = sum(len(eng.generate(h.id, decode_n)) for h in handles)
+    t1 = _now()
+    cow, clone, saving = _peak_memory(cfg, trunk_n * len(handles), residuals, len(handles) * k)
+    hits = [eng.metrics[h.id].known_suffix_hit_rate for h in handles]
+    return RunMetrics(
+        system="forkserve",
+        workload=workload,
+        tp=0,
+        e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=(t_fan - t_open) * 1000.0,
+        decode_ms=(t1 - t_fan) * 1000.0,
+        trunk_tokens=trunk_n,
+        residual_tokens=residuals,
+        peak_kv_tokens=int(peak),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=saving,
+        gpu_mem_mib=gpu_mem_mib(),
+        known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
+        decode_tokens=n_out,
+        sessions=len(handles),
+        branching=len(thoughts),
+        notes=f"{len(handles)} items; one CoW fan-out generate + one winner decode",
+    )
+
+
+def run_react_forest_forkserve(
+    eng: Any,
+    cfg: Any,
+    items: Sequence[tuple[str, str, str, str]],
+    *,
+    decode_n: int,
+    idle_ms: float,
+    workload: str,
+) -> RunMetrics:
+    """Speculate wraps in one idle generate; bind+decode is one generate."""
+    from forkserve.adapters.react import ReActAdapter
+    from forkserve.adapters.templates import ToolWrappers
+
+    t0 = _now()
+    ad = ReActAdapter(eng, ToolWrappers())
+    handles = []
+    for trunk, wrap, recov, obs in items:
+        h = eng.open(trunk, flush=False)
+        handles.append((h, wrap, recov, obs))
+    flush = getattr(eng, "flush", None)
+    if callable(flush):
+        flush()
+    t_idle = _now()
+    for h, wrap, recov, obs in handles:
+        ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=True)
+    eng.drain_slack()
+    spec_ms = (_now() - t_idle) * 1000.0
+    remain = idle_ms - spec_ms
+    if remain > 0:
+        time.sleep(remain / 1000.0)
+    t_obs = _now()
+    for h, wrap, recov, obs in handles:
+        ad.bind_observation(h.id, h.tip, "bash", obs, ok=True)
+    if hasattr(eng, "generate_many"):
+        outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
+        n_out = sum(len(o) for o in outs)
+    else:
+        n_out = sum(len(eng.generate(h.id, decode_n)) for h, *_ in handles)
+    ttft = (_now() - t_obs) * 1000.0
+    t1 = _now()
+    residuals: list[int] = []
+    trunk_n = 0
+    peak = 0
+    for h, wrap, recov, obs in handles:
+        tree = eng.tree(h.id)
+        parent = h.tip
+        trunk_n = len(tree.get(parent).tokens)
+        residuals.extend([len(eng._tok(wrap)), len(eng._tok(recov)), len(eng._tok(obs))])
+        peak += int(tree.live_kv_tokens())
+    cow, clone, saving = _peak_memory(
+        cfg, trunk_n * len(handles), residuals, 2 * len(handles)
+    )
+    hits = [eng.metrics[h.id].known_suffix_hit_rate for h, *_ in handles]
+    return RunMetrics(
+        system="forkserve",
+        workload=workload,
+        tp=0,
+        e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=spec_ms,
+        decode_ms=ttft,
+        ttft_from_obs_ms=ttft,
+        spec_ms=spec_ms,
+        idle_ms=idle_ms,
+        trunk_tokens=trunk_n,
+        residual_tokens=residuals,
+        peak_kv_tokens=int(peak),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=saving,
+        gpu_mem_mib=gpu_mem_mib(),
+        known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
+        decode_tokens=n_out,
+        sessions=len(handles),
+        branching=2,
+        notes=f"{len(handles)} items; speculate wrap in idle; one TTFT generate",
+    )
+
+
+def run_tot_forest_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    system: str,
+    cfg_bpt: float,
+    trunks: Sequence[str],
+    thoughts: Sequence[str],
+    *,
+    decode_n: int,
+    prefix_cache: bool,
+    workload: str,
+) -> RunMetrics:
+    trunk_ids = [_tok_ids(llm, t) for t in trunks]
+    res_ids = [_tok_ids(llm, th) for th in thoughts]
+    branches = [t + r for t in trunk_ids for r in res_ids]
+    residuals = [len(r) for _ in trunks for r in res_ids]
+    trunk_n = len(trunk_ids[0]) if trunk_ids else 0
+    t0 = _now()
+    if prefix_cache:
+        _gen(llm, SamplingParams, TokensPrompt, trunk_ids, 1)
+    t_open = _now()
+    _gen(llm, SamplingParams, TokensPrompt, branches, 1)
+    t_fan = _now()
+    winners = [t + res_ids[0] for t in trunk_ids]
+    _gen(llm, SamplingParams, TokensPrompt, winners, decode_n)
+    t1 = _now()
+    k = len(branches)
+    from forkserve.pages import clone_memory_bytes, cow_memory_bytes
+
+    cow = _mib(cow_memory_bytes(trunk_n * len(trunks), residuals, cfg_bpt))
+    clone = _mib(clone_memory_bytes(trunk_n * len(trunks), residuals, cfg_bpt, k))
+    peak = (
+        sum(len(t) for t in trunk_ids) + sum(residuals)
+        if prefix_cache
+        else sum(len(b) for b in branches)
+    )
+    return RunMetrics(
+        system=system,
+        workload=workload,
+        tp=0,
+        e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=(t_fan - t_open) * 1000.0,
+        decode_ms=(t1 - t_fan) * 1000.0,
+        trunk_tokens=trunk_n,
+        residual_tokens=residuals,
+        peak_kv_tokens=int(peak),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
+        gpu_mem_mib=gpu_mem_mib(),
+        decode_tokens=decode_n * len(trunks),
+        sessions=len(trunks),
+        branching=len(thoughts),
+        notes=f"{len(trunks)} items; one fan-out generate + one winner decode",
+    )
+
+
+def run_react_forest_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    system: str,
+    cfg_bpt: float,
+    items: Sequence[tuple[str, str, str, str]],
+    *,
+    decode_n: int,
+    idle_ms: float,
+    prefix_cache: bool,
+    workload: str,
+) -> RunMetrics:
+    packed = []
+    residuals: list[int] = []
+    for trunk, wrap, recov, obs in items:
+        trunk_ids = _tok_ids(llm, trunk)
+        wrap_ids = _tok_ids(llm, wrap)
+        recov_ids = _tok_ids(llm, recov)
+        obs_ids = _tok_ids(llm, obs)
+        packed.append((trunk_ids, wrap_ids, recov_ids, obs_ids))
+        residuals.extend([len(wrap_ids), len(recov_ids), len(obs_ids)])
+    t0 = _now()
+    if prefix_cache:
+        _gen(llm, SamplingParams, TokensPrompt, [t for t, *_ in packed], 1)
+    time.sleep(idle_ms / 1000.0)
+    t_obs = _now()
+    fulls = [t + w + o for t, w, _r, o in packed]
+    _gen(llm, SamplingParams, TokensPrompt, fulls, decode_n)
+    ttft = (_now() - t_obs) * 1000.0
+    t1 = _now()
+    trunk_n = len(packed[0][0]) if packed else 0
+    from forkserve.pages import clone_memory_bytes, cow_memory_bytes
+
+    cow = _mib(cow_memory_bytes(trunk_n * len(packed), residuals, cfg_bpt))
+    clone = _mib(clone_memory_bytes(trunk_n * len(packed), residuals, cfg_bpt, 2 * len(packed)))
+    peak = sum(len(f) for f in fulls)
+    return RunMetrics(
+        system=system,
+        workload=workload,
+        tp=0,
+        e2e_ms=(t1 - t0) * 1000.0,
+        ttft_from_obs_ms=ttft,
+        idle_ms=idle_ms,
+        trunk_tokens=trunk_n,
+        residual_tokens=residuals,
+        peak_kv_tokens=int(peak),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
+        gpu_mem_mib=gpu_mem_mib(),
+        decode_tokens=decode_n * len(packed),
+        sessions=len(packed),
+        branching=2,
+        notes=f"{len(packed)} items; sleep idle then one wrap+obs generate; no spec",
+    )
+
+
 def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
     thoughts = gsm8k_thoughts(args.branching)
-    parts: list[RunMetrics] = []
-    for item in load_gsm8k(args.limit):
-        parts.append(
-            run_tot_forkserve(
-                eng, cfg, gsm8k_trunk(item), thoughts,
-                decode_n=args.decode, idle_ms=args.idle_ms, workload="gsm8k",
-            )
-        )
-        _close_all(eng)
-    return _merge_metrics(parts, "gsm8k")
+    trunks = [gsm8k_trunk(item) for item in load_gsm8k(args.limit)]
+    row = run_tot_forest_forkserve(
+        eng, cfg, trunks, thoughts,
+        decode_n=args.decode, idle_ms=args.idle_ms, workload="gsm8k",
+    )
+    _close_all(eng)
+    return row
 
 
 def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
     thoughts = game24_thoughts(args.branching)
-    parts: list[RunMetrics] = []
-    for item in load_game24(args.limit):
-        parts.append(
-            run_tot_forkserve(
-                eng, cfg, game24_trunk(item), thoughts,
-                decode_n=args.decode, idle_ms=args.idle_ms, workload="game24",
-            )
-        )
-        _close_all(eng)
-    return _merge_metrics(parts, "game24")
+    trunks = [game24_trunk(item) for item in load_game24(args.limit)]
+    row = run_tot_forest_forkserve(
+        eng, cfg, trunks, thoughts,
+        decode_n=args.decode, idle_ms=args.idle_ms, workload="game24",
+    )
+    _close_all(eng)
+    return row
 
 
 def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
-    parts: list[RunMetrics] = []
+    items = []
     for item in load_humaneval(args.limit):
         wrap, recov, obs = humaneval_react_strings(item)
-        parts.append(
-            run_react_forkserve(
-                eng, cfg, humaneval_trunk(item),
-                decode_n=args.decode, idle_ms=args.idle_ms,
-                wrap=wrap, recov=recov, obs=obs, workload="humaneval",
-            )
-        )
-        _close_all(eng)
-    return _merge_metrics(parts, "humaneval")
+        items.append((humaneval_trunk(item), wrap, recov, obs))
+    row = run_react_forest_forkserve(
+        eng, cfg, items,
+        decode_n=args.decode, idle_ms=args.idle_ms, workload="humaneval",
+    )
+    _close_all(eng)
+    return row
 
 
 def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
     thoughts = gsm8k_thoughts(args.branching)
-    prefix = system == "vllm_apc"
-    parts = [
-        run_tot_vllm(
-            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-            gsm8k_trunk(item), thoughts,
-            decode_n=args.decode, prefix_cache=prefix, workload="gsm8k",
-        )
-        for item in load_gsm8k(args.limit)
-    ]
-    return _merge_metrics(parts, "gsm8k")
+    trunks = [gsm8k_trunk(item) for item in load_gsm8k(args.limit)]
+    return run_tot_forest_vllm(
+        llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+        trunks, thoughts,
+        decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="gsm8k",
+    )
 
 
 def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
     thoughts = game24_thoughts(args.branching)
-    prefix = system == "vllm_apc"
-    parts = [
-        run_tot_vllm(
-            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-            game24_trunk(item), thoughts,
-            decode_n=args.decode, prefix_cache=prefix, workload="game24",
-        )
-        for item in load_game24(args.limit)
-    ]
-    return _merge_metrics(parts, "game24")
+    trunks = [game24_trunk(item) for item in load_game24(args.limit)]
+    return run_tot_forest_vllm(
+        llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+        trunks, thoughts,
+        decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
+    )
 
 
 def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
-    prefix = system == "vllm_apc"
-    parts: list[RunMetrics] = []
+    items = []
     for item in load_humaneval(args.limit):
         wrap, recov, obs = humaneval_react_strings(item)
-        parts.append(
-            run_react_vllm(
-                llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-                humaneval_trunk(item),
-                decode_n=args.decode, idle_ms=args.idle_ms, prefix_cache=prefix,
-                wrap=wrap, recov=recov, obs=obs, workload="humaneval",
-            )
-        )
-    return _merge_metrics(parts, "humaneval")
+        items.append((humaneval_trunk(item), wrap, recov, obs))
+    return run_react_forest_vllm(
+        llm, SamplingParams, TokensPrompt, system, cfg_bpt, items,
+        decode_n=args.decode, idle_ms=args.idle_ms,
+        prefix_cache=(system == "vllm_apc"), workload="humaneval",
+    )
 
 
 # ----- mock accounting (no GPU) ---------------------------------------------
@@ -885,6 +1140,24 @@ def worker_main(args: argparse.Namespace) -> int:
 
     for r in rows:
         r.tp = tp
+    if system == "forkserve" and backend is not None:
+        closer = getattr(backend, "shutdown", None)
+        if callable(closer):
+            closer()
+    elif system != "forkserve":
+        try:
+            del llm
+        except Exception:
+            pass
+        import gc
+
+        gc.collect()
+        try:
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
     payload = {
         "system": system,
         "tp": tp,
@@ -927,17 +1200,21 @@ def format_table(rows: list[dict[str, Any]]) -> str:
         "system           tp  workload  e2e_ms  fanout_ms  ttft_obs_ms  peak_kv  M_CoW_MiB  M_clone_MiB  kv_save  vs_recompute",
         "-" * 118,
     ]
+    def _metric(row: dict[str, Any]) -> float:
+        if row["workload"] in ("react", "humaneval") and float(row.get("ttft_from_obs_ms") or 0) > 0:
+            return float(row["ttft_from_obs_ms"])
+        return float(row["e2e_ms"])
+
     # speedup vs vllm_recompute on same (tp, workload)
     base: dict[tuple[int, str], float] = {}
     for r in rows:
         if r["system"] == "vllm_recompute":
             key = (int(r["tp"]), r["workload"])
-            metric = r["ttft_from_obs_ms"] if r["workload"] == "react" else r["e2e_ms"]
-            base[key] = float(metric)
+            base[key] = _metric(r)
 
     for r in rows:
         key = (int(r["tp"]), r["workload"])
-        metric = r["ttft_from_obs_ms"] if r["workload"] == "react" else r["e2e_ms"]
+        metric = _metric(r)
         b = base.get(key, 0.0)
         speed = (b / metric) if metric > 0 and b > 0 else 0.0
         lines.append(
@@ -998,6 +1275,13 @@ def _wait_devices_free(dev_csv: str, timeout_s: float = 90.0, max_used_mib: int 
     used = _gpu_used_mib()
     print(f"GPUs still busy after {timeout_s:.0f}s: {used}", flush=True)
     return False
+
+
+def _bench_lock_path() -> Path:
+    root = Path(os.environ.get("FORKSERVE_ROOT", Path(__file__).resolve().parents[1]))
+    return Path(
+        os.environ.get("FORKSERVE_BENCH_LOCK", str(root / "logs" / ".forkserve_bench.lock"))
+    )
 
 
 def orchestrate(args: argparse.Namespace) -> int:
@@ -1061,13 +1345,14 @@ def orchestrate(args: argparse.Namespace) -> int:
             env["CUDA_VISIBLE_DEVICES"] = dev
             env["PYTHONUNBUFFERED"] = "1"
             print(f"==> {system} tp={tp} devices={dev}", flush=True)
-            if not _wait_devices_free(dev, timeout_s=90.0):
+            if not _wait_devices_free(dev, timeout_s=180.0, max_used_mib=4096):
                 print(
                     f"worker skipped: {system} tp={tp} — GPUs {dev} still occupied",
                     flush=True,
                 )
                 return 1
             proc = subprocess.run(cmd, env=env)
+            time.sleep(2.0)
             if proc.returncode != 0:
                 print(f"worker failed: {system} tp={tp} rc={proc.returncode}", flush=True)
                 return proc.returncode
