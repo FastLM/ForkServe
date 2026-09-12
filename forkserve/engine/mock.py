@@ -155,6 +155,9 @@ class MockBackend:
     def cancel_prefill(self, node_id: NodeId) -> None:
         return None
 
+    def release_node(self, node_id: NodeId, session: str | None = None) -> None:
+        return None
+
     def tbt_headroom_ms(self) -> float:
         return self._headroom_ms
 

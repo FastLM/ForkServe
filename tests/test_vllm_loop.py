@@ -77,6 +77,10 @@ def test_cow_keys_are_session_scoped() -> None:
     assert table.req_for_node(1, session="s-b") == "req-b"
     extra = forkserve_extra(speculative=False, node_id=1, parent_node=1, session="s-a")
     assert extra["forkserve_session"] == "s-a"
+    assert table.release_node(1, session="s-a")
+    assert table.req_for_node(1, session="s-a") is None
+    assert table.req_for_node(1, session="s-b") == "req-b"
+    assert table.releases == 1
 
 
 def test_select_full_blocks_keeps_complete_last_page() -> None:

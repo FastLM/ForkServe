@@ -25,6 +25,7 @@ from forkserve.engine.vllm_loop import (
     forkserve_extra,
     get_two_class_scheduler,
     install_vllm_cow,
+    release_cow_node,
 )
 from forkserve.pages import PagePool, TokenKvStore
 from forkserve.planner import PrefillChunk
@@ -375,6 +376,11 @@ class VllmBackend:
     def cancel_prefill(self, node_id: NodeId) -> None:
         self._pending = [r for r in self._pending if r.node_id != node_id]
         return None
+
+    def release_node(self, node_id: NodeId, session: str | None = None) -> None:
+        """Forget CoW snapshots for an aborted thought / wrap sibling."""
+        self._pending = [r for r in self._pending if r.node_id != node_id]
+        release_cow_node(int(node_id), session=session)
 
     def tbt_headroom_ms(self) -> float:
         return max(0.0, self.config.tbt_slo_ms * 0.4)

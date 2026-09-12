@@ -33,6 +33,7 @@ FS_COMMITTED = "committed"
 FS_SPECULATIVE = "speculative"
 
 _INSTALLED = False
+_COW_TABLES: list[CowBlockTable] = []
 
 
 def extra_of(request: Any) -> dict[str, Any]:
@@ -126,6 +127,7 @@ class CowBlockTable:
     forks: int = 0
     alias_blocks: int = 0
     cow_copies: int = 0
+    releases: int = 0
 
     def pin_ro(self, block_ids: Iterable[int] | int) -> None:
         if isinstance(block_ids, int):
@@ -168,12 +170,34 @@ class CowBlockTable:
         self.node_snap[key] = snap
         return snap
 
+    def release_node(self, node_id: int, *, session: str | None = None) -> bool:
+        """Drop a dead child's snapshot. Trunk pins stay for live siblings."""
+        key = cow_node_key(session, node_id)
+        if key is None:
+            return False
+        had = key in self.node_snap or key in self.node_to_req
+        self.node_snap.pop(key, None)
+        self.node_to_req.pop(key, None)
+        if had:
+            self.releases += 1
+        return had
+
+
+def release_cow_node(node_id: int, *, session: str | None = None) -> int:
+    """Forget aborted-node snaps on every live BlockPool CoW table."""
+    n = 0
+    for table in _COW_TABLES:
+        if table.release_node(int(node_id), session=session):
+            n += 1
+    return n
+
 
 def cow_of(block_pool: Any) -> CowBlockTable:
     table = getattr(block_pool, "_forkserve_cow", None)
     if table is None:
         table = CowBlockTable()
         block_pool._forkserve_cow = table
+        _COW_TABLES.append(table)
     return table
 
 
@@ -193,6 +217,7 @@ def install_vllm_cow() -> None:
     def _init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         _orig_init(self, *args, **kwargs)
         self._forkserve_cow = CowBlockTable()
+        _COW_TABLES.append(self._forkserve_cow)
 
     def _touch(self, blocks):  # type: ignore[no-untyped-def]
         _orig_touch(self, blocks)

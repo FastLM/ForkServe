@@ -264,6 +264,7 @@ class Engine:
             # already dead; residual length recorded on counters
             aborted_res += tree.get(aid).counters.residual_tokens
             self.metrics[tree.session].aborts += 1
+            self._release_backend_node(tree.session, aid)
 
         if result.tail:
             self.scheduler.submit_committed(
@@ -339,11 +340,14 @@ class Engine:
 
     def abort(self, session: SessionId | str, node: NodeId) -> int:
         tree = self.forest.get(SessionId(str(session)))
+        victims = tree.live_subtree(node)
         n = tree.abort(node)
         self.scheduler.cancel_node(node)
         cancel = getattr(self.backend, "cancel_prefill", None)
         if callable(cancel):
             cancel(node)
+        for vid in victims:
+            self._release_backend_node(tree.session, vid)
         self.metrics[tree.session].aborts += 1
         # Spec ancestors that cascade-died also drop in-flight chunks.
         cur = tree.get(node).parent
@@ -352,9 +356,15 @@ class Engine:
             if parent.mode is not NodeMode.DEAD:
                 break
             self.scheduler.cancel_node(cur)
+            self._release_backend_node(tree.session, cur)
             self.metrics[tree.session].aborts += 1
             cur = parent.parent
         return n
+
+    def _release_backend_node(self, session: SessionId, node: NodeId) -> None:
+        drop = getattr(self.backend, "release_node", None)
+        if callable(drop):
+            drop(node, session=str(session))
 
     def close(self, session: SessionId | str) -> None:
         sid = SessionId(str(session))

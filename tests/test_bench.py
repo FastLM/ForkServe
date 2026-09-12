@@ -42,7 +42,10 @@ def test_mock_tot_cow_saves_kv_vs_clone() -> None:
     tot = rows[0]
     assert tot.workload == "tot"
     assert tot.trunk_tokens >= 200
-    assert tot.peak_kv_tokens == tot.trunk_tokens + sum(tot.residual_tokens)
+    apc_like = tot.trunk_tokens + sum(tot.residual_tokens)
+    winner_only = tot.trunk_tokens + tot.residual_tokens[0]
+    assert tot.peak_kv_tokens == winner_only
+    assert tot.peak_kv_tokens < apc_like
     clone_tokens = tot.branching * tot.trunk_tokens + sum(tot.residual_tokens)
     assert tot.peak_kv_tokens < clone_tokens
     assert tot.kv_saving > 0.5
@@ -84,6 +87,8 @@ def test_mock_gsm8k_cow_saves_kv() -> None:
     assert gsm.workload == "gsm8k"
     assert gsm.sessions == 2
     assert gsm.kv_saving > 0.3
+    apc_like = gsm.trunk_tokens * gsm.sessions + sum(gsm.residual_tokens)
+    assert gsm.peak_kv_tokens < apc_like
     assert gsm.peak_kv_tokens < gsm.branching * gsm.trunk_tokens * gsm.sessions
     assert gsm.decode_ids
     assert all(len(s) >= 1 for s in gsm.decode_ids)

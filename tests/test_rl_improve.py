@@ -25,7 +25,7 @@ def test_judge_success_when_kv_and_latency_win() -> None:
     rows = [
         _row("vllm_recompute", 2, "gsm8k", 700, 694),
         _row("vllm_apc", 2, "gsm8k", 680, 223),
-        _row("forkserve", 2, "gsm8k", 650, 223),
+        _row("forkserve", 2, "gsm8k", 650, 180),
     ]
     v = rl.judge_rows(rows)
     assert v.ok
@@ -37,12 +37,23 @@ def test_judge_fails_on_latency_drop() -> None:
     rows = [
         _row("vllm_recompute", 2, "gsm8k", 700, 694),
         _row("vllm_apc", 2, "gsm8k", 680, 223),
-        _row("forkserve", 2, "gsm8k", 900, 223),
+        _row("forkserve", 2, "gsm8k", 900, 180),
     ]
     v = rl.judge_rows(rows, perf_drop=0.10)
     assert not v.ok
     assert v.pairs[0].efficiency_beats
     assert v.pairs[0].perf_drop
+
+
+def test_judge_fails_when_peak_ties_apc() -> None:
+    rows = [
+        _row("vllm_recompute", 2, "gsm8k", 700, 694),
+        _row("vllm_apc", 2, "gsm8k", 680, 223),
+        _row("forkserve", 2, "gsm8k", 650, 223),
+    ]
+    v = rl.judge_rows(rows)
+    assert not v.ok
+    assert not v.pairs[0].efficiency_beats
 
 
 def test_judge_fails_when_kv_not_better_than_recompute() -> None:
@@ -61,7 +72,7 @@ def test_judge_humaneval_cow_fanout_beats_recompute() -> None:
     rows = [
         _row("vllm_recompute", 2, "humaneval", 8000, 2024, ttft=260),
         _row("vllm_apc", 2, "humaneval", 8000, 1112, ttft=210),
-        _row("forkserve", 2, "humaneval", 8000, 1112, ttft=200),
+        _row("forkserve", 2, "humaneval", 8000, 900, ttft=200),
     ]
     v = rl.judge_rows(rows, kv_gain=0.20, perf_drop=0.10)
     assert v.ok
@@ -89,7 +100,7 @@ def test_judge_fails_on_quality_drop() -> None:
     rows = [
         _row("vllm_recompute", 2, "gsm8k", 700, 694),
         _row("vllm_apc", 2, "gsm8k", 680, 223),
-        _row("forkserve", 2, "gsm8k", 650, 223),
+        _row("forkserve", 2, "gsm8k", 650, 180),
     ]
     rows[1]["task_score"] = 0.75
     rows[1]["task_n"] = 4
@@ -108,7 +119,7 @@ def test_judge_ignores_missing_quality() -> None:
     rows = [
         _row("vllm_recompute", 2, "gsm8k", 700, 694),
         _row("vllm_apc", 2, "gsm8k", 680, 223),
-        _row("forkserve", 2, "gsm8k", 650, 223),
+        _row("forkserve", 2, "gsm8k", 650, 180),
     ]
     v = rl.judge_rows(rows, quality_min=0.05)
     assert v.ok
@@ -125,7 +136,7 @@ def test_judge_ignores_all_zero_and_one_item_noise() -> None:
     rows = [
         _row("vllm_recompute", 2, "gsm8k", 700, 694),
         _row("vllm_apc", 2, "gsm8k", 680, 223),
-        _row("forkserve", 2, "gsm8k", 650, 223),
+        _row("forkserve", 2, "gsm8k", 650, 180),
     ]
     for r in rows:
         r["task_score"] = 0.0

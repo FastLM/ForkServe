@@ -1,6 +1,7 @@
 from forkserve.quality import (
     annotate_quality,
     extract_gsm8k_answer,
+    extract_python,
     game24_correct,
     gsm8k_correct,
     humaneval_pass,
@@ -54,6 +55,12 @@ def test_humaneval_pass_at_1_runs_hidden_tests() -> None:
     chatty = "</think>\n\n```python\n    return a + b\n```\n<|eot_id|>"
     assert humaneval_pass(chatty, official, prompt)
     assert not humaneval_pass("    return a - b\n", official, prompt)
+    leaky = (
+        "```python\n    return a + b\n\nprint(add(1, 2))\n```\n\n"
+        "The function adds two numbers.\n"
+    )
+    assert "print" not in extract_python(leaky)
+    assert humaneval_pass(leaky, official, prompt)
 
 
 def test_annotate_scores_each_system_and_delta() -> None:

@@ -335,6 +335,25 @@ class ContextTree:
                 extra += len(n.residual)
         return len(root.tokens) + extra
 
+    def live_subtree(self, nid: NodeId) -> list[NodeId]:
+        """Live ``nid`` plus descendants — used to drop CoW snaps on abort."""
+        if nid not in self._nodes:
+            return []
+        out: list[NodeId] = []
+        stack = [nid]
+        seen: set[NodeId] = set()
+        while stack:
+            cur = stack.pop()
+            if cur in seen or cur not in self._nodes:
+                continue
+            seen.add(cur)
+            node = self._nodes[cur]
+            if not node.is_live():
+                continue
+            out.append(cur)
+            stack.extend(node.children)
+        return out
+
     def _materialize_residual(self, node: Node, tokens: TokenSeq) -> None:
         ps = self.pool.page_size
         remaining = list(tokens)
@@ -408,6 +427,10 @@ class Forest:
 
     def footprint_bytes(self) -> float:
         return self.pool.footprint_bytes()
+
+    def resident_kv_tokens(self) -> int:
+        """Committed-spine KV across live sessions (losers already aborted)."""
+        return sum(t.live_kv_tokens() for t in self.live_trees())
 
 
 class InvariantError(RuntimeError):

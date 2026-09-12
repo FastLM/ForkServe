@@ -192,8 +192,29 @@ def extract_python(text: str) -> str:
     raw = _CHAT_MARK.sub("", raw)
     fences = _FENCE.findall(raw)
     if fences:
-        return max(fences, key=len).strip("\n")
-    return raw.strip("\n")
+        raw = fences[0]
+    return _trim_humaneval_body(raw)
+
+
+def _trim_humaneval_body(body: str) -> str:
+    """Keep the function body; drop print-and-chat tails that break exec."""
+    lines: list[str] = []
+    for line in (body or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            break
+        if lines and stripped.startswith("print(") and not line[:1].isspace():
+            break
+        if (
+            lines
+            and stripped
+            and not line[:1].isspace()
+            and not stripped.startswith(("#", "def ", "class ", "import ", "from ", "return "))
+            and any(x.strip().startswith("return ") or x.strip().startswith("    return ") for x in lines)
+        ):
+            break
+        lines.append(line)
+    return "\n".join(lines).strip("\n")
 
 
 def humaneval_entry(prompt: str) -> str:

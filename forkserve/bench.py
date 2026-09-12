@@ -268,6 +268,16 @@ def _fanout_thoughts(eng: Any, session: Any, parent: Any, thoughts: Sequence[str
     return kids
 
 
+def _resident_kv(eng: Any, handles: Sequence[Any] | None = None) -> int:
+    """KV after loser abort: shared trunk + committed winner residual only."""
+    forest = getattr(eng, "forest", None)
+    if forest is not None and handles is None:
+        return int(forest.resident_kv_tokens())
+    if handles:
+        return sum(int(eng.tree(h.id).live_kv_tokens()) for h in handles)
+    return 0
+
+
 def _select_winner(eng: Any, session: Any, kids: Sequence[Any], winner: int = 0) -> Any:
     """Abort losers and keep the winner tip — no join node (preserves CoW KV)."""
     keep = kids[winner]
@@ -299,9 +309,9 @@ def run_tot_forkserve(
     t_open = _now()
     kids = _fanout_thoughts(eng, h.id, h.tip, thoughts, idle_ms)
     residuals = [len(tree.get(k).residual) for k in kids]
-    peak = tree.live_kv_tokens()
     t_fan = _now()
     _select_winner(eng, h.id, kids, winner=0)
+    peak = tree.live_kv_tokens()
     out = eng.generate(h.id, decode_n)
     t1 = _now()
     cow, clone, saving = _peak_memory(cfg, trunk_n, residuals, len(thoughts))
@@ -324,7 +334,7 @@ def run_tot_forkserve(
         decode_tokens=len(out),
         decode_ids=_decode_ids(out),
         branching=len(thoughts),
-        notes="open + CoW fan-out of identical residuals + winner decode",
+        notes="open + CoW fan-out; abort losers; peak is committed spine",
     )
 
 
@@ -352,15 +362,18 @@ def run_react_forkserve(
     trunk_n = len(tree.get(parent).tokens)
     ad = ReActAdapter(eng, ToolWrappers())
     t_idle = _now()
-    _happy, _fail = ad.on_tool_parsed(
+    happy, fail = ad.on_tool_parsed(
         h.id, parent, "bash", t_idle_ms=idle_ms, include_recovery=True
     )
     eng.drain_slack()
-    peak = int(tree.live_kv_tokens())
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
     if remain > 0:
         time.sleep(remain / 1000.0)
+    if fail is not None:
+        eng.abort(h.id, fail)
+    eng.promote(h.id, happy)
+    peak = int(tree.live_kv_tokens())
     t_obs = _now()
     ad.bind_observation(h.id, parent, "bash", obs, ok=True)
     out = eng.generate(h.id, decode_n)
@@ -416,8 +429,8 @@ def run_multi_forkserve(
         trunk_n = len(tree.get(h.tip).tokens)
         kids = _fanout_thoughts(eng, h.id, h.tip, thoughts, idle_ms)
         residuals_all.extend(len(tree.get(k).residual) for k in kids)
-        peaks.append(int(tree.live_kv_tokens()))
         _select_winner(eng, h.id, kids, winner=0)
+        peaks.append(int(tree.live_kv_tokens()))
     t_fan = _now()
     n_out = 0
     decoded: list[list[int]] = []
@@ -791,10 +804,10 @@ def run_tot_forest_forkserve(
             eng.queue_known_prefill(h.id, nid)
         all_kids.append(kids)
     eng.flush()
-    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h in handles)
     t_fan = _now()
     for h, kids in zip(handles, all_kids, strict=True):
         _select_winner(eng, h.id, kids, winner=0)
+    peak = _resident_kv(eng, handles)
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h in handles], decode_n)
     else:
@@ -823,7 +836,7 @@ def run_tot_forest_forkserve(
         decode_ids=[[int(t) for t in o] for o in outs],
         sessions=len(handles),
         branching=len(thoughts),
-        notes=f"{len(handles)} items; one CoW fan-out generate (no extra trunk round) + winner decode",
+        notes=f"{len(handles)} items; CoW fan-out then abort losers; peak is winner spine",
     )
 
 
@@ -853,19 +866,24 @@ def run_react_forest_forkserve(
         h = eng.open(trunk_ids, flush=False)
         handles.append((h, wrap, recov, obs, commit_ids))
     t_idle = _now()
+    spawned: list[tuple[Any, Any, Any]] = []
     for h, wrap, recov, obs, _commit in handles:
-        # ToT recipe: fan out every sibling during idle (wrap + recovery).
-        # Peak is taken here — after commit the loser is aborted and the
-        # comparison would collapse to a single committed path.
-        ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=True)
+        happy, fail = ad.on_tool_parsed(
+            h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=True
+        )
+        spawned.append((h, happy, fail))
     eng.drain_slack()
-    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
     slept = 0.0
     if remain > 0:
         time.sleep(remain / 1000.0)
         slept = remain
+    for h, happy, fail in spawned:
+        if fail is not None:
+            eng.abort(h.id, fail)
+        eng.promote(h.id, happy)
+    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     t_obs = _now()
     for h, wrap, recov, obs, commit_ids in handles:
         eng.commit(h.id, h.tip, commit_ids, preferred_bid="bash")

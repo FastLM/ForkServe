@@ -7,7 +7,7 @@ Loop
 2. Judge ForkServe against vLLM:
 
    * **efficiency** = lower ``peak_kv`` than ``vllm_recompute`` by ``--kv-gain``,
-     and not worse than ``vllm_apc``.
+     and **strictly below** ``vllm_apc`` (committed spine after abort).
    * **perf drop** = latency worse than the vLLM baseline by ``--perf-drop``.
      HumanEval / ReAct use ``ttft_from_obs_ms``; others use ``e2e_ms``.
 
@@ -147,8 +147,9 @@ def judge_rows(
             beats_recompute = rec_pk <= 0 or fork_pk <= rec_pk * (1.0 + peak_slack)
         else:
             beats_recompute = rec_pk > 0 and fork_pk <= rec_pk * (1.0 - kv_gain)
-        not_worse_than_apc = apc_pk <= 0 or fork_pk <= apc_pk * (1.0 + peak_slack)
-        efficiency_beats = beats_recompute and not_worse_than_apc
+        # ForkServe must beat APC, not tie: abort losers; APC keeps every prefix.
+        beats_apc = apc_pk <= 0 or fork_pk < apc_pk
+        efficiency_beats = beats_recompute and beats_apc
         dropped = vllm_lat > 0 and fork_lat > vllm_lat * (1.0 + perf_drop)
         fs_q = float(fs.get("task_score", -1.0) if fs else -1.0)
         ref_q = float((base or {}).get("task_score", -1.0))
@@ -223,7 +224,7 @@ def write_cursor_prompt(round_id: int, verdict: RoundVerdict, bench_path: Path) 
         "",
         "## Goal",
         "Make ForkServe more efficient than vLLM (lower peak KV than",
-        "`vllm_recompute`, not worse than `vllm_apc`) **and** keep latency",
+        "`vllm_recompute` **and strictly below** `vllm_apc`) **and** keep latency",
         "within the configured slack of the vLLM baseline (APC if present),",
         "and keep **task quality** almost unchanged vs APC: GSM8K accuracy,",
         "Game24 success rate, HumanEval pass@1 (not token overlap).",
