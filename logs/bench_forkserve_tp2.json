@@ -8,9 +8,9 @@
       "system": "forkserve",
       "workload": "gsm8k",
       "tp": 2,
-      "e2e_ms": 224.5620829053223,
-      "fanout_ms": 65.2694869786501,
-      "decode_ms": 158.68747793138027,
+      "e2e_ms": 228.0545448884368,
+      "fanout_ms": 65.26363268494606,
+      "decode_ms": 162.19612397253513,
       "ttft_from_obs_ms": 0.0,
       "spec_ms": 0.0,
       "idle_ms": 0.0,
@@ -53,9 +53,9 @@
       "system": "forkserve",
       "workload": "game24",
       "tp": 2,
-      "e2e_ms": 200.09596599265933,
-      "fanout_ms": 50.77387718483806,
-      "decode_ms": 149.0195500664413,
+      "e2e_ms": 198.0792391113937,
+      "fanout_ms": 48.15180692821741,
+      "decode_ms": 149.28850391879678,
       "ttft_from_obs_ms": 0.0,
       "spec_ms": 0.0,
       "idle_ms": 0.0,
@@ -98,11 +98,11 @@
       "system": "forkserve",
       "workload": "humaneval",
       "tp": 2,
-      "e2e_ms": 2196.461272891611,
-      "fanout_ms": 49.6109900996089,
-      "decode_ms": 195.92487020418048,
-      "ttft_from_obs_ms": 195.92487020418048,
-      "spec_ms": 49.6109900996089,
+      "e2e_ms": 2224.4804711081088,
+      "fanout_ms": 58.62643709406257,
+      "decode_ms": 223.36150193586946,
+      "ttft_from_obs_ms": 223.36150193586946,
+      "spec_ms": 58.62643709406257,
       "idle_ms": 2000.0,
       "trunk_tokens": 222,
       "residual_tokens": [
@@ -119,7 +119,7 @@
         27,
         210
       ],
-      "peak_kv_tokens": 1807,
+      "peak_kv_tokens": 1059,
       "m_cow_mib": 273.375,
       "m_clone_mib": 1147.5,
       "kv_saving": 0.7617647058823529,
@@ -133,7 +133,7 @@
       "decode_tokens": 64,
       "sessions": 4,
       "branching": 2,
-      "notes": "4 items; idle wrap only (no recovery GPU); one TTFT generate"
+      "notes": "4 items; idle CoW fan-out wrap+recovery; TTFT after LCP commit"
     }
   ]
 }

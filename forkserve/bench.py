@@ -54,6 +54,17 @@ class RunMetrics:
     sessions: int = 1
     branching: int = 1
     notes: str = ""
+    decode_ids: list[list[int]] = field(default_factory=list)
+    decode_texts: list[str] = field(default_factory=list)
+    golds: list[str] = field(default_factory=list)
+    gold_prompts: list[str] = field(default_factory=list)
+    task_metric: str = ""
+    task_n: int = 0
+    task_score: float = -1.0
+    task_correct: list[bool] = field(default_factory=list)
+    quality_vs: str = ""
+    quality_ref_score: float = -1.0
+    quality_delta: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -296,6 +307,7 @@ def run_tot_forkserve(
         gpu_mem_mib=gpu_mem_mib(),
         known_suffix_hit_rate=m.known_suffix_hit_rate,
         decode_tokens=len(out),
+        decode_ids=_decode_ids(out),
         branching=len(thoughts),
         notes="open + CoW fan-out of identical residuals + winner decode",
     )
@@ -363,6 +375,7 @@ def run_react_forkserve(
         gpu_mem_mib=gpu_mem_mib(),
         known_suffix_hit_rate=m.known_suffix_hit_rate,
         decode_tokens=len(out),
+        decode_ids=_decode_ids(out),
         branching=2,
         notes="speculate wrap during idle; TTFT measured from observation arrival",
     )
@@ -392,8 +405,11 @@ def run_multi_forkserve(
         _select_winner(eng, h.id, kids, winner=0)
     t_fan = _now()
     n_out = 0
+    decoded: list[list[int]] = []
     for h in handles:
-        n_out += len(eng.generate(h.id, decode_n))
+        out = eng.generate(h.id, decode_n)
+        decoded.append([int(t) for t in out])
+        n_out += len(out)
     t1 = _now()
     k = len(handles) * len(thoughts)
     cow, clone, saving = _peak_memory(
@@ -414,6 +430,7 @@ def run_multi_forkserve(
         kv_saving=saving,
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=n_out,
+        decode_ids=decoded,
         sessions=len(handles),
         branching=len(thoughts),
         notes="S independent ToT trees on one engine",
@@ -445,10 +462,31 @@ def _tok_ids(llm: Any, text: str) -> list[int]:
     return [int(i) for i in ids]
 
 
-def _gen(llm: Any, SamplingParams: Any, TokensPrompt: Any, seqs: Sequence[Sequence[int]], n: int) -> None:
+def _gen(llm: Any, SamplingParams: Any, TokensPrompt: Any, seqs: Sequence[Sequence[int]], n: int) -> list[list[int]]:
     prompts = [TokensPrompt(prompt_token_ids=list(s)) for s in seqs]
     params = SamplingParams(max_tokens=n, temperature=0.0)
-    llm.generate(prompts, params, use_tqdm=False)
+    outs = llm.generate(prompts, params, use_tqdm=False)
+    return [[int(t) for t in o.outputs[0].token_ids] for o in outs]
+
+
+def _decode_ids(*seqs: Sequence[int]) -> list[list[int]]:
+    return [[int(t) for t in s] for s in seqs if s is not None]
+
+
+def _fs_texts(eng: Any, seqs: Sequence[Sequence[int]]) -> list[str]:
+    return [eng.backend.detokenize(tuple(int(t) for t in s)) for s in seqs]
+
+
+def _vllm_texts(llm: Any, seqs: Sequence[Sequence[int]]) -> list[str]:
+    tok = llm.get_tokenizer()
+    return [tok.decode(list(s), skip_special_tokens=True) for s in seqs]
+
+
+def _set_golds(row: RunMetrics, golds: Sequence[str], texts: Sequence[str], prompts: Sequence[str] = ()) -> RunMetrics:
+    row.golds = [str(g) for g in golds]
+    row.decode_texts = [str(t) for t in texts]
+    row.gold_prompts = [str(p) for p in prompts]
+    return row
 
 
 def _warmup_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any) -> None:
@@ -483,7 +521,7 @@ def run_tot_vllm(
     t_open = _now()
     _gen(llm, SamplingParams, TokensPrompt, branches, 1)
     t_fan = _now()
-    _gen(llm, SamplingParams, TokensPrompt, [branches[0]], decode_n)
+    decoded = _gen(llm, SamplingParams, TokensPrompt, [branches[0]], decode_n)
     t1 = _now()
     if prefix_cache:
         peak = trunk_n + sum(residuals)
@@ -507,6 +545,7 @@ def run_tot_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n,
+        decode_ids=decoded,
         branching=k,
         notes="APC warms trunk then batches branches" if prefix_cache else "full trunk x B, no prefix cache",
     )
@@ -545,7 +584,7 @@ def run_react_vllm(
     if remain > 0:
         time.sleep(remain / 1000.0)
     t_obs = _now()
-    _gen(llm, SamplingParams, TokensPrompt, [full], decode_n)
+    decoded = _gen(llm, SamplingParams, TokensPrompt, [full], decode_n)
     ttft = (_now() - t_obs) * 1000.0
     t1 = _now()
     trunk_n = len(trunk_ids)
@@ -577,6 +616,7 @@ def run_react_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n,
+        decode_ids=decoded,
         branching=2,
         notes="idle fan-out wrap+recovery; then wrap+obs decode",
     )
@@ -606,7 +646,7 @@ def run_multi_vllm(
     _gen(llm, SamplingParams, TokensPrompt, branches, 1)
     t_fan = _now()
     winners = [t + res_ids[0] for t in trunk_ids]
-    _gen(llm, SamplingParams, TokensPrompt, winners, decode_n)
+    decoded = _gen(llm, SamplingParams, TokensPrompt, winners, decode_n)
     t1 = _now()
     k = len(branches)
     from forkserve.pages import clone_memory_bytes, cow_memory_bytes
@@ -633,6 +673,7 @@ def run_multi_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n * len(trunks),
+        decode_ids=decoded,
         sessions=len(trunks),
         branching=len(thoughts),
         notes="SxB independent prompts in one generate()",
@@ -668,6 +709,7 @@ def _merge_metrics(parts: list[RunMetrics], workload: str) -> RunMetrics:
         gpu_mem_mib=parts[-1].gpu_mem_mib,
         known_suffix_hit_rate=sum(p.known_suffix_hit_rate for p in parts) / n,
         decode_tokens=sum(p.decode_tokens for p in parts),
+        decode_ids=[ids for p in parts for ids in p.decode_ids],
         sessions=n,
         branching=head.branching,
         notes=f"{n} items; {head.notes}",
@@ -714,9 +756,9 @@ def run_tot_forest_forkserve(
         _select_winner(eng, h.id, kids, winner=0)
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h in handles], decode_n)
-        n_out = sum(len(o) for o in outs)
     else:
-        n_out = sum(len(eng.generate(h.id, decode_n)) for h in handles)
+        outs = [eng.generate(h.id, decode_n) for h in handles]
+    n_out = sum(len(o) for o in outs)
     t1 = _now()
     cow, clone, saving = _peak_memory(cfg, trunk_n * len(handles), residuals, len(handles) * k)
     hits = [eng.metrics[h.id].known_suffix_hit_rate for h in handles]
@@ -736,6 +778,7 @@ def run_tot_forest_forkserve(
         gpu_mem_mib=gpu_mem_mib(),
         known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
         decode_tokens=n_out,
+        decode_ids=[[int(t) for t in o] for o in outs],
         sessions=len(handles),
         branching=len(thoughts),
         notes=f"{len(handles)} items; one CoW fan-out generate (no extra trunk round) + winner decode",
@@ -784,9 +827,9 @@ def run_react_forest_forkserve(
         eng.commit(h.id, h.tip, commit_ids, preferred_bid="bash")
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
-        n_out = sum(len(o) for o in outs)
     else:
-        n_out = sum(len(eng.generate(h.id, decode_n)) for h, *_ in handles)
+        outs = [eng.generate(h.id, decode_n) for h, *_ in handles]
+    n_out = sum(len(o) for o in outs)
     ttft = (_now() - t_obs) * 1000.0
     t1 = _now()
     residuals: list[int] = []
@@ -819,6 +862,7 @@ def run_react_forest_forkserve(
         gpu_mem_mib=gpu_mem_mib(),
         known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
         decode_tokens=n_out,
+        decode_ids=[[int(t) for t in o] for o in outs],
         sessions=len(handles),
         branching=2,
         notes=f"{len(handles)} items; idle CoW fan-out wrap+recovery; TTFT after LCP commit",
@@ -850,7 +894,7 @@ def run_tot_forest_vllm(
     _gen(llm, SamplingParams, TokensPrompt, branches, 1)
     t_fan = _now()
     winners = [t + res_ids[0] for t in trunk_ids]
-    _gen(llm, SamplingParams, TokensPrompt, winners, decode_n)
+    decoded = _gen(llm, SamplingParams, TokensPrompt, winners, decode_n)
     t1 = _now()
     k = len(branches)
     from forkserve.pages import clone_memory_bytes, cow_memory_bytes
@@ -877,6 +921,7 @@ def run_tot_forest_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n * len(trunks),
+        decode_ids=decoded,
         sessions=len(trunks),
         branching=len(thoughts),
         notes=f"{len(trunks)} items; one fan-out generate + one winner decode",
@@ -919,7 +964,7 @@ def run_react_forest_vllm(
         time.sleep(remain / 1000.0)
     t_obs = _now()
     fulls = [t + w + o for t, w, _r, o in packed]
-    _gen(llm, SamplingParams, TokensPrompt, fulls, decode_n)
+    decoded = _gen(llm, SamplingParams, TokensPrompt, fulls, decode_n)
     ttft = (_now() - t_obs) * 1000.0
     t1 = _now()
     trunk_n = len(packed[0][0]) if packed else 0
@@ -951,6 +996,7 @@ def run_react_forest_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n * len(packed),
+        decode_ids=decoded,
         sessions=len(packed),
         branching=2,
         notes=f"{len(packed)} items; idle fan-out wrap+recovery; then wrap+obs decode",
@@ -960,12 +1006,14 @@ def run_react_forest_vllm(
 def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
+    problems = load_gsm8k(args.limit)
     thoughts = gsm8k_thoughts(args.branching)
-    trunks = [gsm8k_trunk(item) for item in load_gsm8k(args.limit)]
+    trunks = [gsm8k_trunk(item) for item in problems]
     row = run_tot_forest_forkserve(
         eng, cfg, trunks, thoughts,
         decode_n=args.decode, idle_ms=0.0, workload="gsm8k",
     )
+    _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
     _close_all(eng)
     return row
 
@@ -973,12 +1021,14 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
 def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
+    problems = load_game24(args.limit)
     thoughts = game24_thoughts(args.branching)
-    trunks = [game24_trunk(item) for item in load_game24(args.limit)]
+    trunks = [game24_trunk(item) for item in problems]
     row = run_tot_forest_forkserve(
         eng, cfg, trunks, thoughts,
         decode_n=args.decode, idle_ms=0.0, workload="game24",
     )
+    _set_golds(row, [p.question for p in problems], _fs_texts(eng, row.decode_ids))
     _close_all(eng)
     return row
 
@@ -986,13 +1036,20 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
 def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
+    problems = load_humaneval(args.limit)
     items = []
-    for item in load_humaneval(args.limit):
+    for item in problems:
         wrap, recov, obs = humaneval_react_strings(item)
         items.append((humaneval_trunk(item), wrap, recov, obs))
     row = run_react_forest_forkserve(
         eng, cfg, items,
         decode_n=args.decode, idle_ms=args.idle_ms, workload="humaneval",
+    )
+    _set_golds(
+        row,
+        [p.tests for p in problems],
+        _fs_texts(eng, row.decode_ids),
+        [p.prompt for p in problems],
     )
     _close_all(eng)
     return row
@@ -1001,38 +1058,49 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
 def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
+    problems = load_gsm8k(args.limit)
     thoughts = gsm8k_thoughts(args.branching)
-    trunks = [gsm8k_trunk(item) for item in load_gsm8k(args.limit)]
-    return run_tot_forest_vllm(
+    trunks = [gsm8k_trunk(item) for item in problems]
+    row = run_tot_forest_vllm(
         llm, SamplingParams, TokensPrompt, system, cfg_bpt,
         trunks, thoughts,
         decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="gsm8k",
     )
+    return _set_golds(row, [p.answer for p in problems], _vllm_texts(llm, row.decode_ids))
 
 
 def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
+    problems = load_game24(args.limit)
     thoughts = game24_thoughts(args.branching)
-    trunks = [game24_trunk(item) for item in load_game24(args.limit)]
-    return run_tot_forest_vllm(
+    trunks = [game24_trunk(item) for item in problems]
+    row = run_tot_forest_vllm(
         llm, SamplingParams, TokensPrompt, system, cfg_bpt,
         trunks, thoughts,
         decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
     )
+    return _set_golds(row, [p.question for p in problems], _vllm_texts(llm, row.decode_ids))
 
 
 def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
-    items = []
-    for item in load_humaneval(args.limit):
+    problems = load_humaneval(args.limit)
+    packed = []
+    for item in problems:
         wrap, recov, obs = humaneval_react_strings(item)
-        items.append((humaneval_trunk(item), wrap, recov, obs))
-    return run_react_forest_vllm(
-        llm, SamplingParams, TokensPrompt, system, cfg_bpt, items,
+        packed.append((humaneval_trunk(item), wrap, recov, obs))
+    row = run_react_forest_vllm(
+        llm, SamplingParams, TokensPrompt, system, cfg_bpt, packed,
         decode_n=args.decode, idle_ms=args.idle_ms,
         prefix_cache=(system == "vllm_apc"), workload="humaneval",
+    )
+    return _set_golds(
+        row,
+        [p.tests for p in problems],
+        _vllm_texts(llm, row.decode_ids),
+        [p.prompt for p in problems],
     )
 
 
@@ -1223,8 +1291,8 @@ def default_tps(n_gpu: int, requested: Sequence[int] | None) -> list[int]:
 
 def format_table(rows: list[dict[str, Any]]) -> str:
     lines = [
-        "system           tp  workload  e2e_ms  fanout_ms  ttft_obs_ms  peak_kv  M_CoW_MiB  M_clone_MiB  kv_save  vs_recompute",
-        "-" * 118,
+        "system           tp  workload  e2e_ms  fanout_ms  ttft_obs_ms  peak_kv  task_score  metric        kv_save  vs_recompute",
+        "-" * 124,
     ]
     def _metric(row: dict[str, Any]) -> float:
         if row["workload"] in ("react", "humaneval") and float(row.get("ttft_from_obs_ms") or 0) > 0:
@@ -1243,10 +1311,13 @@ def format_table(rows: list[dict[str, Any]]) -> str:
         metric = _metric(r)
         b = base.get(key, 0.0)
         speed = (b / metric) if metric > 0 and b > 0 else 0.0
+        score = r.get("task_score")
+        metric = str(r.get("task_metric") or "")
+        sc_s = f"{float(score):10.3f}" if score is not None and float(score) >= 0 else "       n/a"
         lines.append(
             f"{r['system']:<16} {r['tp']:>2}  {r['workload']:<8} "
             f"{r['e2e_ms']:7.1f}  {r['fanout_ms']:9.1f}  {r['ttft_from_obs_ms']:11.1f}  "
-            f"{r['peak_kv_tokens']:7d}  {r['m_cow_mib']:9.2f}  {r['m_clone_mib']:11.2f}  "
+            f"{r['peak_kv_tokens']:7d}  {sc_s}  {metric:<12}  "
             f"{r['kv_saving']:7.2f}  {speed:5.2f}x"
         )
     return "\n".join(lines)
@@ -1385,6 +1456,9 @@ def orchestrate(args: argparse.Namespace) -> int:
             data = json.loads(shard.read_text())
             all_rows.extend(data["rows"])
 
+    from forkserve.quality import annotate_quality
+
+    annotate_quality(all_rows)
     report = {
         "model": args.model,
         "systems": systems,
@@ -1440,6 +1514,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.backend == "mock":
         rows = run_mock(args)
         payload = {"backend": "mock", "rows": [r.to_dict() for r in rows]}
+        from forkserve.quality import annotate_quality
+
+        annotate_quality(payload["rows"])
         print(format_table(payload["rows"]))
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(payload, indent=2))

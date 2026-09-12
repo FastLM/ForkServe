@@ -71,11 +71,14 @@ class PairJudge:
     vllm_apc_peak_kv: int
     efficiency_beats: bool
     perf_drop: bool
+    task_score: float = -1.0
+    quality_ref_score: float = -1.0
+    quality_drop: bool = False
     notes: str = ""
 
     @property
     def needs_improve(self) -> bool:
-        return (not self.efficiency_beats) or self.perf_drop
+        return (not self.efficiency_beats) or self.perf_drop or self.quality_drop
 
 
 @dataclass
@@ -98,6 +101,7 @@ def judge_rows(
     kv_gain: float = 0.20,
     perf_drop: float = 0.10,
     peak_slack: float = 0.05,
+    quality_min: float = 0.05,
 ) -> RoundVerdict:
     """Return whether ForkServe already beats vLLM without a clear latency drop."""
     idx = index_rows(rows)
@@ -122,6 +126,7 @@ def judge_rows(
                     vllm_apc_peak_kv=0,
                     efficiency_beats=False,
                     perf_drop=True,
+                    quality_drop=True,
                     notes="missing forkserve or vllm_recompute row",
                 )
             )
@@ -145,12 +150,22 @@ def judge_rows(
         not_worse_than_apc = apc_pk <= 0 or fork_pk <= apc_pk * (1.0 + peak_slack)
         efficiency_beats = beats_recompute and not_worse_than_apc
         dropped = vllm_lat > 0 and fork_lat > vllm_lat * (1.0 + perf_drop)
+        fs_q = float(fs.get("task_score", -1.0) if fs else -1.0)
+        ref_q = float((base or {}).get("task_score", -1.0))
+        # Missing scores (old JSON / no gold) do not fail. Drop > slack does.
+        quality_drop = fs_q >= 0.0 and ref_q >= 0.0 and fs_q + 1e-12 < ref_q - quality_min
 
         notes = (
             f"lat {fork_lat:.1f} vs {vllm_lat:.1f} "
             f"({((fork_lat / vllm_lat) - 1.0) * 100 if vllm_lat else 0:+.1f}%); "
             f"peak_kv {fork_pk} vs recompute {rec_pk} / apc {apc_pk}"
         )
+        if fs_q >= 0.0:
+            metric = fs.get("task_metric") or "task"
+            notes += (
+                f"; {metric} {fs_q:.3f} vs {ref_q:.3f} "
+                f"({fs.get('quality_vs') or 'baseline'})"
+            )
         pairs.append(
             PairJudge(
                 tp=tp,
@@ -162,6 +177,9 @@ def judge_rows(
                 vllm_apc_peak_kv=apc_pk,
                 efficiency_beats=efficiency_beats,
                 perf_drop=dropped,
+                task_score=fs_q,
+                quality_ref_score=ref_q,
+                quality_drop=quality_drop,
                 notes=notes,
             )
         )
@@ -174,6 +192,8 @@ def judge_rows(
         bits.append("efficiency did not beat vLLM")
     if any(p.perf_drop for p in bad):
         bits.append("clear latency drop vs vLLM")
+    if any(p.quality_drop for p in bad):
+        bits.append("generation quality dropped vs vLLM")
     return RoundVerdict(ok=False, pairs=pairs, reason="; ".join(bits))
 
 
@@ -192,7 +212,9 @@ def write_cursor_prompt(round_id: int, verdict: RoundVerdict, bench_path: Path) 
         "## Goal",
         "Make ForkServe more efficient than vLLM (lower peak KV than",
         "`vllm_recompute`, not worse than `vllm_apc`) **and** keep latency",
-        "within the configured slack of the vLLM baseline (APC if present).",
+        "within the configured slack of the vLLM baseline (APC if present),",
+        "and keep **task quality** almost unchanged vs APC: GSM8K accuracy,",
+        "Game24 success rate, HumanEval pass@1 (not token overlap).",
         "",
         "Focus on serving path: CoW / two-class scheduler / speculative prefill",
         "(`forkserve/engine/`, `forkserve/bench.py` worker). Keep unit tests green.",
@@ -204,7 +226,8 @@ def write_cursor_prompt(round_id: int, verdict: RoundVerdict, bench_path: Path) 
         flag = "NEED FIX" if p.needs_improve else "ok"
         lines.append(
             f"- tp={p.tp} {p.workload}: {flag} — {p.notes} "
-            f"(efficiency_beats={p.efficiency_beats}, perf_drop={p.perf_drop})"
+            f"(efficiency_beats={p.efficiency_beats}, perf_drop={p.perf_drop}, "
+            f"quality_drop={p.quality_drop})"
         )
     lines += [
         "",
@@ -445,6 +468,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--kv-gain", type=float, default=0.20, help="ForkServe peak_kv must be this fraction below recompute")
     p.add_argument("--perf-drop", type=float, default=0.10, help="latency slack vs vLLM APC (or recompute)")
     p.add_argument("--peak-slack", type=float, default=0.05, help="allowed peak_kv above APC")
+    p.add_argument(
+        "--quality-min",
+        type=float,
+        default=0.05,
+        help="max allowed drop in task_score (acc / success / pass@1) vs APC",
+    )
     p.add_argument("--edit", choices=("cursor", "wait", "both"), default=os.environ.get("RL_EDIT", "both"))
     p.add_argument("--wait-sec", type=float, default=float(os.environ.get("RL_WAIT_SEC", "86400")))
     p.add_argument("--from-json", default="", help="judge this JSON only (no GPU)")
@@ -458,7 +487,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.from_json:
         rows = load_rows(Path(args.from_json))
         verdict = judge_rows(
-            rows, kv_gain=args.kv_gain, perf_drop=args.perf_drop, peak_slack=args.peak_slack
+            rows,
+            kv_gain=args.kv_gain,
+            perf_drop=args.perf_drop,
+            peak_slack=args.peak_slack,
+            quality_min=args.quality_min,
         )
         print(json.dumps(verdict.to_dict(), indent=2))
         write_cursor_prompt(0, verdict, Path(args.from_json))
@@ -477,7 +510,11 @@ def main(argv: list[str] | None = None) -> int:
                 bench_path = run_bench(args, rnd)
                 rows = load_rows(bench_path)
                 verdict = judge_rows(
-                    rows, kv_gain=args.kv_gain, perf_drop=args.perf_drop, peak_slack=args.peak_slack
+                    rows,
+                    kv_gain=args.kv_gain,
+                    perf_drop=args.perf_drop,
+                    peak_slack=args.peak_slack,
+                    quality_min=args.quality_min,
                 )
             except Exception as exc:
                 log(f"bench failed: {exc}")

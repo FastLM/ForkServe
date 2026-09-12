@@ -85,6 +85,8 @@ def test_mock_gsm8k_cow_saves_kv() -> None:
     assert gsm.sessions == 2
     assert gsm.kv_saving > 0.3
     assert gsm.peak_kv_tokens < gsm.branching * gsm.trunk_tokens
+    assert gsm.decode_ids
+    assert all(len(s) >= 1 for s in gsm.decode_ids)
 
 
 def test_mock_game24_fanout() -> None:

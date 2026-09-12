@@ -69,6 +69,34 @@ def test_judge_humaneval_cow_fanout_beats_recompute() -> None:
     assert not v.pairs[0].perf_drop
 
 
+def test_judge_fails_on_quality_drop() -> None:
+    rows = [
+        _row("vllm_recompute", 2, "gsm8k", 700, 694),
+        _row("vllm_apc", 2, "gsm8k", 680, 223),
+        _row("forkserve", 2, "gsm8k", 650, 223),
+    ]
+    rows[1]["task_score"] = 0.75
+    rows[1]["task_metric"] = "accuracy"
+    rows[2]["task_score"] = 0.25
+    rows[2]["task_metric"] = "accuracy"
+    rows[2]["quality_vs"] = "vllm_apc"
+    v = rl.judge_rows(rows, quality_min=0.05)
+    assert not v.ok
+    assert v.pairs[0].quality_drop
+    assert "quality" in v.reason
+
+
+def test_judge_ignores_missing_quality() -> None:
+    rows = [
+        _row("vllm_recompute", 2, "gsm8k", 700, 694),
+        _row("vllm_apc", 2, "gsm8k", 680, 223),
+        _row("forkserve", 2, "gsm8k", 650, 223),
+    ]
+    v = rl.judge_rows(rows, quality_min=0.05)
+    assert v.ok
+    assert not v.pairs[0].quality_drop
+
+
 def test_humaneval_uses_ttft() -> None:
     rows = [
         _row("vllm_recompute", 2, "humaneval", 8000, 588, ttft=100),
