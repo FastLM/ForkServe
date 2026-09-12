@@ -186,12 +186,12 @@ def _chat(system: str, user: str) -> str:
 
 def gsm8k_trunk(item: MathItem) -> str:
     system = (
-        "You are a careful math tutor. Show reasoning, then put the final "
-        "numeric answer after the line ####."
+        "You are a careful math tutor. Use short arithmetic. "
+        "The last line of your reply must be exactly: #### <number>"
     )
     user = (
         f"{item.question}\n\n"
-        "Think of several solution plans before committing to one.\n"
+        "Do not list alternate plans. Finish with #### <number>.\n"
         "/no_think"
     )
     return _chat(system, user)

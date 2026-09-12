@@ -121,8 +121,14 @@ def test_mock_humaneval_tool_idle_hit() -> None:
 
 
 def test_decode_default_is_per_item_not_sixteen() -> None:
+    from forkserve.bench import workload_decode
+
     args = parse_args(["--out", "/tmp/forkserve-decode-default.json"])
     assert args.decode >= 256
+    assert workload_decode(args, "gsm8k") >= 512
+    assert workload_decode(args, "game24") == args.decode
+    tiny = parse_args(["--decode", "2", "--out", "/tmp/forkserve-decode-tiny.json"])
+    assert workload_decode(tiny, "gsm8k") == 2
 
 
 def test_loads_local_benchmark_files() -> None:

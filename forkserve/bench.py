@@ -29,6 +29,19 @@ from typing import Any, Callable, Sequence
 
 SYSTEMS = ("vllm_recompute", "vllm_apc", "forkserve")
 WORKLOADS = ("gsm8k", "game24", "humaneval", "tot", "react", "multi")
+# GSM8K needs a finished #### line; 256 tokens still truncates 8B/14B.
+GSM8K_DECODE_DEFAULT = 512
+
+
+def workload_decode(args: argparse.Namespace, workload: str) -> int:
+    """Per-workload decode. Tests that pass a tiny ``--decode`` keep that value."""
+    n = int(getattr(args, "decode", 256) or 256)
+    if workload != "gsm8k":
+        return n
+    gs = getattr(args, "gsm8k_decode", None)
+    if gs is not None:
+        return int(gs)
+    return n if n < 64 else max(n, GSM8K_DECODE_DEFAULT)
 
 
 @dataclass
@@ -1047,7 +1060,7 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
     trunks = [gsm8k_trunk(item) for item in problems]
     row = run_tot_forest_forkserve(
         eng, cfg, trunks, thoughts,
-        decode_n=args.decode, idle_ms=0.0, workload="gsm8k",
+        decode_n=workload_decode(args, "gsm8k"), idle_ms=0.0, workload="gsm8k",
     )
     _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
     _close_all(eng)
@@ -1097,7 +1110,7 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
     row = run_tot_forest_vllm(
         llm, SamplingParams, TokensPrompt, system, cfg_bpt,
         trunks, thoughts,
-        decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="gsm8k",
+        decode_n=workload_decode(args, "gsm8k"), prefix_cache=(system == "vllm_apc"), workload="gsm8k",
     )
     return _set_golds(row, [p.answer for p in problems], _vllm_texts(llm, row.decode_ids))
 
@@ -1447,6 +1460,8 @@ def orchestrate(args: argparse.Namespace) -> int:
                 args.model,
                 "--decode",
                 str(args.decode),
+                "--gsm8k-decode",
+                str(workload_decode(args, "gsm8k")),
                 "--idle-ms",
                 str(args.idle_ms),
                 "--branching",
@@ -1528,6 +1543,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         default=int(os.environ.get("FORKSERVE_DECODE", "256")),
         help="tokens generated per winner/item; JSON decode_tokens is the sum across items",
+    )
+    p.add_argument(
+        "--gsm8k-decode",
+        type=int,
+        default=None,
+        help="GSM8K tokens per item (default max(--decode, 512) unless --decode < 64)",
     )
     p.add_argument("--idle-ms", type=float, default=2000.0)
     p.add_argument("--branching", type=int, default=4)

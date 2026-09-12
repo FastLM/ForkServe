@@ -92,8 +92,10 @@ def test_judge_fails_on_quality_drop() -> None:
         _row("forkserve", 2, "gsm8k", 650, 223),
     ]
     rows[1]["task_score"] = 0.75
+    rows[1]["task_n"] = 4
     rows[1]["task_metric"] = "accuracy"
     rows[2]["task_score"] = 0.25
+    rows[2]["task_n"] = 4
     rows[2]["task_metric"] = "accuracy"
     rows[2]["quality_vs"] = "vllm_apc"
     v = rl.judge_rows(rows, quality_min=0.05)
@@ -116,6 +118,25 @@ def test_judge_ignores_missing_quality() -> None:
 def test_decode_default_is_long_enough_for_answers() -> None:
     args = rl.parse_args([])
     assert args.decode >= 256
+    assert args.gsm8k_decode >= 512
+
+
+def test_judge_ignores_all_zero_and_one_item_noise() -> None:
+    rows = [
+        _row("vllm_recompute", 2, "gsm8k", 700, 694),
+        _row("vllm_apc", 2, "gsm8k", 680, 223),
+        _row("forkserve", 2, "gsm8k", 650, 223),
+    ]
+    for r in rows:
+        r["task_score"] = 0.0
+        r["task_n"] = 4
+        r["task_metric"] = "accuracy"
+    assert rl.judge_rows(rows, quality_min=0.05).ok
+    rows[1]["task_score"] = 0.25
+    # 0 vs 0.25 on n=4 is one item — slack is 1/n
+    v = rl.judge_rows(rows, quality_min=0.05)
+    assert v.ok
+    assert not v.pairs[0].quality_drop
 
 
 def test_humaneval_uses_ttft() -> None:

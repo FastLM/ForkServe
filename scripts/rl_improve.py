@@ -153,10 +153,16 @@ def judge_rows(
         fs_q = float(fs.get("task_score", -1.0) if fs else -1.0)
         ref_q = float((base or {}).get("task_score", -1.0))
         collapsed = bool(fs.get("quality_collapsed"))
-        # Missing scores (old JSON / no gold) do not fail. Drop > slack does.
-        # Identical decode across distinct golds is a serving mixup, not noise.
+        n_q = max(int(fs.get("task_n") or 0), int((base or {}).get("task_n") or 0), 1)
+        # One miss on n=4 is 0.25 — do not treat that as a serving regression.
+        slack = max(float(quality_min), 1.0 / n_q)
+        # Both-zero (truncated GSM8K) is uninformative, not a quality drop.
+        uninformative = fs_q == 0.0 and ref_q == 0.0
         quality_drop = collapsed or (
-            fs_q >= 0.0 and ref_q >= 0.0 and fs_q + 1e-12 < ref_q - quality_min
+            (not uninformative)
+            and fs_q >= 0.0
+            and ref_q >= 0.0
+            and fs_q < ref_q - slack - 1e-12
         )
 
         notes = (
@@ -222,9 +228,11 @@ def write_cursor_prompt(round_id: int, verdict: RoundVerdict, bench_path: Path) 
         "and keep **task quality** almost unchanged vs APC: GSM8K accuracy,",
         "Game24 success rate, HumanEval pass@1 (not token overlap).",
         "",
-        "Quality is only informative if each winner can finish. Pass `--decode`",
-        "through to bench (default 256 **per item**, not 16). JSON `decode_tokens`",
-        "is n_items × decode — do not treat 64 as 64 tokens per problem.",
+        "Quality is only informative if each winner can finish. GSM8K uses",
+        "`--gsm8k-decode` (default **512**) so traces can reach `####`; Game24 /",
+        "HumanEval stay on `--decode` (default 256). JSON `decode_tokens` is the",
+        "sum across items. Judge slack is at least 1/n so one miss on n=4 is not",
+        "a FAIL. Do not compare quality when both scores are 0 (still truncated).",
         "HumanEval pass@1 must score official function-body completions",
         "(`prompt + body + check(entry)`), not the ReAct/chat tail.",
         "",
@@ -400,6 +408,8 @@ def run_bench(args: argparse.Namespace, round_id: int) -> Path:
         str(args.limit),
         "--decode",
         str(args.decode),
+        "--gsm8k-decode",
+        str(args.gsm8k_decode),
         "--out",
         str(out),
     ]
@@ -483,7 +493,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--decode",
         type=int,
         default=int(os.environ.get("FORKSERVE_DECODE", "256")),
-        help="tokens per winner/item (bench JSON decode_tokens is n_items × this)",
+        help="tokens per winner/item for game24/humaneval",
+    )
+    p.add_argument(
+        "--gsm8k-decode",
+        type=int,
+        default=int(os.environ.get("FORKSERVE_GSM8K_DECODE", "512")),
+        help="GSM8K tokens per item — must reach #### (256 is too short on 8B/14B)",
     )
     p.add_argument("--kv-gain", type=float, default=0.20, help="ForkServe peak_kv must be this fraction below recompute")
     p.add_argument("--perf-drop", type=float, default=0.10, help="latency slack vs vLLM APC (or recompute)")
