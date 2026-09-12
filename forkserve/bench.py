@@ -801,6 +801,7 @@ def _close_all(eng: Any) -> None:
 
 
 def worker_main(args: argparse.Namespace) -> int:
+    os.environ.update(_sanitize_cuda_env())
     system = args.system
     if not args.tp:
         args.tp = [1]
@@ -948,6 +949,20 @@ def format_table(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _sanitize_cuda_env(env: dict[str, str] | None = None) -> dict[str, str]:
+    """Drop CUDA 13 wheel paths; this box's driver is 12.9 / torch is cu128."""
+    e = dict(os.environ if env is None else env)
+    kept = [
+        p
+        for p in e.get("LD_LIBRARY_PATH", "").split(":")
+        if p and "/cu13/" not in p and "/nvidia/cu13/" not in p
+    ]
+    e["LD_LIBRARY_PATH"] = ":".join(kept)
+    e.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
+    e.setdefault("PYTHONUNBUFFERED", "1")
+    return e
+
+
 def orchestrate(args: argparse.Namespace) -> int:
     n_gpu = visible_gpu_count()
     tps = default_tps(n_gpu, args.tp)
@@ -1005,7 +1020,7 @@ def orchestrate(args: argparse.Namespace) -> int:
             ]
             if args.enforce_eager:
                 cmd.append("--enforce-eager")
-            env = os.environ.copy()
+            env = _sanitize_cuda_env()
             env["CUDA_VISIBLE_DEVICES"] = dev
             env["PYTHONUNBUFFERED"] = "1"
             print(f"==> {system} tp={tp} devices={dev}", flush=True)

@@ -1,0 +1,307 @@
+[2026-09-11 18:39:32] CUDA_VISIBLE_DEVICES=0,1,2,3  idle threshold=1024 MiB  poll=30s
+[2026-09-11 18:39:32] current GPU state:
+[2026-09-11 18:39:32]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 100 %
+[2026-09-11 18:39:32]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:39:32]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:39:32]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 100 %
+[2026-09-11 18:39:32] waiting for 4 GPU process(es): 2116231 2116232 2116233 2116234
+[2026-09-11 18:39:32]   zqyuan   2116231    02:51:00 /data/zqyuan/miniconda3/bin/python3.13 -u /data/zqyuan/router/gerbera/src/smart_router/encoder_mlp_vertfam.py --config /tmp/encoder_mlp_vertfam_additional_all_mmlu_pro.json
+[2026-09-11 18:39:32]   zqyuan   2116232    02:51:00 /data/zqyuan/miniconda3/bin/python3.13 -u /data/zqyuan/router/gerbera/src/smart_router/encoder_mlp_vertfam.py --config /tmp/encoder_mlp_vertfam_additional_all_mmlu_pro.json
+[2026-09-11 18:39:33]   zqyuan   2116233    02:51:00 /data/zqyuan/miniconda3/bin/python3.13 -u /data/zqyuan/router/gerbera/src/smart_router/encoder_mlp_vertfam.py --config /tmp/encoder_mlp_vertfam_additional_all_mmlu_pro.json
+[2026-09-11 18:39:33]   zqyuan   2116234    02:51:00 /data/zqyuan/miniconda3/bin/python3.13 -u /data/zqyuan/router/gerbera/src/smart_router/encoder_mlp_vertfam.py --config /tmp/encoder_mlp_vertfam_additional_all_mmlu_pro.json
+[2026-09-11 18:39:33] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:39:33]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 91 %
+[2026-09-11 18:39:33]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:39:33]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 94 %
+[2026-09-11 18:39:33]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 90 %
+[2026-09-11 18:40:03] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:40:03]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 100 %
+[2026-09-11 18:40:03]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:40:03]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:40:03]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 100 %
+[2026-09-11 18:40:33] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:40:33]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 77 %
+[2026-09-11 18:40:33]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:40:33]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:40:33]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 100 %
+[2026-09-11 18:41:03] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:41:03]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 87 %
+[2026-09-11 18:41:03]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:41:03]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:41:03]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 100 %
+[2026-09-11 18:41:33] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:41:33]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 87 %
+[2026-09-11 18:41:33]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 99 %
+[2026-09-11 18:41:33]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 99 %
+[2026-09-11 18:41:33]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 85 %
+[2026-09-11 18:42:03] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:42:03]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 100 %
+[2026-09-11 18:42:03]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:42:03]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:42:03]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 95 %
+[2026-09-11 18:42:33] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:42:33]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 93 %
+[2026-09-11 18:42:33]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 85 %
+[2026-09-11 18:42:33]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 85 %
+[2026-09-11 18:42:33]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 83 %
+[2026-09-11 18:43:03] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:43:04]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 100 %
+[2026-09-11 18:43:04]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 98 %
+[2026-09-11 18:43:04]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:43:04]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 100 %
+[2026-09-11 18:43:34] still running (4): 2116231 2116232 2116233 2116234
+[2026-09-11 18:43:34]   0, NVIDIA A100-SXM4-40GB, 9387 MiB, 40960 MiB, 100 %
+[2026-09-11 18:43:34]   1, NVIDIA A100-SXM4-40GB, 10873 MiB, 40960 MiB, 100 %
+[2026-09-11 18:43:34]   2, NVIDIA A100-SXM4-40GB, 9017 MiB, 40960 MiB, 100 %
+[2026-09-11 18:43:34]   3, NVIDIA A100-SXM4-40GB, 11007 MiB, 40960 MiB, 100 %
+[2026-09-11 18:44:04] GPU 0,1,2,3 is free — starting ForkServe vs vLLM bench
+[2026-09-11 18:44:04]   0, NVIDIA A100-SXM4-40GB, 0 MiB, 40960 MiB, 0 %
+[2026-09-11 18:44:04]   1, NVIDIA A100-SXM4-40GB, 0 MiB, 40960 MiB, 0 %
+[2026-09-11 18:44:04]   2, NVIDIA A100-SXM4-40GB, 0 MiB, 40960 MiB, 0 %
+[2026-09-11 18:44:04]   3, NVIDIA A100-SXM4-40GB, 0 MiB, 40960 MiB, 0 %
+[2026-09-11 18:44:04] exec: /home/dliu/envs/forkserve/bin/python -m forkserve.bench --tp 2,4 --model /home/dliu/models/Qwen3-8B
+orchestrating systems=['vllm_recompute', 'vllm_apc', 'forkserve'] tp=[2, 4] gpus=['0', '1', '2', '3'] workloads=['tot', 'react', 'multi'] model=/home/dliu/models/Qwen3-8B
+==> vllm_recompute tp=2 devices=0,1
+INFO 09-11 18:44:12 [api_utils.py:273] non-default args: {'dtype': 'bfloat16', 'max_model_len': 4096, 'tensor_parallel_size': 2, 'enable_prefix_caching': False, 'gpu_memory_utilization': 0.9, 'max_num_batched_tokens': 2048, 'disable_log_stats': True, 'enable_chunked_prefill': True, 'model': '/home/dliu/models/Qwen3-8B'}
+INFO 09-11 18:44:21 [model.py:598] Resolved architecture: Qwen3ForCausalLM
+INFO 09-11 18:44:21 [model.py:1725] Using max model len 4096
+INFO 09-11 18:44:21 [scheduler.py:252] Chunked prefill is enabled with max_num_batched_tokens=2048.
+INFO 09-11 18:44:21 [vllm.py:1006] Asynchronous scheduling is enabled.
+INFO 09-11 18:44:21 [kernel.py:276] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native'])
+(EngineCore pid=2255010) INFO 09-11 18:44:24 [core.py:114] Initializing a V1 LLM engine (v0.24.0) with config: model='/home/dliu/models/Qwen3-8B', speculative_config=None, tokenizer='/home/dliu/models/Qwen3-8B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=4096, download_dir=None, load_format=auto, tensor_parallel_size=2, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=None, quantization_config=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False, jit_monitor_verbose=False), seed=0, served_model_name=/home/dliu/models/Qwen3-8B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'ir_enable_torch_wrap': True, 'splitting_ops': ['vllm::unified_attention_with_output', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::qwen_gdn_attention_core', 'vllm::gdn_attention_core_xpu', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::deepseek_v4_attention', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240, 248, 256, 272, 288, 304, 320, 336, 352, 368, 384, 400, 416, 432, 448, 464, 480, 496, 512], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False}, 'max_cudagraph_capture_size': 512, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['native'], fused_add_rms_norm=['native']), enable_flashinfer_autotune=True, moe_backend='auto', linear_backend='auto')
+(EngineCore pid=2255010) WARNING 09-11 18:44:24 [multiproc_executor.py:1063] Reducing Torch parallelism from 128 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+(EngineCore pid=2255010) INFO 09-11 18:44:24 [multiproc_executor.py:140] DP group leader: node_rank=0, node_rank_within_dp=0, master_addr=127.0.0.1, mq_connect_ip=202.45.128.234 (local), world_size=2, local_world_size=2
+(Worker pid=2255016) INFO 09-11 18:44:24 [parallel_state.py:1588] world_size=2 rank=0 local_rank=0 distributed_init_method=tcp://127.0.0.1:54915 backend=nccl
+(Worker pid=2255017) INFO 09-11 18:44:25 [parallel_state.py:1588] world_size=2 rank=1 local_rank=1 distributed_init_method=tcp://127.0.0.1:54915 backend=nccl
+(Worker pid=2255017) <frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+(Worker pid=2255017) <frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+(Worker pid=2255016) <frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+(Worker pid=2255016) <frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+(Worker pid=2255016) INFO 09-11 18:44:26 [pynccl.py:113] vLLM is using nccl==2.28.9
+(Worker pid=2255016) (Worker pid=2255017) WARNING 09-11 18:44:26 [symm_mem.py:66] SymmMemCommunicator: Device capability 8.0 not supported, communicator is not available.
+WARNING 09-11 18:44:26 [symm_mem.py:66] SymmMemCommunicator: Device capability 8.0 not supported, communicator is not available.
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] WorkerProc failed to start.
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] WorkerProc failed to start.
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] Traceback (most recent call last):
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] Traceback (most recent call last):
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 865, in worker_main
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 865, in worker_main
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     worker = WorkerProc(*args, **kwargs)
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     worker = WorkerProc(*args, **kwargs)
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return func(*args, **kwargs)
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return func(*args, **kwargs)
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 626, in __init__
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 626, in __init__
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.worker.init_device()
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.worker.init_device()
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/worker/worker_base.py", line 331, in init_device
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/worker/worker_base.py", line 331, in init_device
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.worker.init_device()  # type: ignore
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.worker.init_device()  # type: ignore
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     ^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     ^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return func(*args, **kwargs)
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return func(*args, **kwargs)
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 322, in init_device
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 322, in init_device
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     init_worker_distributed_environment(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     init_worker_distributed_environment(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 1225, in init_worker_distributed_environment
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 1225, in init_worker_distributed_environment
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     ensure_model_parallel_initialized(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     ensure_model_parallel_initialized(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 1955, in ensure_model_parallel_initialized
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 1955, in ensure_model_parallel_initialized
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     initialize_model_parallel(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     initialize_model_parallel(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 1786, in initialize_model_parallel
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 1786, in initialize_model_parallel
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     _TP = init_model_parallel_group(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     _TP = init_model_parallel_group(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 1287, in init_model_parallel_group
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 1287, in init_model_parallel_group
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return GroupCoordinator(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return GroupCoordinator(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 474, in __init__
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/parallel_state.py", line 474, in __init__
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.device_communicator = device_comm_cls(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.device_communicator = device_comm_cls(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]                                ^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]                                ^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/cuda_communicator.py", line 102, in __init__
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/cuda_communicator.py", line 102, in __init__
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.ca_comm = CustomAllreduce(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.ca_comm = CustomAllreduce(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]                    ^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]                    ^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 173, in __init__
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 173, in __init__
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.meta_ptrs = self.create_shared_buffer(
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     self.meta_ptrs = self.create_shared_buffer(
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 299, in create_shared_buffer
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 299, in create_shared_buffer
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     pointer, handle = ops.allocate_shared_buffer_and_handle(size_in_bytes)
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     pointer, handle = ops.allocate_shared_buffer_and_handle(size_in_bytes)
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/_custom_ops.py", line 2923, in allocate_shared_buffer_and_handle
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/_custom_ops.py", line 2923, in allocate_shared_buffer_and_handle
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return torch.ops._C_custom_ar.allocate_shared_buffer_and_handle(size)
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return torch.ops._C_custom_ar.allocate_shared_buffer_and_handle(size)
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/torch/_ops.py", line 1269, in __call__
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/torch/_ops.py", line 1269, in __call__
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return self._op(*args, **kwargs)
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]     return self._op(*args, **kwargs)
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+ERROR 09-11 18:44:26 [multiproc_executor.py:898]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] RuntimeError: CUDA error: CUDA driver version is insufficient for CUDA runtime version
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] RuntimeError: CUDA error: CUDA driver version is insufficient for CUDA runtime version
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] Search for `cudaErrorInsufficientDriver' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] Search for `cudaErrorInsufficientDriver' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+(Worker pid=2255017) (Worker pid=2255016) ERROR 09-11 18:44:26 [multiproc_executor.py:898] 
+ERROR 09-11 18:44:26 [multiproc_executor.py:898] 
+(Worker pid=2255017) (Worker pid=2255016) Exception ignored in: Exception ignored in: <function CustomAllreduce.__del__ at 0x7f00483a5ee0><function CustomAllreduce.__del__ at 0x7f00483a5ee0>
+
+(Worker pid=2255017) (Worker pid=2255016) Traceback (most recent call last):
+Traceback (most recent call last):
+(Worker pid=2255017) (Worker pid=2255016)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 291, in __del__
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 291, in __del__
+(Worker pid=2255017) (Worker pid=2255016)         self.close()self.close()
+
+(Worker pid=2255017) (Worker pid=2255016)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 283, in close
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/distributed/device_communicators/custom_all_reduce.py", line 283, in close
+(Worker pid=2255016) (Worker pid=2255017)         if not self.disabled and self._ptr:if not self.disabled and self._ptr:
+
+(Worker pid=2255016) (Worker pid=2255017)                                                           ^^^^^^^^^^^^^^^^^^
+
+(Worker pid=2255016) (Worker pid=2255017) AttributeErrorAttributeError: : 'CustomAllreduce' object has no attribute '_ptr''CustomAllreduce' object has no attribute '_ptr'
+
+(EngineCore pid=2255010) INFO 09-11 18:44:26 [multiproc_executor.py:426] [shutdown] Executor: waiting for worker exit count=2
+(EngineCore pid=2255010) INFO 09-11 18:44:27 [multiproc_executor.py:433] [shutdown] Executor: all workers exited gracefully
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231] EngineCore failed to start.
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231] Traceback (most recent call last):
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1200, in run_engine_core
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     return func(*args, **kwargs)
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 966, in __init__
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     super().__init__(
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 123, in __init__
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     self.model_executor = executor_class(vllm_config)
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 108, in __init__
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     super().__init__(vllm_config)
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     return func(*args, **kwargs)
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 109, in __init__
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     self._init_executor()
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 201, in _init_executor
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     self.workers = WorkerProc.wait_for_ready(unready_workers)
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 762, in wait_for_ready
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231]     raise e from None
+(EngineCore pid=2255010) ERROR 09-11 18:44:27 [core.py:1231] Exception: WorkerProc initialization failed due to an exception in a background process. See stack trace for root cause.
+(EngineCore pid=2255010) Process EngineCore:
+(EngineCore pid=2255010) Traceback (most recent call last):
+(EngineCore pid=2255010)   File "/data/dliu/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+(EngineCore pid=2255010)     self.run()
+(EngineCore pid=2255010)   File "/data/dliu/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 108, in run
+(EngineCore pid=2255010)     self._target(*self._args, **self._kwargs)
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1235, in run_engine_core
+(EngineCore pid=2255010)     raise e
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1200, in run_engine_core
+(EngineCore pid=2255010)     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore pid=2255010)                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2255010)     return func(*args, **kwargs)
+(EngineCore pid=2255010)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 966, in __init__
+(EngineCore pid=2255010)     super().__init__(
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 123, in __init__
+(EngineCore pid=2255010)     self.model_executor = executor_class(vllm_config)
+(EngineCore pid=2255010)                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 108, in __init__
+(EngineCore pid=2255010)     super().__init__(vllm_config)
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=2255010)     return func(*args, **kwargs)
+(EngineCore pid=2255010)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 109, in __init__
+(EngineCore pid=2255010)     self._init_executor()
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 201, in _init_executor
+(EngineCore pid=2255010)     self.workers = WorkerProc.wait_for_ready(unready_workers)
+(EngineCore pid=2255010)                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=2255010)   File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/executor/multiproc_executor.py", line 762, in wait_for_ready
+(EngineCore pid=2255010)     raise e from None
+(EngineCore pid=2255010) Exception: WorkerProc initialization failed due to an exception in a background process. See stack trace for root cause.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/data/dliu/ForkServe/forkserve/bench.py", line 910, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/data/dliu/ForkServe/forkserve/bench.py", line 905, in main
+    return worker_main(args)
+           ^^^^^^^^^^^^^^^^^
+  File "/data/dliu/ForkServe/forkserve/bench.py", line 662, in worker_main
+    llm, SamplingParams, TokensPrompt = _vllm_llm(
+     /data/dliu/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 1 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+                                   ^^^^^^^^^^
+  File "/data/dliu/ForkServe/forkserve/bench.py", line 418, in _vllm_llm
+    llm = LLM(
+          ^^^^
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/entrypoints/llm.py", line 349, in __init__
+    self.llm_engine = LLMEngine.from_engine_args(
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/llm_engine.py", line 179, in from_engine_args
+    return cls(
+           ^^^^
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/llm_engine.py", line 105, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 103, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 786, in __init__
+    super().__init__(
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 573, in __init__
+    with launch_core_engines(
+         ^^^^^^^^^^^^^^^^^^^^
+  File "/data/dliu/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/contextlib.py", line 144, in __exit__
+    next(self.gen)
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1213, in launch_core_engines
+    wait_for_engine_startup(
+  File "/home/dliu/envs/forkserve/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1272, in wait_for_engine_startup
+    raise RuntimeError(
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {'EngineCore': 1}
+worker failed: vllm_recompute tp=2 rc=1

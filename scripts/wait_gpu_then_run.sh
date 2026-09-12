@@ -78,11 +78,38 @@ setup_runtime() {
   export PATH="${ENV_BIN}:${PATH}"
   export PYTHONUNBUFFERED=1
   export VLLM_USE_FLASHINFER_SAMPLER="${VLLM_USE_FLASHINFER_SAMPLER:-0}"
+  # Driver 575 advertises CUDA 12.9; torch is cu128. CUDA 13 libcudart
+  # from nvidia-cu13 makes vLLM fail with cudaErrorInsufficientDriver.
+  if [[ -d /usr/local/cuda-12.8 ]]; then
+    export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.8}"
+  elif [[ -d /usr/local/cuda-12.9 ]]; then
+    export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.9}"
+  fi
   local ld="" d
-  for d in "${SITE}"/nvidia/*/lib "${SITE}"/nvidia/cu13/lib; do
-    [[ -d "$d" ]] && ld="${d}:${ld}"
+  for d in \
+    "${CUDA_HOME:-}/lib64" \
+    "${SITE}/nvidia/cuda_runtime/lib" \
+    "${SITE}/nvidia/cublas/lib" \
+    "${SITE}/nvidia/cudnn/lib" \
+    "${SITE}/nvidia/nccl/lib" \
+    "${SITE}/nvidia/nvtx/lib" \
+    "${SITE}/nvidia/cuda_nvrtc/lib" \
+    "${SITE}/nvidia/cuda_cupti/lib" \
+    "${SITE}/nvidia/nvjitlink/lib" \
+    "${SITE}/nvidia/cusparse/lib" \
+    "${SITE}/nvidia/cusolver/lib" \
+    "${SITE}/nvidia/cufft/lib" \
+    "${SITE}/nvidia/curand/lib"
+  do
+    [[ -d "$d" ]] && ld="${ld}${d}:"
   done
-  export LD_LIBRARY_PATH="${ld}${LD_LIBRARY_PATH:-}"
+  local cleaned="" part
+  IFS=':' read -ra _ld_parts <<< "${LD_LIBRARY_PATH:-}"
+  for part in "${_ld_parts[@]}"; do
+    [[ "$part" == *"/nvidia/cu13/"* || "$part" == *"/cu13/lib"* ]] && continue
+    [[ -n "$part" ]] && cleaned="${cleaned}${part}:"
+  done
+  export LD_LIBRARY_PATH="${ld}${cleaned}"
 }
 
 cd "$ROOT"
