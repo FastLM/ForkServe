@@ -401,6 +401,7 @@ class Engine:
                 seed=seed,
                 node_id=tip.id,
                 parent_node=tip.id,
+                session=str(tree.session),
             )
         else:
             out = self.backend.decode(req)
@@ -421,6 +422,7 @@ class Engine:
         seqs: list[TokenSeq] = []
         node_ids: list[NodeId] = []
         parents: list[NodeId | None] = []
+        sess_ids: list[str] = []
         for session in sessions:
             tree = self.forest.get(SessionId(str(session)))
             if tree.tip is None:
@@ -441,8 +443,10 @@ class Engine:
             tips.append((tree, tip))
             seqs.append(tip.tokens)
             node_ids.append(tip.id)
-            # Alias the tip's own snapshot (trunk+thought or trunk+wrap).
+            # Alias this session's tip snapshot — keys are session-scoped
+            # because every tree restarts node ids at 1.
             parents.append(tip.id)
+            sess_ids.append(str(tree.session))
         gen = getattr(self.backend, "generate_committed_many", None)
         if not callable(gen):
             return [self.generate(session, n_tokens, seed=seed) for session in sessions]
@@ -452,6 +456,7 @@ class Engine:
             seed=seed,
             node_ids=node_ids,
             parent_nodes=parents,
+            sessions=sess_ids,
         )
         result: list[TokenSeq] = []
         for (tree, tip), out in zip(tips, outs, strict=True):

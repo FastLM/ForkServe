@@ -103,6 +103,23 @@ class MockBackend:
         self.kv.setdefault(req.node_id, []).extend(take)
         return list(take)
 
+    def generate_committed_many(
+        self,
+        seqs: Sequence[TokenSeq],
+        max_tokens: int,
+        seed: int | None = None,
+        node_ids: Sequence[NodeId | None] | None = None,
+        parent_nodes: Sequence[NodeId | None] | None = None,
+        sessions: Sequence[str | None] | None = None,
+    ) -> list[list[TokenId]]:
+        """Prompt-dependent tokens so mixed-up sessions fail tests."""
+        outs: list[list[TokenId]] = []
+        n = max(1, int(max_tokens))
+        for s in seqs:
+            h = (sum(int(t) for t in s) + len(s) * 17) % 997 + 3
+            outs.append([h + j for j in range(n)])
+        return outs
+
     def run_batch(
         self,
         committed_prefills: Sequence[PrefillRequest],

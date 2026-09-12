@@ -168,6 +168,7 @@ class VllmBackend:
         node_id: NodeId | None,
         parent_node: NodeId | None = None,
         seed: int | None = None,
+        session: str | None = None,
     ) -> Any:
         return self._SamplingParams(
             max_tokens=max_tokens,
@@ -177,6 +178,7 @@ class VllmBackend:
                 speculative=speculative,
                 node_id=int(node_id) if node_id is not None else None,
                 parent_node=int(parent_node) if parent_node is not None else None,
+                session=session,
             ),
         )
 
@@ -188,6 +190,7 @@ class VllmBackend:
         speculative: Sequence[bool] | bool = False,
         node_ids: Sequence[NodeId | None] | None = None,
         parent_nodes: Sequence[NodeId | None] | None = None,
+        sessions: Sequence[str | None] | None = None,
         seed: int | None = None,
     ) -> list[list[int]]:
         if not seqs:
@@ -200,6 +203,7 @@ class VllmBackend:
         )
         nodes = list(node_ids) if node_ids is not None else [None] * n
         parents = list(parent_nodes) if parent_nodes is not None else [None] * n
+        sess = list(sessions) if sessions is not None else [None] * n
         prompts = [self._TokensPrompt(prompt_token_ids=list(s)) for s in seqs]
         params = [
             self._params(
@@ -208,6 +212,7 @@ class VllmBackend:
                 node_id=nodes[i],
                 parent_node=parents[i],
                 seed=seed,
+                session=sess[i] if i < len(sess) else None,
             )
             for i in range(n)
         ]
@@ -255,6 +260,7 @@ class VllmBackend:
             speculative=[r.speculative for r in reqs],
             node_ids=[r.node_id for r in reqs],
             parent_nodes=[r.parent_node for r in reqs],
+            sessions=[str(r.session) for r in reqs],
         )
         return (perf_counter() - t0) * 1000.0
 
@@ -269,6 +275,7 @@ class VllmBackend:
         seed: int | None = None,
         node_id: NodeId | None = None,
         parent_node: NodeId | None = None,
+        session: str | None = None,
     ) -> list[TokenId]:
         outs = self.generate_committed_many(
             [tokens],
@@ -276,6 +283,7 @@ class VllmBackend:
             seed=seed,
             node_ids=[node_id],
             parent_nodes=[parent_node],
+            sessions=[session],
         )
         return outs[0] if outs else []
 
@@ -286,6 +294,7 @@ class VllmBackend:
         seed: int | None = None,
         node_ids: Sequence[NodeId | None] | None = None,
         parent_nodes: Sequence[NodeId | None] | None = None,
+        sessions: Sequence[str | None] | None = None,
     ) -> list[list[TokenId]]:
         fused, committed_rest, dropped = split_pending_for_decode(self._pending, seqs)
         # Known-suffix / commit-tail / covered trunks ride this generate.
@@ -301,6 +310,7 @@ class VllmBackend:
             speculative=False,
             node_ids=node_ids,
             parent_nodes=parent_nodes,
+            sessions=sessions,
             seed=seed,
         )
 

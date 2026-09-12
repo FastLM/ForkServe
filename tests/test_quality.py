@@ -4,6 +4,7 @@ from forkserve.quality import (
     game24_correct,
     gsm8k_correct,
     humaneval_pass,
+    quality_collapsed,
     score_task,
 )
 
@@ -26,6 +27,11 @@ def test_game24_success_checks_value_and_cards() -> None:
     scored = score_task("game24", ["(4+8)*3-12"], [gold])
     assert scored.metric == "success_rate"
     assert scored.score == 1.0
+    noisy = (
+        "6*4=24, and 1/1=1. So 6*4*(1/1)=24. But that uses all numbers once.\n"
+        "Wait, maybe 6/1 + 4 + 1 + 99 extra digits 6411.\n"
+    )
+    assert game24_correct(noisy, "Use 1, 1, 4, 6 each once with + - * / to make 24.")
 
 
 def test_humaneval_pass_at_1_runs_hidden_tests() -> None:
@@ -72,3 +78,14 @@ def test_annotate_scores_each_system_and_delta() -> None:
     assert rows[1]["task_score"] == 1.0
     assert rows[1]["quality_vs"] == "vllm_apc"
     assert rows[1]["quality_delta"] == 0.5
+
+
+def test_quality_collapsed_detects_session_mixup() -> None:
+    same = "    balance = 0\n    for op in operations:\n        return True\n"
+    assert quality_collapsed("humaneval", [same, same, same, same], ["a", "b", "c", "d"])
+    assert not quality_collapsed(
+        "humaneval",
+        ["    return numbers\n", "    return groups\n", "    return n\n", same],
+        ["a", "b", "c", "d"],
+    )
+    assert quality_collapsed("gsm8k", ["#### 540"] * 4, ["18", "3", "70000", "540"])

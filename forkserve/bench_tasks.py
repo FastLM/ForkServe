@@ -191,7 +191,8 @@ def gsm8k_trunk(item: MathItem) -> str:
     )
     user = (
         f"{item.question}\n\n"
-        "Think of several solution plans before committing to one."
+        "Think of several solution plans before committing to one.\n"
+        "/no_think"
     )
     return _chat(system, user)
 
@@ -209,7 +210,7 @@ def game24_trunk(item: MathItem) -> str:
         "You solve the 24 game. Use each number once with +, -, *, / and "
         "parentheses. Reply with an equation that equals 24."
     )
-    return _chat(system, item.question)
+    return _chat(system, item.question + "\n/no_think")
 
 
 def game24_thoughts(branching: int) -> list[str]:

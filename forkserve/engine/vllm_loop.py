@@ -53,17 +53,32 @@ def committed_first(requests: Sequence[Any]) -> list[Any]:
     return c + s
 
 
+def cow_node_key(session: Any, node: Any) -> str | None:
+    """Per-tree node ids restart at 1 — snapshots must be session-scoped.
+
+    Round-2 HumanEval/GSM8K mixup: four sessions all used ``node_id=1``, so
+    ``node_snap[1]`` kept the last prompt and every decode continued it.
+    """
+    if node is None:
+        return None
+    sid = str(session or "").strip()
+    return f"{sid}:{int(node)}"
+
+
 def forkserve_extra(
     *,
     speculative: bool,
     node_id: int | None = None,
     parent_node: int | None = None,
     generation: int = 0,
+    session: str | None = None,
 ) -> dict[str, Any]:
     extra: dict[str, Any] = {
         "forkserve_class": FS_SPECULATIVE if speculative else FS_COMMITTED,
         "forkserve_generation": int(generation),
     }
+    if session:
+        extra["forkserve_session"] = str(session)
     if node_id is not None:
         extra["forkserve_node"] = int(node_id)
     if parent_node is not None:
@@ -121,11 +136,11 @@ class CowBlockTable:
     def writable(self, block_id: int, ref_cnt: int) -> bool:
         return ref_cnt <= 1 and int(block_id) not in self.ro
 
-    def bind_node(self, node_id: int, request_id: str) -> None:
-        self.node_to_req[int(node_id)] = request_id
+    def bind_node(self, node_id: int, request_id: str, *, session: str | None = None) -> None:
+        self.node_to_req[cow_node_key(session, node_id)] = request_id
 
-    def req_for_node(self, node_id: int) -> str | None:
-        return self.node_to_req.get(int(node_id))
+    def req_for_node(self, node_id: int, *, session: str | None = None) -> str | None:
+        return self.node_to_req.get(cow_node_key(session, node_id))
 
     def note_fork(self, n_blocks: int) -> None:
         self.forks += 1
@@ -140,14 +155,17 @@ class CowBlockTable:
         groups: list[list[Any]],
         num_tokens: int,
         block_size: int,
+        *,
+        session: str | None = None,
     ) -> NodeBlockSnap:
+        key = cow_node_key(session, node_id)
         snap = NodeBlockSnap(
             groups=groups,
             num_tokens=int(num_tokens),
             block_size=int(block_size),
-            pinned=self.node_snap.get(int(node_id), NodeBlockSnap([], 0, 0)).pinned,
+            pinned=self.node_snap.get(key, NodeBlockSnap([], 0, 0)).pinned,
         )
-        self.node_snap[int(node_id)] = snap
+        self.node_snap[key] = snap
         return snap
 
 
@@ -220,7 +238,8 @@ def _snapshot_node_blocks(mgr: Any, request: Any) -> None:
     if pool is None or coord is None:
         return
     table = cow_of(pool)
-    table.bind_node(int(node), request.request_id)
+    session = extra.get("forkserve_session")
+    table.bind_node(int(node), request.request_id, session=session)
     groups: list[list[Any]] = []
     block_size = 16
     for stm in coord.single_type_managers:
@@ -231,8 +250,8 @@ def _snapshot_node_blocks(mgr: Any, request: Any) -> None:
         getattr(request, "num_prompt_tokens", 0)
         or getattr(request, "num_tokens", 0)
     )
-    prev = table.node_snap.get(int(node))
-    snap = table.store_snapshot(int(node), groups, num_tokens, block_size)
+    prev = table.node_snap.get(cow_node_key(session, node))
+    snap = table.store_snapshot(int(node), groups, num_tokens, block_size, session=session)
     if prev is not None and prev.pinned:
         return
     flat = [
@@ -273,7 +292,8 @@ def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int] | None:
         return None
     table = cow_of(pool)
     coord = getattr(mgr, "coordinator", None)
-    snap = table.node_snap.get(int(parent_node))
+    session = extra.get("forkserve_session")
+    snap = table.node_snap.get(cow_node_key(session, parent_node))
     groups_src: list[list[Any]] = []
     parent_tokens = 0
     block_size = 16
@@ -282,7 +302,7 @@ def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int] | None:
         parent_tokens = snap.num_tokens
         block_size = snap.block_size
     elif coord is not None:
-        parent_req = table.req_for_node(int(parent_node))
+        parent_req = table.req_for_node(int(parent_node), session=session)
         if not parent_req:
             return None
         groups_src, parent_tokens, block_size = _groups_from_live(coord, parent_req)
@@ -337,7 +357,11 @@ def get_two_class_scheduler() -> type:
             node = extra.get("forkserve_node")
             pool = getattr(self.kv_cache_manager, "block_pool", None)
             if pool is not None and node is not None:
-                cow_of(pool).bind_node(int(node), request.request_id)
+                cow_of(pool).bind_node(
+                    int(node),
+                    request.request_id,
+                    session=extra.get("forkserve_session"),
+                )
             return super().add_request(request)
 
         def schedule(self, throttle_prefills: bool = False):  # type: ignore[no-untyped-def]

@@ -10,6 +10,7 @@ from forkserve.engine.protocol import PrefillRequest
 from forkserve.engine.vllm_loop import (
     CowBlockTable,
     committed_first,
+    cow_node_key,
     extra_of,
     forkserve_extra,
     is_speculative,
@@ -64,6 +65,18 @@ def test_cow_bind_parent_lookup() -> None:
     table.bind_node(4, "req-parent")
     assert table.req_for_node(4) == "req-parent"
     assert extra_of(_req(False))["forkserve_class"] == "committed"
+
+
+def test_cow_keys_are_session_scoped() -> None:
+    """Per-tree node ids restart at 1; snaps must not collide across sessions."""
+    assert cow_node_key("s-a", 1) != cow_node_key("s-b", 1)
+    table = CowBlockTable()
+    table.bind_node(1, "req-a", session="s-a")
+    table.bind_node(1, "req-b", session="s-b")
+    assert table.req_for_node(1, session="s-a") == "req-a"
+    assert table.req_for_node(1, session="s-b") == "req-b"
+    extra = forkserve_extra(speculative=False, node_id=1, parent_node=1, session="s-a")
+    assert extra["forkserve_session"] == "s-a"
 
 
 def test_select_full_blocks_keeps_complete_last_page() -> None:

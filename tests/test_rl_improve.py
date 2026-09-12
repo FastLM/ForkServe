@@ -69,6 +69,22 @@ def test_judge_humaneval_cow_fanout_beats_recompute() -> None:
     assert not v.pairs[0].perf_drop
 
 
+def test_judge_fails_on_collapsed_decode() -> None:
+    rows = [
+        _row("vllm_recompute", 2, "humaneval", 8000, 1918, ttft=200),
+        _row("vllm_apc", 2, "humaneval", 8000, 1059, ttft=200),
+        _row("forkserve", 2, "humaneval", 8000, 1059, ttft=200),
+    ]
+    for r in rows:
+        r["task_score"] = 0.25
+        r["task_metric"] = "pass_at_1"
+    rows[1]["task_score"] = 0.25
+    rows[2]["quality_collapsed"] = True
+    v = rl.judge_rows(rows, quality_min=0.05)
+    assert not v.ok
+    assert v.pairs[0].quality_drop
+
+
 def test_judge_fails_on_quality_drop() -> None:
     rows = [
         _row("vllm_recompute", 2, "gsm8k", 700, 694),

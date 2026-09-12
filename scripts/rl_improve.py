@@ -152,8 +152,12 @@ def judge_rows(
         dropped = vllm_lat > 0 and fork_lat > vllm_lat * (1.0 + perf_drop)
         fs_q = float(fs.get("task_score", -1.0) if fs else -1.0)
         ref_q = float((base or {}).get("task_score", -1.0))
+        collapsed = bool(fs.get("quality_collapsed"))
         # Missing scores (old JSON / no gold) do not fail. Drop > slack does.
-        quality_drop = fs_q >= 0.0 and ref_q >= 0.0 and fs_q + 1e-12 < ref_q - quality_min
+        # Identical decode across distinct golds is a serving mixup, not noise.
+        quality_drop = collapsed or (
+            fs_q >= 0.0 and ref_q >= 0.0 and fs_q + 1e-12 < ref_q - quality_min
+        )
 
         notes = (
             f"lat {fork_lat:.1f} vs {vllm_lat:.1f} "
@@ -166,6 +170,8 @@ def judge_rows(
                 f"; {metric} {fs_q:.3f} vs {ref_q:.3f} "
                 f"({fs.get('quality_vs') or 'baseline'})"
             )
+        if collapsed:
+            notes += "; quality_collapsed=session mixup"
         pairs.append(
             PairJudge(
                 tp=tp,

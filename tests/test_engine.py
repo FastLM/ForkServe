@@ -68,6 +68,7 @@ def test_generate_many_batches_committed_decode(eng: Engine) -> None:
     outs = eng.generate_many([a.id, b.id], 2)
     assert len(outs) == 2
     assert all(len(o) >= 1 for o in outs)
+    assert outs[0] != outs[1]
 
 
 def test_generate_refuses_spec_tip(eng: Engine) -> None:

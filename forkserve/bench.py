@@ -51,6 +51,7 @@ class RunMetrics:
     gpu_mem_mib: list[int] = field(default_factory=list)
     known_suffix_hit_rate: float = 0.0
     decode_tokens: int = 0
+    decode_per_item: int = 0
     sessions: int = 1
     branching: int = 1
     notes: str = ""
@@ -65,6 +66,7 @@ class RunMetrics:
     quality_vs: str = ""
     quality_ref_score: float = -1.0
     quality_delta: float = 0.0
+    quality_collapsed: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -486,6 +488,8 @@ def _set_golds(row: RunMetrics, golds: Sequence[str], texts: Sequence[str], prom
     row.golds = [str(g) for g in golds]
     row.decode_texts = [str(t) for t in texts]
     row.gold_prompts = [str(p) for p in prompts]
+    if row.decode_per_item <= 0 and texts:
+        row.decode_per_item = max((len(t) for t in row.decode_ids), default=0) if row.decode_ids else 0
     return row
 
 
@@ -732,6 +736,7 @@ def _merge_metrics(parts: list[RunMetrics], workload: str) -> RunMetrics:
         gpu_mem_mib=parts[-1].gpu_mem_mib,
         known_suffix_hit_rate=sum(p.known_suffix_hit_rate for p in parts) / n,
         decode_tokens=sum(p.decode_tokens for p in parts),
+        decode_per_item=head.decode_per_item,
         decode_ids=[ids for p in parts for ids in p.decode_ids],
         sessions=n,
         branching=head.branching,
@@ -801,6 +806,7 @@ def run_tot_forest_forkserve(
         gpu_mem_mib=gpu_mem_mib(),
         known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
         decode_tokens=n_out,
+        decode_per_item=decode_n,
         decode_ids=[[int(t) for t in o] for o in outs],
         sessions=len(handles),
         branching=len(thoughts),
@@ -843,8 +849,10 @@ def run_react_forest_forkserve(
     peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
+    slept = 0.0
     if remain > 0:
         time.sleep(remain / 1000.0)
+        slept = remain
     t_obs = _now()
     for h, wrap, recov, obs, commit_ids in handles:
         eng.commit(h.id, h.tip, commit_ids, preferred_bid="bash")
@@ -870,7 +878,7 @@ def run_react_forest_forkserve(
         system="forkserve",
         workload=workload,
         tp=0,
-        e2e_ms=(t1 - t0) * 1000.0,
+        e2e_ms=(t1 - t0) * 1000.0 - slept,
         fanout_ms=spec_ms,
         decode_ms=ttft,
         ttft_from_obs_ms=ttft,
@@ -885,6 +893,7 @@ def run_react_forest_forkserve(
         gpu_mem_mib=gpu_mem_mib(),
         known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
         decode_tokens=n_out,
+        decode_per_item=decode_n,
         decode_ids=[[int(t) for t in o] for o in outs],
         sessions=len(handles),
         branching=2,
@@ -944,6 +953,7 @@ def run_tot_forest_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n * len(trunks),
+        decode_per_item=decode_n,
         decode_ids=decoded,
         sessions=len(trunks),
         branching=len(thoughts),
@@ -983,8 +993,10 @@ def run_react_forest_vllm(
     _gen(llm, SamplingParams, TokensPrompt, branches, 1)
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
+    slept = 0.0
     if remain > 0:
         time.sleep(remain / 1000.0)
+        slept = remain
     t_obs = _now()
     fulls = [t + w + o for t, w, _r, o in packed]
     decoded = _gen(llm, SamplingParams, TokensPrompt, fulls, decode_n)
@@ -1005,7 +1017,7 @@ def run_react_forest_vllm(
         system=system,
         workload=workload,
         tp=0,
-        e2e_ms=(t1 - t0) * 1000.0,
+        e2e_ms=(t1 - t0) * 1000.0 - slept,
         fanout_ms=spec_ms,
         decode_ms=ttft,
         ttft_from_obs_ms=ttft,
@@ -1019,6 +1031,7 @@ def run_react_forest_vllm(
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n * len(packed),
+        decode_per_item=decode_n,
         decode_ids=decoded,
         sessions=len(packed),
         branching=2,

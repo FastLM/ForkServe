@@ -89,19 +89,42 @@ def extract_game24_nums(gold: str) -> list[int]:
     return nums[:4] if len(nums) >= 4 else nums
 
 
-def extract_game24_expr(text: str) -> str:
-    lines = [ln.strip() for ln in text.replace("\\n", "\n").splitlines() if ln.strip()]
-    candidates = [ln for ln in lines if any(op in ln for op in "+-*/")]
-    pool = candidates or lines
-    best = ""
-    for ln in pool:
-        left = ln.split("=")[0]
-        cleaned = re.sub(r"[^0-9+\-*/().\s]", "", left)
-        if cleaned.count("(") != cleaned.count(")"):
+_EXPR_CHUNK = re.compile(r"[\d.]+(?:\s*[+\-*/]\s*[\d.()]+)+")
+
+
+def _clean_game24_expr(raw: str) -> str:
+    left = raw.split("=")[0]
+    cleaned = re.sub(r"[^0-9+\-*/().\s]", "", left)
+    if cleaned.count("(") != cleaned.count(")"):
+        return ""
+    return cleaned.strip()
+
+
+def iter_game24_exprs(text: str) -> list[str]:
+    """First-to-last candidates — do not prefer the longest (noisy) line."""
+    raw = (text or "").replace("\\n", "\n")
+    seen: list[str] = []
+    for ln in raw.splitlines():
+        ln = ln.strip()
+        if not ln or not any(op in ln for op in "+-*/"):
             continue
-        if len(cleaned) > len(best):
-            best = cleaned
-    return best.strip()
+        cleaned = _clean_game24_expr(ln)
+        if cleaned and cleaned not in seen:
+            seen.append(cleaned)
+        for m in _EXPR_CHUNK.finditer(ln):
+            cleaned = _clean_game24_expr(m.group(0))
+            if cleaned and cleaned not in seen:
+                seen.append(cleaned)
+    for m in _EXPR_CHUNK.finditer(raw):
+        cleaned = _clean_game24_expr(m.group(0))
+        if cleaned and cleaned not in seen:
+            seen.append(cleaned)
+    return seen
+
+
+def extract_game24_expr(text: str) -> str:
+    exprs = iter_game24_exprs(text)
+    return exprs[0] if exprs else ""
 
 
 _OPS = {
@@ -126,11 +149,7 @@ def _eval_ast(node: ast.AST) -> float:
     raise ValueError("disallowed")
 
 
-def game24_correct(text: str, gold: str) -> bool:
-    nums = extract_game24_nums(gold)
-    expr = extract_game24_expr(text)
-    if not expr or not nums:
-        return False
+def _game24_ok(expr: str, nums: list[int]) -> bool:
     used = [int(float(x)) for x in _CARD.findall(expr)]
     if sorted(used) != sorted(nums):
         return False
@@ -139,6 +158,30 @@ def game24_correct(text: str, gold: str) -> bool:
     except Exception:
         return False
     return abs(val - 24.0) < 1e-6
+
+
+def game24_correct(text: str, gold: str) -> bool:
+    nums = extract_game24_nums(gold)
+    if not nums:
+        return False
+    return any(_game24_ok(expr, nums) for expr in iter_game24_exprs(text))
+
+
+def quality_collapsed(workload: str, texts: Sequence[str], golds: Sequence[str]) -> bool:
+    """True when every item decoded the same payload (session mixup)."""
+    n = min(len(texts), len(golds))
+    if n < 3:
+        return False
+    if workload == "gsm8k":
+        preds = [extract_gsm8k_answer(t or "") for t in texts[:n]]
+        return len(set(normalize_num(g) for g in golds[:n])) >= 3 and len(set(preds)) == 1
+    if workload == "game24":
+        exprs = [extract_game24_expr(t or "") for t in texts[:n]]
+        return len(set(golds[:n])) >= 3 and len(set(exprs)) == 1
+    if workload == "humaneval":
+        heads = [(extract_python(t or "")[:96]).strip() for t in texts[:n]]
+        return len({h for h in heads if h}) == 1
+    return False
 
 
 def extract_python(text: str) -> str:
@@ -218,6 +261,11 @@ def annotate_quality(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             r.get("gold_prompts") or [],
         )
         r.update(scored.to_dict())
+        r["quality_collapsed"] = quality_collapsed(
+            str(r.get("workload") or ""),
+            texts,
+            golds,
+        )
     idx: dict[tuple[str, int, str], dict[str, Any]] = {}
     for r in rows:
         idx[(str(r.get("system")), int(r.get("tp") or 0), str(r.get("workload")))] = r
