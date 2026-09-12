@@ -41,8 +41,9 @@ class ReActAdapter:
         ]
         if include_recovery:
             fail = self.engine.fork(session, parent, "err", recov)
-            # Fork for LCP / bind(ok=False) only. GPU-prefilling recovery is
-            # what pushed HumanEval peak_kv above APC (idle wrap is enough).
+            # Same ToT contract: every declared sibling is a real fan-out row.
+            # Recovery is low-p slack, but it still occupies residual KV so
+            # CoW vs clone is visible (vLLM recompute prefills trunk+recov).
             cands.append(
                 Candidate(
                     branch_id=BranchId("err"),
@@ -51,7 +52,7 @@ class ReActAdapter:
                     p_b=0.2,
                     schema=SchemaKind.FREEFORM,
                     declared=True,
-                    gpu_prefill=False,
+                    gpu_prefill=True,
                 )
             )
         self.engine.speculate_set(session, parent, cands, t_idle_ms=t_idle_ms)

@@ -113,6 +113,9 @@ def test_mock_humaneval_tool_idle_hit() -> None:
     assert he.workload == "humaneval"
     assert he.known_suffix_hit_rate == 1.0
     assert he.sessions == 2
+    assert he.branching == 2
+    # Fan-out peak shares the trunk; clone would be ~2× trunks + wrap + recov.
+    assert he.peak_kv_tokens < 2 * he.trunk_tokens * he.sessions
 
 
 def test_loads_local_benchmark_files() -> None:

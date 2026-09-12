@@ -329,6 +329,7 @@ def run_react_forkserve(
         h.id, parent, "bash", t_idle_ms=idle_ms, include_recovery=True
     )
     eng.drain_slack()
+    peak = int(tree.live_kv_tokens())
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
     if remain > 0:
@@ -355,7 +356,7 @@ def run_react_forkserve(
         idle_ms=idle_ms,
         trunk_tokens=trunk_n,
         residual_tokens=[wrap_n, recov_n, obs_n],
-        peak_kv_tokens=int(tree.live_kv_tokens()),
+        peak_kv_tokens=peak,
         m_cow_mib=cow,
         m_clone_mib=clone,
         kv_saving=saving,
@@ -532,11 +533,17 @@ def run_react_vllm(
     trunk_ids = _tok_ids(llm, trunk)
     wrap_ids = _tok_ids(llm, wrap)
     recov_ids = _tok_ids(llm, recov)
-    full = trunk_ids + wrap_ids + _tok_ids(llm, obs)
+    obs_ids = _tok_ids(llm, obs)
+    full = trunk_ids + wrap_ids + obs_ids
     t0 = _now()
     if prefix_cache:
         _gen(llm, SamplingParams, TokensPrompt, [trunk_ids], 1)
-    time.sleep(idle_ms / 1000.0)
+    t_idle = _now()
+    _gen(llm, SamplingParams, TokensPrompt, [trunk_ids + wrap_ids, trunk_ids + recov_ids], 1)
+    spec_ms = (_now() - t_idle) * 1000.0
+    remain = idle_ms - spec_ms
+    if remain > 0:
+        time.sleep(remain / 1000.0)
     t_obs = _now()
     _gen(llm, SamplingParams, TokensPrompt, [full], decode_n)
     ttft = (_now() - t_obs) * 1000.0
@@ -547,16 +554,23 @@ def run_react_vllm(
 
     cow = _mib(cow_memory_bytes(trunk_n, residuals, cfg_bpt))
     clone = _mib(clone_memory_bytes(trunk_n, residuals, cfg_bpt, 2))
-    peak = len(full) if not prefix_cache else (len(full))
+    peak = (
+        trunk_n + len(wrap_ids) + len(recov_ids)
+        if prefix_cache
+        else 2 * trunk_n + len(wrap_ids) + len(recov_ids)
+    )
     return RunMetrics(
         system=system,
         workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=spec_ms,
+        decode_ms=ttft,
         ttft_from_obs_ms=ttft,
+        spec_ms=spec_ms,
         idle_ms=idle_ms,
         trunk_tokens=trunk_n,
-        residual_tokens=residuals + [len(full) - trunk_n - len(wrap_ids)],
+        residual_tokens=residuals + [len(obs_ids)],
         peak_kv_tokens=int(peak),
         m_cow_mib=cow,
         m_clone_mib=clone,
@@ -564,7 +578,7 @@ def run_react_vllm(
         gpu_mem_mib=gpu_mem_mib(),
         decode_tokens=decode_n,
         branching=2,
-        notes="sleep idle then prefill wrap+obs; no speculative overlap",
+        notes="idle fan-out wrap+recovery; then wrap+obs decode",
     )
 
 
@@ -755,10 +769,12 @@ def run_react_forest_forkserve(
         handles.append((h, wrap, recov, obs, commit_ids))
     t_idle = _now()
     for h, wrap, recov, obs, _commit in handles:
-        # Only the known wrap is useful in idle. Recovery is unused on the
-        # happy path and inflated peak_kv vs APC (~+88 tokens).
-        ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=False)
+        # ToT recipe: fan out every sibling during idle (wrap + recovery).
+        # Peak is taken here — after commit the loser is aborted and the
+        # comparison would collapse to a single committed path.
+        ad.on_tool_parsed(h.id, h.tip, "bash", t_idle_ms=idle_ms, include_recovery=True)
     eng.drain_slack()
+    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     spec_ms = (_now() - t_idle) * 1000.0
     remain = idle_ms - spec_ms
     if remain > 0:
@@ -766,7 +782,6 @@ def run_react_forest_forkserve(
     t_obs = _now()
     for h, wrap, recov, obs, commit_ids in handles:
         eng.commit(h.id, h.tip, commit_ids, preferred_bid="bash")
-    peak = sum(int(eng.tree(h.id).live_kv_tokens()) for h, *_ in handles)
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
         n_out = sum(len(o) for o in outs)
@@ -806,7 +821,7 @@ def run_react_forest_forkserve(
         decode_tokens=n_out,
         sessions=len(handles),
         branching=2,
-        notes=f"{len(handles)} items; idle wrap only (no recovery GPU); one TTFT generate",
+        notes=f"{len(handles)} items; idle CoW fan-out wrap+recovery; TTFT after LCP commit",
     )
 
 
@@ -891,9 +906,17 @@ def run_react_forest_vllm(
         packed.append((trunk_ids, wrap_ids, recov_ids, obs_ids))
         residuals.extend([len(wrap_ids), len(recov_ids), len(obs_ids)])
     t0 = _now()
+    trunks = [t for t, *_ in packed]
+    # Same ToT shape: optional trunk populate, then fan-out BOTH wrappers.
     if prefix_cache:
-        _gen(llm, SamplingParams, TokensPrompt, [t for t, *_ in packed], 1)
-    time.sleep(idle_ms / 1000.0)
+        _gen(llm, SamplingParams, TokensPrompt, trunks, 1)
+    t_idle = _now()
+    branches = [seq for t, w, r, _o in packed for seq in (t + w, t + r)]
+    _gen(llm, SamplingParams, TokensPrompt, branches, 1)
+    spec_ms = (_now() - t_idle) * 1000.0
+    remain = idle_ms - spec_ms
+    if remain > 0:
+        time.sleep(remain / 1000.0)
     t_obs = _now()
     fulls = [t + w + o for t, w, _r, o in packed]
     _gen(llm, SamplingParams, TokensPrompt, fulls, decode_n)
@@ -904,13 +927,21 @@ def run_react_forest_vllm(
 
     cow = _mib(cow_memory_bytes(trunk_n * len(packed), residuals, cfg_bpt))
     clone = _mib(clone_memory_bytes(trunk_n * len(packed), residuals, cfg_bpt, 2 * len(packed)))
-    peak = sum(len(f) for f in fulls)
+    wrap_recov = [len(w) + len(r) for _t, w, r, _o in packed]
+    peak = (
+        sum(len(t) for t, *_ in packed) + sum(wrap_recov)
+        if prefix_cache
+        else sum(len(b) for b in branches)
+    )
     return RunMetrics(
         system=system,
         workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=spec_ms,
+        decode_ms=ttft,
         ttft_from_obs_ms=ttft,
+        spec_ms=spec_ms,
         idle_ms=idle_ms,
         trunk_tokens=trunk_n,
         residual_tokens=residuals,
@@ -922,7 +953,7 @@ def run_react_forest_vllm(
         decode_tokens=decode_n * len(packed),
         sessions=len(packed),
         branching=2,
-        notes=f"{len(packed)} items; sleep idle then one wrap+obs generate; no spec",
+        notes=f"{len(packed)} items; idle fan-out wrap+recovery; then wrap+obs decode",
     )
 
 

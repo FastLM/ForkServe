@@ -8,8 +8,9 @@ visible against vLLM recompute / APC.
   fan-out (same stem, B strategy prefixes). Protocol of Cobbe et al. 2021.
 * ``game24`` — the ToT paper's math puzzle (Yao et al. 2023): four numbers
   to make 24, high branching on a tiny trunk.
-* ``humaneval`` — function-completion + pytest tool-idle (Chen et al. 2021
-  protocol). Known ``<tool_response>`` wrapper is speculated while tests run.
+* ``humaneval`` — function-completion + pytest tool-idle. Same ToT contract:
+  idle fans out wrap **and** recovery; peak is the live tree at fan-out
+  (shared trunk vs cloned trunks). Observation residual is the TTFT tail.
 """
 
 from __future__ import annotations

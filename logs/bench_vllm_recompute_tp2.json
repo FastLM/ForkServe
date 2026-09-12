@@ -8,9 +8,9 @@
       "system": "vllm_recompute",
       "workload": "gsm8k",
       "tp": 2,
-      "e2e_ms": 327.07967329770327,
-      "fanout_ms": 148.55612721294165,
-      "decode_ms": 178.52312605828047,
+      "e2e_ms": 332.9675351269543,
+      "fanout_ms": 147.5717439316213,
+      "decode_ms": 185.39533112198114,
       "ttft_from_obs_ms": 0.0,
       "spec_ms": 0.0,
       "idle_ms": 0.0,
@@ -53,9 +53,9 @@
       "system": "vllm_recompute",
       "workload": "game24",
       "tp": 2,
-      "e2e_ms": 284.3280448578298,
-      "fanout_ms": 118.24526684358716,
-      "decode_ms": 166.0821079276502,
+      "e2e_ms": 282.7797243371606,
+      "fanout_ms": 116.49583093822002,
+      "decode_ms": 166.2835031747818,
       "ttft_from_obs_ms": 0.0,
       "spec_ms": 0.0,
       "idle_ms": 0.0,
@@ -98,11 +98,11 @@
       "system": "vllm_recompute",
       "workload": "humaneval",
       "tp": 2,
-      "e2e_ms": 2258.549958933145,
-      "fanout_ms": 0.0,
-      "decode_ms": 0.0,
-      "ttft_from_obs_ms": 258.3053009584546,
-      "spec_ms": 0.0,
+      "e2e_ms": 2265.1131921447814,
+      "fanout_ms": 103.75732881948352,
+      "decode_ms": 265.00532077625394,
+      "ttft_from_obs_ms": 265.00532077625394,
+      "spec_ms": 103.75732881948352,
       "idle_ms": 2000.0,
       "trunk_tokens": 228,
       "residual_tokens": [
@@ -119,7 +119,7 @@
         27,
         210
       ],
-      "peak_kv_tokens": 1807,
+      "peak_kv_tokens": 1918,
       "m_cow_mib": 276.75,
       "m_clone_mib": 1174.5,
       "kv_saving": 0.764367816091954,
@@ -133,7 +133,7 @@
       "decode_tokens": 64,
       "sessions": 4,
       "branching": 2,
-      "notes": "4 items; sleep idle then one wrap+obs generate; no spec"
+      "notes": "4 items; idle fan-out wrap+recovery; then wrap+obs decode"
     }
   ]
 }
