@@ -963,6 +963,43 @@ def _sanitize_cuda_env(env: dict[str, str] | None = None) -> dict[str, str]:
     return e
 
 
+def _gpu_used_mib() -> dict[int, int]:
+    try:
+        out = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,memory.used",
+                "--format=csv,noheader,nounits",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return {}
+    used: dict[int, int] = {}
+    for line in out.splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 2 and parts[0].isdigit():
+            used[int(parts[0])] = int(float(parts[1]))
+    return used
+
+
+def _wait_devices_free(dev_csv: str, timeout_s: float = 90.0, max_used_mib: int = 2048) -> bool:
+    """Wait until listed physical GPUs have dropped leftover / occupy allocations."""
+    want = [int(x) for x in dev_csv.split(",") if x.strip().isdigit()]
+    if not want:
+        return True
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        used = _gpu_used_mib()
+        if used and all(used.get(i, 0) <= max_used_mib for i in want):
+            return True
+        time.sleep(0.25)
+    used = _gpu_used_mib()
+    print(f"GPUs still busy after {timeout_s:.0f}s: {used}", flush=True)
+    return False
+
+
 def orchestrate(args: argparse.Namespace) -> int:
     n_gpu = visible_gpu_count()
     tps = default_tps(n_gpu, args.tp)
@@ -1024,6 +1061,12 @@ def orchestrate(args: argparse.Namespace) -> int:
             env["CUDA_VISIBLE_DEVICES"] = dev
             env["PYTHONUNBUFFERED"] = "1"
             print(f"==> {system} tp={tp} devices={dev}", flush=True)
+            if not _wait_devices_free(dev, timeout_s=90.0):
+                print(
+                    f"worker skipped: {system} tp={tp} — GPUs {dev} still occupied",
+                    flush=True,
+                )
+                return 1
             proc = subprocess.run(cmd, env=env)
             if proc.returncode != 0:
                 print(f"worker failed: {system} tp={tp} rc={proc.returncode}", flush=True)
