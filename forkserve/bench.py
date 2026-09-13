@@ -587,6 +587,27 @@ def _iter_chunks(items: Sequence[Any], args: argparse.Namespace):
         yield i, items[i : i + n]
 
 
+def _log_forest_chunk(
+    args: argparse.Namespace,
+    system: str,
+    workload: str,
+    start: int,
+    batch: Sequence[Any],
+    n_total: int,
+    row: RunMetrics,
+    parts: Sequence[RunMetrics],
+) -> None:
+    texts = [t for p in parts for t in p.decode_texts]
+    golds = [g for p in parts for g in p.golds]
+    prompts = [x for p in parts for x in p.gold_prompts]
+    progress(
+        args,
+        f"{_sys_tp(args, system)} forest {workload} {start + len(batch)}/{n_total} "
+        f"+{len(batch)} peak={row.peak_kv_tokens} fanout={row.fanout_ms:.0f}ms "
+        f"{_score_so_far(workload, texts, golds, prompts)}",
+    )
+
+
 def merge_metrics(parts: Sequence[RunMetrics]) -> RunMetrics:
     if not parts:
         raise ValueError("no chunks to merge")
@@ -1336,7 +1357,6 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        progress(args, f"{_sys_tp(args, 'forkserve')} forest gsm8k {start + len(batch)}/{len(problems)}")
         trunks = [gsm8k_trunk(item) for item in batch]
         row = run_tot_forest_forkserve(
             eng, cfg, trunks, thoughts,
@@ -1345,6 +1365,7 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
         _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
         row.item_ids = [p.item_id for p in batch]
         parts.append(row)
+        _log_forest_chunk(args, "forkserve", "gsm8k", start, batch, len(problems), row, parts)
         _close_all(eng)
     return merge_metrics(parts)
 
@@ -1362,7 +1383,6 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        progress(args, f"{_sys_tp(args, 'forkserve')} forest game24 {start + len(batch)}/{len(problems)}")
         trunks = [game24_trunk(item) for item in batch]
         row = run_tot_forest_forkserve(
             eng, cfg, trunks, thoughts,
@@ -1371,6 +1391,7 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
         _set_golds(row, [p.question for p in batch], _fs_texts(eng, row.decode_ids))
         row.item_ids = [p.item_id for p in batch]
         parts.append(row)
+        _log_forest_chunk(args, "forkserve", "game24", start, batch, len(problems), row, parts)
         _close_all(eng)
     return merge_metrics(parts)
 
@@ -1419,7 +1440,6 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
     parts: list[RunMetrics] = []
     all_texts: list[str] = []
     for start, batch in _iter_chunks(problems, args):
-        progress(args, f"{_sys_tp(args, 'forkserve')} forest humaneval {start + len(batch)}/{len(problems)}")
         items = []
         for item in batch:
             wrap, recov, obs = humaneval_react_strings(item)
@@ -1433,6 +1453,7 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
         row.item_ids = [p.item_id for p in batch]
         _set_golds(row, [p.tests for p in batch], texts, [p.prompt for p in batch])
         parts.append(row)
+        _log_forest_chunk(args, "forkserve", "humaneval", start, batch, len(problems), row, parts)
         _close_all(eng)
     merged = merge_metrics(parts)
     merged.decode_texts = all_texts
@@ -1457,7 +1478,6 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        progress(args, f"{_sys_tp(args, system)} forest gsm8k {start + len(batch)}/{len(problems)}")
         trunks = [gsm8k_trunk(item) for item in batch]
         row = run_tot_forest_vllm(
             llm, SamplingParams, TokensPrompt, system, cfg_bpt,
@@ -1467,6 +1487,7 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
         _set_golds(row, [p.answer for p in batch], _vllm_texts(llm, row.decode_ids))
         row.item_ids = [p.item_id for p in batch]
         parts.append(row)
+        _log_forest_chunk(args, system, "gsm8k", start, batch, len(problems), row, parts)
     return merge_metrics(parts)
 
 
@@ -1483,7 +1504,6 @@ def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: st
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        progress(args, f"{_sys_tp(args, system)} forest game24 {start + len(batch)}/{len(problems)}")
         trunks = [game24_trunk(item) for item in batch]
         row = run_tot_forest_vllm(
             llm, SamplingParams, TokensPrompt, system, cfg_bpt,
@@ -1493,6 +1513,7 @@ def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: st
         _set_golds(row, [p.question for p in batch], _vllm_texts(llm, row.decode_ids))
         row.item_ids = [p.item_id for p in batch]
         parts.append(row)
+        _log_forest_chunk(args, system, "game24", start, batch, len(problems), row, parts)
     return merge_metrics(parts)
 
 
@@ -1541,7 +1562,6 @@ def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system:
     parts: list[RunMetrics] = []
     all_texts: list[str] = []
     for start, batch in _iter_chunks(problems, args):
-        progress(args, f"{_sys_tp(args, system)} forest humaneval {start + len(batch)}/{len(problems)}")
         packed = []
         for item in batch:
             wrap, recov, obs = humaneval_react_strings(item)
@@ -1558,6 +1578,7 @@ def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system:
         row.item_ids = [p.item_id for p in batch]
         _set_golds(row, [p.tests for p in batch], texts, [p.prompt for p in batch])
         parts.append(row)
+        _log_forest_chunk(args, system, "humaneval", start, batch, len(problems), row, parts)
     merged = merge_metrics(parts)
     merged.decode_texts = all_texts
     merged.golds = [p.tests for p in problems]
@@ -2027,7 +2048,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--quality-only",
         action="store_true",
-        help="full-set solving ability: single-path generate + official metrics (no serving forest)",
+        help="single-path generate only — skips ToT/ReAct fan-out; peak_kv/fanout stay 0",
     )
     p.add_argument("--workloads", type=lambda s: _csv_list(s, WORKLOADS), default=["gsm8k", "game24", "humaneval"])
     p.add_argument("--out", default="logs/bench_gpu.json")

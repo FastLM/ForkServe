@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Scan the full GSM8K / Game24 / HumanEval files and score solving ability.
+"""Full-file forest comparison: ToT / ReAct fan-out, then official metrics.
 
-``--inventory-only`` writes dataset stats (no GPU).
-Default also runs ``forkserve.bench --limit 0 --quality-only`` so each system
-solves every item (chunked), then attaches difficulty-bucket accuracy.
+Default is the same multi-branch recipe as ``rl_improve`` (shared trunk,
+branching thoughts or wrap+recovery, abort losers, winner decode). That is
+what peak_kv and fanout_ms measure. ``--quality-only`` is single-path and
+must not be used for serving efficiency.
 """
 
 from __future__ import annotations
@@ -56,16 +57,21 @@ def attach_buckets(report: dict[str, Any]) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Full-set inventory + solving-ability eval")
+    p = argparse.ArgumentParser(description="Full-set forest bench + official metrics")
     p.add_argument("--inventory-only", action="store_true")
     p.add_argument("--model", default=os.environ.get("FORKSERVE_MODEL", str(Path.home() / "models/Qwen3-14B")))
     p.add_argument("--systems", default="vllm_recompute,vllm_apc,forkserve")
     p.add_argument("--tp", default="2")
     p.add_argument("--workloads", default="gsm8k,game24,humaneval")
     p.add_argument("--limit", type=int, default=0, help="0 = entire jsonl/csv")
-    p.add_argument("--chunk", type=int, default=8)
+    p.add_argument("--chunk", type=int, default=8, help="sessions per forest generate")
     p.add_argument("--decode", type=int, default=256)
     p.add_argument("--gsm8k-decode", type=int, default=512)
+    p.add_argument(
+        "--quality-only",
+        action="store_true",
+        help="single-path generate (no fan-out); not a serving comparison",
+    )
     p.add_argument("--out", default=str(LOG / "eval.json"))
     args = p.parse_args(argv)
 
@@ -100,10 +106,12 @@ def main(argv: list[str] | None = None) -> int:
         str(args.decode),
         "--gsm8k-decode",
         str(args.gsm8k_decode),
-        "--quality-only",
         "--out",
         args.out,
     ]
+    if args.quality_only:
+        cmd.append("--quality-only")
+        log("WARNING: --quality-only zeros peak_kv/fanout (single-path)")
     progress_log = LOG / "progress.log"
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"

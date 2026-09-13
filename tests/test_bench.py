@@ -179,6 +179,21 @@ def test_progress_eta_and_running_score() -> None:
     assert "accuracy=1.000 (2/2)" in _score_so_far("gsm8k", ["#### 18", "#### 3"], ["18", "3"])
 
 
+def test_forest_records_peak_and_fanout() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "gsm8k",
+            "--limit", "2", "--chunk", "2", "--decode", "2",
+            "--out", "/tmp/forkserve-forest-metrics.json",
+        ]
+    )
+    row = run_mock(args)[0]
+    assert row.branching == 4
+    assert row.peak_kv_tokens > 0
+    assert row.fanout_ms >= 0
+    assert "quality-only" not in row.notes
+
+
 def test_quality_only_mock_scores_slice() -> None:
     args = parse_args(
         [
