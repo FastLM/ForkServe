@@ -18,6 +18,7 @@ def test_gsm8k_accuracy_is_final_number_not_trace() -> None:
     scored = score_task("gsm8k", ["#### 72", "#### 0"], ["72", "72"])
     assert scored.metric == "accuracy"
     assert scored.score == 0.5
+    assert scored.preds == ["72", "0"]
 
 
 def test_game24_success_checks_value_and_cards() -> None:

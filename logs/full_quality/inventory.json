@@ -1,0 +1,70 @@
+{
+  "benchmarks_dir": "/home/dliu/benchmarks",
+  "files": {
+    "gsm8k": "/home/dliu/benchmarks/gsm8k/test.jsonl",
+    "game24": "/home/dliu/benchmarks/game24/24.csv",
+    "humaneval": "/home/dliu/benchmarks/humaneval/HumanEval.jsonl"
+  },
+  "counts": {
+    "gsm8k_test": 1319,
+    "game24": 1362,
+    "humaneval": 164,
+    "total": 2845
+  },
+  "gsm8k": {
+    "split": "test",
+    "n": 1319,
+    "question_words_mean": 46.25094768764215,
+    "question_words_median": 43.0,
+    "calc_steps_mean": 3.246398786959818,
+    "calc_steps_median": 3.0,
+    "calc_steps_hist": {
+      "2": 357,
+      "4+": 515,
+      "3": 364,
+      "1": 83
+    },
+    "answer_abs_median": 42.0,
+    "first_ids": [
+      "gsm8k-test-0",
+      "gsm8k-test-1",
+      "gsm8k-test-2"
+    ],
+    "first_golds": [
+      "18",
+      "3",
+      "70000"
+    ]
+  },
+  "game24": {
+    "n": 1362,
+    "solved_rate_mean": 85.35249632892805,
+    "solved_rate_median": 90.35,
+    "difficulty_hist": {
+      "easy>=90%": 719,
+      "medium50-90%": 573,
+      "hard<50%": 70
+    },
+    "first_ids": [
+      "24-1-1-1-4-6",
+      "24-2-1-1-11-11",
+      "24-3-1-1-3-8"
+    ]
+  },
+  "humaneval": {
+    "n": 164,
+    "prompt_chars_mean": 450.5975609756098,
+    "prompt_chars_median": 396.0,
+    "assert_mean": 8.079268292682928,
+    "first_ids": [
+      "HumanEval/0",
+      "HumanEval/1",
+      "HumanEval/2"
+    ],
+    "first_entry_points": [
+      "has_close_elements",
+      "separate_paren_groups",
+      "truncate_number"
+    ]
+  }
+}

@@ -151,6 +151,55 @@ def test_loads_local_benchmark_files() -> None:
     assert "24" in game[0].question
 
 
+def test_limit_zero_reads_entire_jsonl_csv() -> None:
+    from forkserve.bench_tasks import load_game24, load_gsm8k, load_humaneval, take
+    from forkserve.dataset_stats import inventory
+
+    assert take(["a", "b", "c"], 0) == ["a", "b", "c"]
+    assert take(["a", "b", "c"], 2) == ["a", "b"]
+    gsm = load_gsm8k(0)
+    game = load_game24(0)
+    he = load_humaneval(0)
+    assert len(gsm) == 1319
+    assert len(game) >= 1361
+    assert len(he) == 164
+    assert gsm[0].n_steps >= 1
+    assert game[0].solved_rate >= 0
+    inv = inventory(0)
+    assert inv["counts"]["gsm8k_test"] == 1319
+    assert inv["counts"]["humaneval"] == 164
+    assert inv["counts"]["total"] == len(gsm) + len(game) + len(he)
+
+
+def test_quality_only_mock_scores_slice() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "gsm8k",
+            "--limit", "2", "--decode", "2", "--quality-only",
+            "--out", "/tmp/forkserve-quality-only.json",
+        ]
+    )
+    rows = run_mock(args)
+    assert rows[0].workload == "gsm8k"
+    assert rows[0].sessions == 2
+    assert rows[0].branching == 1
+    assert "quality-only" in rows[0].notes
+
+
+def test_chunked_forest_keeps_item_count() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "game24",
+            "--limit", "2", "--chunk", "1", "--decode", "2",
+            "--out", "/tmp/forkserve-chunked.json",
+        ]
+    )
+    game = run_mock(args)[0]
+    assert game.sessions == 2
+    assert game.item_ids
+    assert len(game.item_ids) == 2
+
+
 def test_format_table_speedup() -> None:
     rows = [
         {

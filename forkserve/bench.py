@@ -72,6 +72,9 @@ class RunMetrics:
     decode_texts: list[str] = field(default_factory=list)
     golds: list[str] = field(default_factory=list)
     gold_prompts: list[str] = field(default_factory=list)
+    item_ids: list[str] = field(default_factory=list)
+    item_preds: list[str] = field(default_factory=list)
+    failures: list[dict[str, Any]] = field(default_factory=list)
     task_metric: str = ""
     task_n: int = 0
     task_score: float = -1.0
@@ -517,6 +520,172 @@ def _set_golds(row: RunMetrics, golds: Sequence[str], texts: Sequence[str], prom
     if row.decode_per_item <= 0 and texts:
         row.decode_per_item = max((len(t) for t in row.decode_ids), default=0) if row.decode_ids else 0
     return row
+
+
+def _chunk_size(args: argparse.Namespace) -> int:
+    return max(1, int(getattr(args, "chunk", 4) or 4))
+
+
+def _iter_chunks(items: Sequence[Any], args: argparse.Namespace):
+    n = _chunk_size(args)
+    for i in range(0, len(items), n):
+        yield i, items[i : i + n]
+
+
+def merge_metrics(parts: Sequence[RunMetrics]) -> RunMetrics:
+    if not parts:
+        raise ValueError("no chunks to merge")
+    if len(parts) == 1:
+        return parts[0]
+    a = parts[0]
+    texts = [t for p in parts for t in p.decode_texts]
+    golds = [g for p in parts for g in p.golds]
+    prompts = [x for p in parts for x in p.gold_prompts]
+    ids = [x for p in parts for x in p.item_ids]
+    decode_ids = [x for p in parts for x in p.decode_ids]
+    out = RunMetrics(
+        system=a.system,
+        workload=a.workload,
+        tp=a.tp,
+        e2e_ms=sum(p.e2e_ms for p in parts),
+        fanout_ms=sum(p.fanout_ms for p in parts),
+        decode_ms=sum(p.decode_ms for p in parts),
+        ttft_from_obs_ms=sum(p.ttft_from_obs_ms for p in parts),
+        spec_ms=sum(p.spec_ms for p in parts),
+        idle_ms=a.idle_ms,
+        trunk_tokens=a.trunk_tokens,
+        residual_tokens=[],
+        peak_kv_tokens=max(p.peak_kv_tokens for p in parts),
+        m_cow_mib=max(p.m_cow_mib for p in parts),
+        m_clone_mib=max(p.m_clone_mib for p in parts),
+        kv_saving=sum(p.kv_saving for p in parts) / len(parts),
+        gpu_mem_mib=parts[-1].gpu_mem_mib,
+        known_suffix_hit_rate=sum(p.known_suffix_hit_rate for p in parts) / len(parts),
+        decode_tokens=sum(p.decode_tokens for p in parts),
+        decode_per_item=a.decode_per_item,
+        sessions=sum(p.sessions for p in parts),
+        branching=a.branching,
+        notes=f"{sum(p.sessions for p in parts)} items; {len(parts)} chunks; {a.notes}",
+        decode_ids=decode_ids,
+        item_ids=ids,
+    )
+    return _set_golds(out, golds, texts, prompts)
+
+
+def _quality_generate_forkserve(eng: Any, prompts: Sequence[str], decode_n: int) -> tuple[list[str], list[list[int]]]:
+    handles = [eng.open(p, flush=True) for p in prompts]
+    if hasattr(eng, "generate_many"):
+        outs = eng.generate_many([h.id for h in handles], decode_n)
+    else:
+        outs = [eng.generate(h.id, decode_n) for h in handles]
+    ids = [[int(t) for t in o] for o in outs]
+    return _fs_texts(eng, ids), ids
+
+
+def _quality_generate_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    prompts: Sequence[str],
+    decode_n: int,
+) -> tuple[list[str], list[list[int]]]:
+    seqs = [_tok_ids(llm, p) for p in prompts]
+    decoded = _gen(llm, SamplingParams, TokensPrompt, seqs, decode_n)
+    return _vllm_texts(llm, decoded), decoded
+
+
+def run_quality_forkserve(
+    eng: Any,
+    args: argparse.Namespace,
+    workload: str,
+    problems: Sequence[Any],
+    prompts: Sequence[str],
+    golds: Sequence[str],
+    gold_prompts: Sequence[str] = (),
+    decode_n: int | None = None,
+) -> RunMetrics:
+    """Single-path generate + official metric. Used for full-set solving ability."""
+    n_dec = int(decode_n if decode_n is not None else workload_decode(args, workload))
+    texts: list[str] = []
+    e2e = 0.0
+    peak = 0
+    n_tok = 0
+    for start, batch in _iter_chunks(problems, args):
+        batch_p = prompts[start : start + len(batch)]
+        print(f"quality {workload} {start + len(batch)}/{len(problems)}", flush=True)
+        t0 = _now()
+        chunk_texts, ids = _quality_generate_forkserve(eng, batch_p, n_dec)
+        e2e += (_now() - t0) * 1000.0
+        texts.extend(chunk_texts)
+        n_tok += sum(len(x) for x in ids)
+        if hasattr(eng, "forest"):
+            live = 0
+            for sid in list(eng.forest.sessions):
+                try:
+                    live += int(eng.tree(sid).live_kv_tokens())
+                except Exception:
+                    pass
+            peak = max(peak, live)
+        _close_all(eng)
+    row = RunMetrics(
+        system="forkserve",
+        workload=workload,
+        tp=0,
+        e2e_ms=e2e,
+        decode_ms=e2e,
+        peak_kv_tokens=int(peak),
+        decode_tokens=n_tok,
+        decode_per_item=n_dec,
+        sessions=len(problems),
+        branching=1,
+        notes=f"{len(problems)} items; quality-only single-path generate",
+        item_ids=[str(getattr(p, "item_id", i)) for i, p in enumerate(problems)],
+    )
+    return _set_golds(row, golds, texts, gold_prompts)
+
+
+def run_quality_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    system: str,
+    args: argparse.Namespace,
+    workload: str,
+    problems: Sequence[Any],
+    prompts: Sequence[str],
+    golds: Sequence[str],
+    gold_prompts: Sequence[str] = (),
+    decode_n: int | None = None,
+) -> RunMetrics:
+    n_dec = int(decode_n if decode_n is not None else workload_decode(args, workload))
+    texts: list[str] = []
+    e2e = 0.0
+    n_tok = 0
+    for start, batch in _iter_chunks(problems, args):
+        batch_p = prompts[start : start + len(batch)]
+        print(f"quality {system} {workload} {start + len(batch)}/{len(problems)}", flush=True)
+        t0 = _now()
+        chunk_texts, ids = _quality_generate_vllm(
+            llm, SamplingParams, TokensPrompt, batch_p, n_dec
+        )
+        e2e += (_now() - t0) * 1000.0
+        texts.extend(chunk_texts)
+        n_tok += sum(len(x) for x in ids)
+    row = RunMetrics(
+        system=system,
+        workload=workload,
+        tp=0,
+        e2e_ms=e2e,
+        decode_ms=e2e,
+        peak_kv_tokens=0,
+        decode_tokens=n_tok,
+        decode_per_item=n_dec,
+        sessions=len(problems),
+        branching=1,
+        notes=f"{len(problems)} items; quality-only single-path generate",
+        item_ids=[str(getattr(p, "item_id", i)) for i, p in enumerate(problems)],
+    )
+    return _set_golds(row, golds, texts, gold_prompts)
 
 
 def _humaneval_complete_forkserve(eng: Any, problems: Sequence[Any], decode_n: int) -> tuple[list[str], list[list[int]]]:
@@ -1074,97 +1243,223 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
     problems = load_gsm8k(args.limit)
+    if getattr(args, "quality_only", False):
+        return run_quality_forkserve(
+            eng, args, "gsm8k", problems,
+            [gsm8k_trunk(p) for p in problems],
+            [p.answer for p in problems],
+            decode_n=workload_decode(args, "gsm8k"),
+        )
     thoughts = gsm8k_thoughts(args.branching)
-    trunks = [gsm8k_trunk(item) for item in problems]
-    row = run_tot_forest_forkserve(
-        eng, cfg, trunks, thoughts,
-        decode_n=workload_decode(args, "gsm8k"), idle_ms=0.0, workload="gsm8k",
-    )
-    _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
-    _close_all(eng)
-    return row
+    parts: list[RunMetrics] = []
+    for start, batch in _iter_chunks(problems, args):
+        print(f"forest gsm8k {start + len(batch)}/{len(problems)}", flush=True)
+        trunks = [gsm8k_trunk(item) for item in batch]
+        row = run_tot_forest_forkserve(
+            eng, cfg, trunks, thoughts,
+            decode_n=workload_decode(args, "gsm8k"), idle_ms=0.0, workload="gsm8k",
+        )
+        _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _close_all(eng)
+    return merge_metrics(parts)
 
 
 def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
     problems = load_game24(args.limit)
+    if getattr(args, "quality_only", False):
+        return run_quality_forkserve(
+            eng, args, "game24", problems,
+            [game24_trunk(p) for p in problems],
+            [p.question for p in problems],
+        )
     thoughts = game24_thoughts(args.branching)
-    trunks = [game24_trunk(item) for item in problems]
-    row = run_tot_forest_forkserve(
-        eng, cfg, trunks, thoughts,
-        decode_n=args.decode, idle_ms=0.0, workload="game24",
-    )
-    _set_golds(row, [p.question for p in problems], _fs_texts(eng, row.decode_ids))
-    _close_all(eng)
-    return row
+    parts: list[RunMetrics] = []
+    for start, batch in _iter_chunks(problems, args):
+        print(f"forest game24 {start + len(batch)}/{len(problems)}", flush=True)
+        trunks = [game24_trunk(item) for item in batch]
+        row = run_tot_forest_forkserve(
+            eng, cfg, trunks, thoughts,
+            decode_n=args.decode, idle_ms=0.0, workload="game24",
+        )
+        _set_golds(row, [p.question for p in batch], _fs_texts(eng, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _close_all(eng)
+    return merge_metrics(parts)
 
 
 def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
     problems = load_humaneval(args.limit)
-    items = []
-    for item in problems:
-        wrap, recov, obs = humaneval_react_strings(item)
-        items.append((humaneval_trunk(item), wrap, recov, obs))
-    row = run_react_forest_forkserve(
-        eng, cfg, items,
-        decode_n=args.decode, idle_ms=args.idle_ms, workload="humaneval",
-    )
-    texts, _ids = _humaneval_complete_forkserve(eng, problems, args.decode)
-    row.notes = (row.notes + "; quality=official HumanEval completion").strip("; ")
-    _set_golds(row, [p.tests for p in problems], texts, [p.prompt for p in problems])
-    _close_all(eng)
-    return row
+    if getattr(args, "quality_only", False):
+        texts: list[str] = []
+        e2e = 0.0
+        n_tok = 0
+        for start, batch in _iter_chunks(problems, args):
+            print(f"quality humaneval {start + len(batch)}/{len(problems)}", flush=True)
+            t0 = _now()
+            chunk_texts, ids = _humaneval_complete_forkserve(eng, batch, args.decode)
+            e2e += (_now() - t0) * 1000.0
+            texts.extend(chunk_texts)
+            n_tok += sum(len(x) for x in ids)
+            _close_all(eng)
+        row = RunMetrics(
+            system="forkserve",
+            workload="humaneval",
+            tp=0,
+            e2e_ms=e2e,
+            decode_ms=e2e,
+            decode_tokens=n_tok,
+            decode_per_item=args.decode,
+            sessions=len(problems),
+            branching=1,
+            notes=f"{len(problems)} items; quality-only official HumanEval completion",
+            item_ids=[p.item_id for p in problems],
+        )
+        return _set_golds(row, [p.tests for p in problems], texts, [p.prompt for p in problems])
+    parts: list[RunMetrics] = []
+    all_texts: list[str] = []
+    for start, batch in _iter_chunks(problems, args):
+        print(f"forest humaneval {start + len(batch)}/{len(problems)}", flush=True)
+        items = []
+        for item in batch:
+            wrap, recov, obs = humaneval_react_strings(item)
+            items.append((humaneval_trunk(item), wrap, recov, obs))
+        row = run_react_forest_forkserve(
+            eng, cfg, items,
+            decode_n=args.decode, idle_ms=args.idle_ms, workload="humaneval",
+        )
+        texts, _ids = _humaneval_complete_forkserve(eng, batch, args.decode)
+        all_texts.extend(texts)
+        row.item_ids = [p.item_id for p in batch]
+        _set_golds(row, [p.tests for p in batch], texts, [p.prompt for p in batch])
+        parts.append(row)
+        _close_all(eng)
+    merged = merge_metrics(parts)
+    merged.decode_texts = all_texts
+    merged.golds = [p.tests for p in problems]
+    merged.gold_prompts = [p.prompt for p in problems]
+    merged.item_ids = [p.item_id for p in problems]
+    merged.notes = (merged.notes + "; quality=official HumanEval completion").strip("; ")
+    return merged
 
 
 def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
     problems = load_gsm8k(args.limit)
+    if getattr(args, "quality_only", False):
+        return run_quality_vllm(
+            llm, SamplingParams, TokensPrompt, system, args, "gsm8k", problems,
+            [gsm8k_trunk(p) for p in problems],
+            [p.answer for p in problems],
+            decode_n=workload_decode(args, "gsm8k"),
+        )
     thoughts = gsm8k_thoughts(args.branching)
-    trunks = [gsm8k_trunk(item) for item in problems]
-    row = run_tot_forest_vllm(
-        llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-        trunks, thoughts,
-        decode_n=workload_decode(args, "gsm8k"), prefix_cache=(system == "vllm_apc"), workload="gsm8k",
-    )
-    return _set_golds(row, [p.answer for p in problems], _vllm_texts(llm, row.decode_ids))
+    parts: list[RunMetrics] = []
+    for start, batch in _iter_chunks(problems, args):
+        print(f"forest {system} gsm8k {start + len(batch)}/{len(problems)}", flush=True)
+        trunks = [gsm8k_trunk(item) for item in batch]
+        row = run_tot_forest_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+            trunks, thoughts,
+            decode_n=workload_decode(args, "gsm8k"), prefix_cache=(system == "vllm_apc"), workload="gsm8k",
+        )
+        _set_golds(row, [p.answer for p in batch], _vllm_texts(llm, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+    return merge_metrics(parts)
 
 
 def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
     problems = load_game24(args.limit)
+    if getattr(args, "quality_only", False):
+        return run_quality_vllm(
+            llm, SamplingParams, TokensPrompt, system, args, "game24", problems,
+            [game24_trunk(p) for p in problems],
+            [p.question for p in problems],
+        )
     thoughts = game24_thoughts(args.branching)
-    trunks = [game24_trunk(item) for item in problems]
-    row = run_tot_forest_vllm(
-        llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-        trunks, thoughts,
-        decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
-    )
-    return _set_golds(row, [p.question for p in problems], _vllm_texts(llm, row.decode_ids))
+    parts: list[RunMetrics] = []
+    for start, batch in _iter_chunks(problems, args):
+        print(f"forest {system} game24 {start + len(batch)}/{len(problems)}", flush=True)
+        trunks = [game24_trunk(item) for item in batch]
+        row = run_tot_forest_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+            trunks, thoughts,
+            decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
+        )
+        _set_golds(row, [p.question for p in batch], _vllm_texts(llm, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+    return merge_metrics(parts)
 
 
 def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import humaneval_react_strings, humaneval_trunk, load_humaneval
 
     problems = load_humaneval(args.limit)
-    packed = []
-    for item in problems:
-        wrap, recov, obs = humaneval_react_strings(item)
-        packed.append((humaneval_trunk(item), wrap, recov, obs))
-    row = run_react_forest_vllm(
-        llm, SamplingParams, TokensPrompt, system, cfg_bpt, packed,
-        decode_n=args.decode, idle_ms=args.idle_ms,
-        prefix_cache=(system == "vllm_apc"), workload="humaneval",
-    )
-    texts, _ids = _humaneval_complete_vllm(
-        llm, SamplingParams, TokensPrompt, problems, args.decode
-    )
-    row.notes = (row.notes + "; quality=official HumanEval completion").strip("; ")
-    return _set_golds(row, [p.tests for p in problems], texts, [p.prompt for p in problems])
+    if getattr(args, "quality_only", False):
+        texts: list[str] = []
+        e2e = 0.0
+        n_tok = 0
+        for start, batch in _iter_chunks(problems, args):
+            print(f"quality {system} humaneval {start + len(batch)}/{len(problems)}", flush=True)
+            t0 = _now()
+            chunk_texts, ids = _humaneval_complete_vllm(
+                llm, SamplingParams, TokensPrompt, batch, args.decode
+            )
+            e2e += (_now() - t0) * 1000.0
+            texts.extend(chunk_texts)
+            n_tok += sum(len(x) for x in ids)
+        row = RunMetrics(
+            system=system,
+            workload="humaneval",
+            tp=0,
+            e2e_ms=e2e,
+            decode_ms=e2e,
+            decode_tokens=n_tok,
+            decode_per_item=args.decode,
+            sessions=len(problems),
+            branching=1,
+            notes=f"{len(problems)} items; quality-only official HumanEval completion",
+            item_ids=[p.item_id for p in problems],
+        )
+        return _set_golds(row, [p.tests for p in problems], texts, [p.prompt for p in problems])
+    parts: list[RunMetrics] = []
+    all_texts: list[str] = []
+    for start, batch in _iter_chunks(problems, args):
+        print(f"forest {system} humaneval {start + len(batch)}/{len(problems)}", flush=True)
+        packed = []
+        for item in batch:
+            wrap, recov, obs = humaneval_react_strings(item)
+            packed.append((humaneval_trunk(item), wrap, recov, obs))
+        row = run_react_forest_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt, packed,
+            decode_n=args.decode, idle_ms=args.idle_ms,
+            prefix_cache=(system == "vllm_apc"), workload="humaneval",
+        )
+        texts, _ids = _humaneval_complete_vllm(
+            llm, SamplingParams, TokensPrompt, batch, args.decode
+        )
+        all_texts.extend(texts)
+        row.item_ids = [p.item_id for p in batch]
+        _set_golds(row, [p.tests for p in batch], texts, [p.prompt for p in batch])
+        parts.append(row)
+    merged = merge_metrics(parts)
+    merged.decode_texts = all_texts
+    merged.golds = [p.tests for p in problems]
+    merged.gold_prompts = [p.prompt for p in problems]
+    merged.item_ids = [p.item_id for p in problems]
+    merged.notes = (merged.notes + "; quality=official HumanEval completion").strip("; ")
+    return merged
 
 
 # ----- mock accounting (no GPU) ---------------------------------------------
@@ -1445,6 +1740,16 @@ def _bench_lock_path() -> Path:
 
 
 def orchestrate(args: argparse.Namespace) -> int:
+    lock = _bench_lock_path()
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(str(os.getpid()))
+    try:
+        return _orchestrate(args)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def _orchestrate(args: argparse.Namespace) -> int:
     n_gpu = visible_gpu_count()
     tps = default_tps(n_gpu, args.tp)
     vis = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
@@ -1498,9 +1803,13 @@ def orchestrate(args: argparse.Namespace) -> int:
                 ",".join(args.workloads),
                 "--limit",
                 str(args.limit),
+                "--chunk",
+                str(getattr(args, "chunk", 4)),
                 "--out",
                 str(shard),
             ]
+            if getattr(args, "quality_only", False):
+                cmd.append("--quality-only")
             if args.enforce_eager:
                 cmd.append("--enforce-eager")
             env = _sanitize_cuda_env()
@@ -1576,7 +1885,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--max-batched-tokens", type=int, default=2048)
     p.add_argument("--gpu-util", type=float, default=float(os.environ.get("FORKSERVE_GPU_UTIL", "0.90")))
     p.add_argument("--enforce-eager", action="store_true")
-    p.add_argument("--limit", type=int, default=4, help="problems per gsm8k/game24/humaneval slice")
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=4,
+        help="problems per gsm8k/game24/humaneval slice; 0 = entire jsonl/csv",
+    )
+    p.add_argument(
+        "--chunk",
+        type=int,
+        default=4,
+        help="items per forest / generate batch (required when --limit 0)",
+    )
+    p.add_argument(
+        "--quality-only",
+        action="store_true",
+        help="full-set solving ability: single-path generate + official metrics (no serving forest)",
+    )
     p.add_argument("--workloads", type=lambda s: _csv_list(s, WORKLOADS), default=["gsm8k", "game24", "humaneval"])
     p.add_argument("--out", default="logs/bench_gpu.json")
     args = p.parse_args(argv)

@@ -40,6 +40,9 @@ class MathItem:
     item_id: str
     question: str
     answer: str
+    n_steps: int = 0
+    rank: int = 0
+    solved_rate: float = -1.0
 
 
 @dataclass(frozen=True)
@@ -254,9 +257,20 @@ def humaneval_react_strings(item: CodeItem) -> tuple[str, str, str]:
     return wrap, recov, obs
 
 
-def take(items: tuple | list, limit: int) -> list:
-    n = max(1, int(limit))
-    return list(items[:n])
+def unlimited(limit: int | None) -> bool:
+    """``--limit 0`` / negative means the whole jsonl/csv, not a 1-item slice."""
+    return limit is None or int(limit) <= 0
+
+
+def take(items: tuple | list, limit: int | None) -> list:
+    xs = list(items)
+    if unlimited(limit):
+        return xs
+    return xs[: max(1, int(limit))]
+
+
+def _hit_cap(n: int, limit: int | None) -> bool:
+    return not unlimited(limit) and n >= int(limit)
 
 
 def _gsm8k_final_answer(answer: str) -> str:
@@ -276,16 +290,26 @@ def load_gsm8k(limit: int, split: str = "test") -> list[MathItem]:
             if not line:
                 continue
             row = json.loads(line)
+            raw = str(row["answer"])
             items.append(
                 MathItem(
                     item_id=f"gsm8k-{split}-{i}",
                     question=str(row["question"]).strip(),
-                    answer=_gsm8k_final_answer(str(row["answer"])),
+                    answer=_gsm8k_final_answer(raw),
+                    n_steps=raw.count("<<"),
                 )
             )
-            if len(items) >= max(1, int(limit)):
+            if _hit_cap(len(items), limit):
                 break
     return items or take(GSM8K_SLICE, limit)
+
+
+def _parse_pct(raw: str) -> float:
+    s = (raw or "").strip().replace("%", "")
+    try:
+        return float(s)
+    except ValueError:
+        return -1.0
 
 
 def load_game24(limit: int) -> list[MathItem]:
@@ -299,15 +323,21 @@ def load_game24(limit: int) -> list[MathItem]:
             if not puzzle:
                 continue
             nums = puzzle.replace(",", " ")
-            rank = (row.get("Rank") or str(len(items) + 1)).strip()
+            rank_s = (row.get("Rank") or str(len(items) + 1)).strip()
+            try:
+                rank = int(float(rank_s))
+            except ValueError:
+                rank = len(items) + 1
             items.append(
                 MathItem(
                     item_id=f"24-{rank}-{nums.replace(' ', '-')}",
                     question=f"Use {', '.join(nums.split())} each once with + - * / to make 24.",
                     answer="24",
+                    rank=rank,
+                    solved_rate=_parse_pct(str(row.get("Solved rate") or "")),
                 )
             )
-            if len(items) >= max(1, int(limit)):
+            if _hit_cap(len(items), limit):
                 break
     return items or take(GAME24_SLICE, limit)
 
@@ -339,6 +369,6 @@ def load_humaneval(limit: int) -> list[CodeItem]:
                 tests=str(row.get("test") or row.get("canonical_solution") or ""),
             )
         )
-        if len(items) >= max(1, int(limit)):
+        if _hit_cap(len(items), limit):
             break
     return items or take(HUMANEVAL_SLICE, limit)

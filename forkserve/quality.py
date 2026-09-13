@@ -35,6 +35,7 @@ class TaskScore:
     n: int
     score: float
     correct: list[bool] = field(default_factory=list)
+    preds: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +43,7 @@ class TaskScore:
             "task_n": self.n,
             "task_score": self.score,
             "task_correct": self.correct,
+            "item_preds": self.preds,
         }
 
 
@@ -241,6 +243,18 @@ def humaneval_pass(completion: str, tests: str, prompt: str = "") -> bool:
     return True
 
 
+def pred_for(workload: str, text: str, gold: str = "", prompt: str = "") -> str:
+    if workload == "gsm8k":
+        return extract_gsm8k_answer(text)
+    if workload == "game24":
+        return extract_game24_expr(text)
+    if workload == "humaneval":
+        body = extract_python(text)
+        head = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
+        return head[:96]
+    return ""
+
+
 def score_task(
     workload: str,
     texts: Sequence[str],
@@ -253,19 +267,55 @@ def score_task(
         return TaskScore(metric, 0, 0.0, [])
     prompts = list(prompts or [])
     flags: list[bool] = []
+    preds: list[str] = []
     for i in range(n):
         text = texts[i] or ""
         gold = golds[i] or ""
+        prompt = prompts[i] if i < len(prompts) else ""
         if workload == "gsm8k":
             flags.append(gsm8k_correct(text, gold))
         elif workload == "game24":
             flags.append(game24_correct(text, gold))
         elif workload == "humaneval":
-            prompt = prompts[i] if i < len(prompts) else ""
             flags.append(humaneval_pass(text, gold, prompt))
         else:
             flags.append(False)
-    return TaskScore(metric, n, sum(flags) / n, flags)
+        preds.append(pred_for(workload, text, gold, prompt))
+    return TaskScore(metric, n, sum(flags) / n, flags, preds)
+
+
+_FAIL_TEXT = 2000
+
+
+def compact_scored_row(row: dict[str, Any], *, keep_texts_n: int = 16) -> dict[str, Any]:
+    """Drop bulky traces after scoring; keep short preds + failed tails."""
+    texts = list(row.get("decode_texts") or [])
+    golds = list(row.get("golds") or [])
+    ids = list(row.get("item_ids") or [])
+    correct = list(row.get("task_correct") or [])
+    preds = list(row.get("item_preds") or [])
+    n = min(len(texts), len(golds), len(correct) or len(texts))
+    fails: list[dict[str, Any]] = []
+    for i in range(n):
+        if i < len(correct) and correct[i]:
+            continue
+        fails.append(
+            {
+                "i": i,
+                "item_id": ids[i] if i < len(ids) else f"{row.get('workload')}-{i}",
+                "pred": preds[i] if i < len(preds) else "",
+                "gold": (golds[i] or "")[:240],
+                "text": (texts[i] or "")[-_FAIL_TEXT:],
+            }
+        )
+    row["failures"] = fails
+    if int(row.get("task_n") or n) > keep_texts_n:
+        row["decode_texts"] = []
+        row["decode_ids"] = []
+        if str(row.get("workload")) == "humaneval":
+            row["golds"] = []
+            row["gold_prompts"] = []
+    return row
 
 
 def annotate_quality(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -287,6 +337,7 @@ def annotate_quality(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             texts,
             golds,
         )
+        compact_scored_row(r)
     idx: dict[tuple[str, int, str], dict[str, Any]] = {}
     for r in rows:
         idx[(str(r.get("system")), int(r.get("tp") or 0), str(r.get("workload")))] = r
