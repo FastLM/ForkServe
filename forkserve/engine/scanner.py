@@ -1,4 +1,4 @@
-"""Streaming JSON/XML tool-call scanner (§8).
+"""Streaming JSON/XML tool-call scanner.
 
 Emits a complete tool-call object as soon as it is parsed, so fork of the
 observation wrapper overlaps remaining parent decode — charged as committed.

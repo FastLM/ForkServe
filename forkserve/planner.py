@@ -1,4 +1,4 @@
-"""Branch-aware speculative prefill planner (§6, Algorithm 1).
+"""Branch-aware speculative prefill planner.
 
 Known suffixes (p=1) starve observation residuals (p<1). We never draft
 future thoughts (IdleSpec's job) and never fabricate x̂^o from an LLM.
@@ -100,7 +100,7 @@ def expected_gain(
     t_pre: float,
     t_idle: float,
 ) -> float:
-    """Equation (4): G(w) = p(w) · min(T_pre, T_idle) · η(w)."""
+    """G(w) = p(w) · min(T_pre, T_idle) · η(w)."""
     useful = min(t_pre, t_idle) if t_idle < inf else t_pre
     if t_pre > t_idle and t_idle > 0:
         # Partial chunks still help under chunked prefill.
@@ -117,14 +117,14 @@ def expected_cost(
     bytes_per_token: float,
     lambda_tbt: float,
 ) -> float:
-    """Equation (5): C(w) = b|w| + λ max(0, T_pre − γ)."""
+    """C(w) = b|w| + λ max(0, T_pre − γ)."""
     hbm = bytes_per_token * len(item)
     interference = lambda_tbt * max(0.0, t_pre - gamma_ms)
     return hbm + interference
 
 
 class SpeculatePlanner:
-    """Greedy fractional knapsack of Algorithm 1. Known suffixes first."""
+    """Greedy fractional knapsack. Known suffixes first."""
 
     def __init__(
         self,
@@ -180,7 +180,7 @@ class SpeculatePlanner:
         parent_mode: NodeMode = NodeMode.IDLE,
         generation: int = 0,
     ) -> BudgetResult:
-        """Algorithm 1. Filters: idle horizon, residual HBM, committed TBT."""
+        """Admit work under idle horizon, residual HBM, and committed TBT."""
         raw = self.build_items([c for c in candidates if c.gpu_prefill])
         scored: list[tuple[float, WorkItem, float, float]] = []
         for w in raw:
@@ -263,7 +263,7 @@ class SpeculatePlanner:
 
 
 # ---------------------------------------------------------------------------
-# Probability sources (§6.1)
+# Probability sources
 # ---------------------------------------------------------------------------
 
 

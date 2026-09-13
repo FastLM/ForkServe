@@ -1,4 +1,4 @@
-"""Two-class continuous batcher (§7.1). Speculation is slack, not load.
+"""Two-class continuous batcher. Speculation is slack, not load.
 
 Committed jobs consume token budget first until their JIT margin is met.
 Speculative chunks fill the remainder, are preemptible at chunk boundaries,
@@ -43,7 +43,7 @@ class BatchPlan:
 
 @dataclass(slots=True)
 class FairMeter:
-    """VTC-style second meter (§7.4): spec billed at κ, TBT-miss victims at 1."""
+    """VTC-style second meter: spec billed at κ, TBT-miss victims at 1."""
 
     committed: float = 0.0
     speculative: float = 0.0
@@ -79,7 +79,7 @@ class TwoClassScheduler:
         return n
 
     def schedule(self, *, leftover_hint: int | None = None) -> BatchPlan:
-        """Realize Equations (6) and (7) for one engine tick."""
+        """One tick: fill B_c then B_s from leftover token budget."""
         self.tick += 1
         dt = self.cfg.tick_ms
         B_t = leftover_hint if leftover_hint is not None else self.cfg.max_batched_tokens

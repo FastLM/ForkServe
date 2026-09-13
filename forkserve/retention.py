@@ -1,4 +1,4 @@
-"""Branch-aware TTL and leaf-first relative offload (§5.4).
+"""Branch-aware TTL and leaf-first relative offload.
 
 Continuum's TTL and MORI's relative idleness are lifted from sessions to
 nodes. Trunk pages do not expire while any child is live. Speculative
@@ -33,7 +33,7 @@ def node_ttl_s(
     p_g: float,
     cfg: ForkServeConfig,
 ) -> float:
-    """Equation (1): Continuum estimator on the node's residual, not the session."""
+    """TTL on the node's residual, not the session."""
     if p_g <= 0:
         p_g = 1.0
     est = cfg.ttl_alpha * t_b + cfg.ttl_beta * (c_r + q_q) / p_g
@@ -43,7 +43,7 @@ def node_ttl_s(
 
 
 def relative_idleness(node: Node, session_last_decode: float, now: float | None = None) -> float:
-    """Equation (2): ι(u) = t_since_decode(u) / t_since_decode(session)."""
+    """ι(u) = t_since_decode(u) / t_since_decode(session)."""
     now = now if now is not None else monotonic()
     num = max(now - node.last_decode_at, 1e-6)
     den = max(now - session_last_decode, 1e-6)

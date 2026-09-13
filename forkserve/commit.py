@@ -1,4 +1,4 @@
-"""Longest-common-prefix commit protocol (§6.4) and Theorem 2.
+"""Longest-common-prefix commit protocol.
 
 Commit is a token procedure, not a branch-id lookup. The harness may have
 rewritten the wrapper. Speculative KV is an input-side cache: decode of
@@ -34,7 +34,7 @@ class CommitResult:
 
 
 class CommitProtocol:
-    """Five steps of §6.4. Never changes model outputs (Theorem 2)."""
+    """LCP bind, mid-page split, abort losers. Does not change model outputs."""
 
     def apply(
         self,
@@ -46,7 +46,7 @@ class CommitProtocol:
     ) -> CommitResult:
         prompt = as_tokens(prompt)
         parent = tree.get(parent_id)
-        # Appendix D passes wrap+obs (residual). §6.4 also allows the full x_u.
+        # Harness may pass wrap+obs (residual) or the full committed sequence.
         if prompt[: len(parent.tokens)] != parent.tokens:
             prompt = parent.tokens + prompt
 
@@ -113,7 +113,7 @@ class CommitProtocol:
         prompt: TokenSeq,
         preferred_bid: str | None,
     ) -> tuple:
-        # Short-circuit on harness branch id when it matches (Appendix B).
+        # Short-circuit on harness branch id when it matches.
         if preferred_bid is not None:
             for child in tree.children_of(parent_id):
                 if child.branch_id == preferred_bid:

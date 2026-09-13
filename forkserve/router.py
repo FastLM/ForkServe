@@ -1,4 +1,4 @@
-"""Tree-sticky placement and residual-only steal (§7.2).
+"""Tree-sticky placement and residual-only steal.
 
 The worker that prefills the root owns the trunk. Forks schedule there first.
 If residual HBM is exhausted we may steal a speculative residual without

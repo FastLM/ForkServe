@@ -1,4 +1,4 @@
-"""Userspace orchestrator wrapping OpenAI-compatible streaming (~1.1K paper LoC).
+"""Userspace orchestrator wrapping OpenAI-compatible streaming.
 
 Adapters announce structure the harness already has; they do not rewrite
 prompts. A closed-source gateway can still infer wrappers via the scanner.
@@ -84,7 +84,7 @@ class Orchestrator:
 
         wrap = self.wrappers.observation(parsed.name)
         recov = self.wrappers.recovery(parsed.name)
-        # Placeholders only — splice arguments as a second residual (§10).
+        # Placeholders only — splice arguments as a second residual.
         happy = self.engine.fork(handle.id, parent, parsed.name, wrap, speculate=False)
         fail: NodeId | None = None
         cands = [

@@ -1,4 +1,4 @@
-"""ReAct / tool-choice adapter. Appendix D, simplified and complete."""
+"""ReAct / tool-choice adapter."""
 
 from __future__ import annotations
 

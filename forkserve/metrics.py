@@ -1,4 +1,4 @@
-"""Counters that feed §9 tables: hit rates, residual/trunk HBM, TBT, goodput."""
+"""Counters: hit rates, residual/trunk HBM, TBT, goodput."""
 
 from __future__ import annotations
 

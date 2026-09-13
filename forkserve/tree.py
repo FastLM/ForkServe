@@ -1,4 +1,4 @@
-"""Forkable context tree (Definition 1, §5).
+"""Forkable context tree.
 
 Invariants
 ----------
@@ -8,7 +8,7 @@ Invariants
 * Liveness: page refcount = # of non-Dead nodes mapping the page
 * Generation: commit increments g_u; stale speculative jobs drop in O(1)
 * Cascade abort: a Spec node with no live children is aborted; walk stops at
-  the committed spine or a parent that still has a live child (Figure 3)
+  the committed spine or a parent that still has a live child
 """
 
 from __future__ import annotations
@@ -222,7 +222,7 @@ class ContextTree:
         If ``cascade`` and aborting ``nid`` leaves a Spec ancestor with no live
         children, abort that ancestor and continue upward. The walk stops at the
         root, a committed/idle spine node, or a parent that still has a live child
-        (Figure 3: C's four leaves die ⇒ C1, C2, then C; Root lives via A, B).
+        (example: C's four leaves die ⇒ C1, C2, then C; Root lives via A, B).
         """
         if nid not in self._nodes:
             return 0
@@ -290,7 +290,7 @@ class ContextTree:
         node.ttl_deadline = deadline
 
     def best_lcp_child(self, parent_id: NodeId, prompt: TokenSeq) -> tuple[Node | None, int]:
-        """Step 1 of §6.4: v* = arg max LCP(x, x_v) among live children."""
+        """v* = arg max LCP(x, x_v) among live children."""
         prompt = as_tokens(prompt)
         best: Node | None = None
         best_l = -1
@@ -325,7 +325,7 @@ class ContextTree:
         node.tokens = node.tokens[: node.table.alias_len + keep]
 
     def live_kv_tokens(self) -> int:
-        """Distinct live tokens: trunk counted once (Equation 3)."""
+        """Distinct live tokens: trunk counted once (M_CoW)."""
         if self.root is None:
             return 0
         root = self._nodes[self.root]

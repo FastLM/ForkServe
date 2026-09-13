@@ -1,4 +1,4 @@
-"""Join / context-engineering children (§5.3).
+"""Join / context-engineering children.
 
 KV of the join node is not algebraic in the children's KV — attention is
 not a homomorphism of concatenation. We reuse the shared trunk plus a

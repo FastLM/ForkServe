@@ -1,7 +1,7 @@
 """ForkServe: branch-aware speculative prefilling and CoW KV state.
 
 Public surface is the five harness verbs plus ``Engine`` / ``Orchestrator``.
-Speculation never feeds unverified tokens into decode (Theorem 2).
+Speculation never feeds unverified tokens into decode.
 """
 
 from forkserve.api import Engine

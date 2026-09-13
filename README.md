@@ -6,25 +6,67 @@ Dong Liu, Chuan Wu, and contributors
 
 Production agents do not issue a unique next prompt. A ReAct step chooses among tools, a planner fans out to specialists, Tree-of-Thoughts expands siblings, a failed call opens recovery. Those branches share a long trunk and differ in a short residual, yet engines still recompute the trunk, serialize the fan-out, or wait until the chosen child is fully known before prefilling.
 
-ForkServe makes the **branch** the first-class serving object: a forkable context tree, speculative prefill of known suffixes (and, when profitable, observation residuals), and a two-class scheduler that spends only idle GPU cycles.
-
-```
-harness  -- open / fork / speculate / commit / join / abort -->  Engine
-                                                                  ├─ SpeculatePlanner     Algorithm 1
-                                                                  ├─ TwoClassScheduler    committed ≻ spec
-                                                                  ├─ ContextTree + CoW    Definition 1
-                                                                  └─ LCP commit           Theorem 2
-```
+ForkServe makes the **branch** the first-class serving object: a forkable context tree, speculative prefill of known suffixes, and a two-class scheduler that spends only idle GPU cycles.
 
 `commit` is the only verb on the critical path of user-visible tokens. Speculative KV is an input-side cache: decode attends only to the committed sequence. No speculative output token is ever shown or fed back.
 
-## Mechanisms
+## Architecture
 
-1. **Forkable CoW tree.** `fork` aliases parent pages in O(1). Writes allocate residual pages. Abort cost is residual-only, independent of trunk length. Join reuses the shared trunk plus a scaffold; unused children die at residual cost.
+```
+ L3  harness     structure only — no prompt rewrite
+ +------------------------------------------------------------------+
+ |   ReAct          ToT         LangGraph Send         tool I/O     |
+ +-------------------------------+----------------------------------+
+                                 |
+          open  fork  speculate  commit  join  abort
+                                 |
+ L2  control plane
+ +-------------------------------v----------------------------------+
+ |                                                                  |
+ |    Planner              Scheduler              Commit            |
+ |    admit by G/C         two-class batch        LCP bind          |
+ |    G(w) / C(w)          B_c  before  B_s       abort losers      |
+ |         |                    |                      |            |
+ |         +--------------------+----------------------+            |
+ |                              |                                   |
+ |                              v                                   |
+ |                   Context tree  (per session)                    |
+ |              shared trunk pages (refcount, read-only)            |
+ |              private residual pages · cascade abort              |
+ |                              |                                   |
+ |                   Router (sticky)   Retention (TTL)              |
+ +-------------------------------+----------------------------------+
+                                 |
+ L1  execution
+ +-------------------------------v----------------------------------+
+ |   MockBackend                         vLLM V1                    |
+ |   algorithms only                     CoW pin / page alias       |
+ +------------------------------------------------------------------+
+```
 
-2. **Speculative prefill.** During tool idle and decode slack, admit work that maximizes expected TTFT reduction subject to idle horizon, residual HBM, and committed TBT margin. Known suffixes (`p=1`) starve guessed residuals (`p<1`). Candidates come from the harness, constrained-decoding mass (top-`m`), and a session-local prior that never invents a branch id.
+Three layers, one contract: the harness announces branch structure; the control plane decides what to prefill and what to keep; the backend only moves pages and tokens.
 
-3. **Two-class schedule.** Committed decode / commit-tail / root prefill take token budget first. Speculative chunks fill the remainder, are preemptible at `C_spec`, and are cancelled on generation mismatch. Under saturation `B^s_t = 0`: retention + CoW fan-out only.
+```
+session
+ └── trunk          shared, refcounted, never rewritten in place
+      ├── thought-0     residual  ──►  winner  ──►  decode
+      ├── thought-1     residual  ──►  abort (residual cost only)
+      └── thought-2     residual  ──►  abort
+```
+
+## Methods
+
+**CoW tree.** `fork` aliases parent pages in O(1). A write allocates residual pages only. Live KV is \(M_{\mathrm{CoW}}=b\bigl(L+\sum_i \ell_i\bigr)\) versus clone \(M_{\mathrm{clone}}=b\bigl(kL+\sum_i \ell_i\bigr)\). Abort and cascade-free cost the residual, not the trunk. Join reuses the shared trunk plus a scaffold.
+
+**Speculative admit.** Rank candidates by expected TTFT gain over cost. Gain \(G(w)=p(w)\cdot\min(T_{\mathrm{pre}},T_{\mathrm{idle}})\cdot\eta(w)\). Cost \(C(w)=b|w|+\lambda\max(0,T_{\mathrm{pre}}-\gamma)\). Known suffixes (\(p=1\)) starve guessed residuals (\(p<1\)). Sources: harness-declared wraps, constrained-decoding mass (top-\(m\)), session-local prior (never invents a branch id).
+
+**LCP commit.** Bind the observed token prefix; CoW-split a mid-page; abort siblings that lost the LCP. Decode uses only KV that matches the committed sequence (output identity).
+
+**Two-class batch.** Each tick: committed jobs take \(B^c_t\) first (decode, commit-tail, root prefill); speculative chunks fill \(B^s_t\), preemptible at \(C_{\mathrm{spec}}\), dropped on generation mismatch. Under saturation \(B^s_t=0\).
+
+**Retention and placement.** TTL on the residual (not the session); leaf-first relative idleness for offload. Tree-sticky routing; steal residual pages only.
+
+Defaults: page size \(P=16\), \(C_{\mathrm{spec}}=512\), \(\lambda\) such that 1 ms TBT ≡ 4 ms TTFT, grammar top-\(m\) ≤ 3, branch cap 6, \(q_{\min}=0.35\), VTC spec billed at \(\kappa=0.25\).
 
 ## API
 
@@ -45,33 +87,15 @@ cr = eng.commit(h.id, h.tip, wrap + observation)  # LCP binds
 eng.generate(h.id, 128)                            # committed decode only
 ```
 
-Harness adapters lower ReAct, LangGraph `Send`, OpenHands / SWE, and Tree-of-Thoughts onto these verbs. They announce structure; they do not rewrite prompts.
-
-## Paper → code
-
-| Paper | Code |
-|---|---|
-| Definition 1 context tree, prefix / spec-isolation / cascade abort | `forkserve/tree.py` |
-| CoW pages, abort cost, \(M_\mathrm{CoW} = b(L+\sum \ell_i)\) | `forkserve/pages.py` |
-| Algorithm 1, \(G(w)\) / \(C(w)\), Proposition 1, grammar + prior + n-gram | `forkserve/planner.py` |
-| LCP commit, Theorem 2 (output identity) | `forkserve/commit.py` |
-| \(B^c_t\), \(B^s_t\), PLAS, VTC \(\kappa=0.25\) | `forkserve/scheduler.py` |
-| Node TTL on residual, leaf-first relative offload | `forkserve/retention.py` |
-| Tree-sticky routing, residual-only steal | `forkserve/router.py` |
-| Join scaffolds (all / first / k-of-n / winner) | `forkserve/join.py` |
-| ReAct / LangGraph / OpenHands / ToT | `forkserve/adapters/` |
-| vLLM engine loop: CoW bit + two-class ``schedule()`` | `forkserve/engine/vllm_loop.py` |
-| vLLM backend (tags requests, installs the loop) | `forkserve/engine/vllm_backend.py` |
-
-Defaults: page size \(P=16\), \(C_\mathrm{spec}=512\), \(\lambda\) such that 1 ms TBT ≡ 4 ms TTFT, grammar top-\(m\) ≤ 3, branch cap 6, \(q_\min=0.35\).
+Harness adapters lower ReAct, LangGraph `Send`, OpenHands / SWE, and Tree-of-Thoughts onto these verbs.
 
 ## Status
 
-This repository is the ForkServe control plane plus a **vLLM V1 engine-loop comparison substrate**:
+Control plane plus a vLLM V1 comparison substrate:
 
-- **One generate per phase** — open, CoW fan-out, and winner decode each map to one `LLM.generate` for the whole slice (same shape as APC). `generate_committed_many` fuses commit-tails and **drops speculative siblings** so HumanEval TTFT is not a recovery prefill.
-- **CoW bit** — `install_vllm_cow()` snapshots + extra-pins parent **prompt** blocks (not the extra sampled token from `max_tokens=1`). Children alias complete pages only. Abort decrefs residuals; the trunk stays while a sibling holds a ref.
-- **Stock async scheduler by default** — two-class reorder is opt-in. Passing a factory as `scheduler_cls` made vLLM treat it as `Scheduler` and disable async scheduling (the 2/4-GPU decode tax). When enabled, we pass the `AsyncScheduler` subclass itself.
+- **One generate per phase** — open, CoW fan-out, and winner decode each map to one `LLM.generate` for the whole slice (same shape as APC). `generate_committed_many` fuses commit-tails and drops speculative siblings so HumanEval TTFT is not a recovery prefill.
+- **CoW bit** — `install_vllm_cow()` snapshots + extra-pins parent prompt blocks. Children alias complete pages only. Abort decrefs residuals; the trunk stays while a sibling holds a ref.
+- **Stock async scheduler by default** — two-class reorder is opt-in (`AsyncScheduler` subclass). A factory `scheduler_cls` made vLLM fall back to sync `Scheduler`.
 
 Still out of tree: prefill/decode disaggregation, and real HBM↔DRAM tensor movement.
 

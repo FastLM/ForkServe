@@ -118,7 +118,7 @@ class NodeBlockSnap:
 class CowBlockTable:
     """Physical CoW metadata living beside vLLM's ``BlockPool``.
 
-    ``ro`` is the paper's CoW bit: shared trunk pages are pinned read-only.
+    ``ro`` is the CoW bit: shared trunk pages are pinned read-only.
     """
 
     ro: set[int] = field(default_factory=set)

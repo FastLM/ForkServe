@@ -1,4 +1,4 @@
-"""Deterministic CPU backend for tests and paper-algorithm replay.
+"""Deterministic CPU backend for tests and algorithm replay.
 
 Tokenization is a stable hash of whitespace-split pieces plus a small
 byte-fallback so LCP behaves like a real tokenizer without a model.

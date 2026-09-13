@@ -1,4 +1,4 @@
-"""Copy-on-write KV pages on top of a PagedAttention block pool (§5.2).
+"""Copy-on-write KV pages on top of a PagedAttention block pool.
 
 A physical page is (id, ref, ro, owner). A node's logical table is
 σ_v = (off_v, ρ_v): an offset into the parent table plus a private residual
@@ -158,7 +158,7 @@ class PagePool:
         return new_id
 
     def split_at(self, pid: PageId, keep_valid: int, owner: NodeId) -> PageId:
-        """Mid-page LCP split (§6.4): siblings keep the speculative tail."""
+        """Mid-page LCP split: siblings keep the speculative tail."""
         self.reload([pid])
         page = self._pages[pid]
         if keep_valid >= page.n_valid and page.ref == 1 and not page.ro:
@@ -272,10 +272,10 @@ def pages_for_tokens(n_tokens: int, page_size: int) -> int:
 
 
 def cow_memory_bytes(trunk: int, residuals: Iterable[int], bpt: float) -> float:
-    """Equation (3): M_CoW = b (L + Σ ℓ_i)."""
+    """M_CoW = b (L + Σ ℓ_i)."""
     return bpt * (trunk + sum(residuals))
 
 
 def clone_memory_bytes(trunk: int, residuals: Iterable[int], bpt: float, k: int) -> float:
-    """Equation (3): M_clone = b (k L + Σ ℓ_i)."""
+    """M_clone = b (k L + Σ ℓ_i)."""
     return bpt * (k * trunk + sum(residuals))

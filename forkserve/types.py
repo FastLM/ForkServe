@@ -1,7 +1,7 @@
-"""Shared types and paper-level enumerations.
+"""Shared types.
 
-Node modes follow §5.1. Token sequences are lists of integer ids so LCP
-commit is a pure token compare and never a string heuristic.
+Token sequences are lists of integer ids so LCP commit is a pure token
+compare and never a string heuristic.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ WorkerId = NewType("WorkerId", int)
 
 
 class NodeMode(str, Enum):
-    """ρ_u in Definition 1."""
+    """Node residency: spec, committed, idle, or dead."""
 
     SPEC = "Spec"
     COMMIT = "Commit"
@@ -30,14 +30,14 @@ class NodeMode(str, Enum):
 
 
 class JobClass(str, Enum):
-    """Two-class continuous batch (§7.1)."""
+    """Two-class continuous batch: committed vs speculative."""
 
     COMMITTED = "committed"
     SPECULATIVE = "speculative"
 
 
 class JoinPolicy(str, Enum):
-    """Fan-out join policies from §5.3 / Autellix-style harnesses."""
+    """Fan-out join policies for multi-child merge."""
 
     ALL = "all"
     FIRST_SUCCESS = "first"
@@ -53,7 +53,7 @@ class WorkKind(str, Enum):
 
 
 class SchemaKind(str, Enum):
-    """Observation residual admission gate of Algorithm 1."""
+    """Observation residual admission gate (schema kind)."""
 
     FREEFORM = "freeform"
     JSON = "json"
@@ -71,7 +71,7 @@ def as_tokens(seq: Sequence[TokenId] | TokenSeq) -> TokenSeq:
 
 
 def lcp_len(a: Sequence[TokenId], b: Sequence[TokenId]) -> int:
-    """Longest common prefix length. Tokenizer-side commit (§6.4)."""
+    """Longest common prefix length. Tokenizer-side commit."""
     n = min(len(a), len(b))
     i = 0
     while i < n and a[i] == b[i]:
@@ -104,7 +104,7 @@ class TokenSpan:
 
 @dataclass(slots=True)
 class Counters:
-    """Per-node traces that feed §9 accounting."""
+    """Per-node traces for hit-rate and residual accounting."""
 
     p_b: float = 0.0
     admitted_tokens: int = 0
