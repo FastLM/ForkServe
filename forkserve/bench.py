@@ -28,6 +28,61 @@ from typing import Any, Callable, Sequence
 
 
 SYSTEMS = ("vllm_recompute", "vllm_apc", "forkserve")
+
+
+def _now_stamp() -> str:
+    return time.strftime("%F %T")
+
+
+def progress(args: argparse.Namespace | None, msg: str) -> None:
+    """Timestamped line on stdout and optional ``FORKSERVE_PROGRESS_LOG`` file."""
+    line = f"[{_now_stamp()}] {msg}"
+    print(line, flush=True)
+    path = ""
+    if args is not None:
+        path = str(getattr(args, "progress_log", "") or "")
+    path = path or os.environ.get("FORKSERVE_PROGRESS_LOG", "")
+    if path:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with Path(path).open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+
+
+def _sys_tp(args: argparse.Namespace, default_system: str = "") -> str:
+    system = str(getattr(args, "system", None) or default_system or "forkserve")
+    tp = getattr(args, "tp", None)
+    if isinstance(tp, (list, tuple)) and tp:
+        tp_s = str(tp[0])
+    else:
+        tp_s = str(tp or "?")
+    return f"{system} tp={tp_s}"
+
+
+def _score_so_far(
+    workload: str,
+    texts: Sequence[str],
+    golds: Sequence[str],
+    prompts: Sequence[str] | None = None,
+) -> str:
+    from forkserve.quality import score_task
+
+    n = min(len(texts), len(golds))
+    if n <= 0:
+        return "score=n/a"
+    scored = score_task(workload, texts[:n], golds[:n], prompts[:n] if prompts else None)
+    ok = int(sum(scored.correct))
+    return f"{scored.metric}={scored.score:.3f} ({ok}/{scored.n})"
+
+
+def _eta_s(done: int, total: int, elapsed_s: float) -> str:
+    if done <= 0 or elapsed_s <= 0 or total <= done:
+        return "eta=?"
+    remain = elapsed_s * (total - done) / done
+    if remain >= 3600:
+        return f"eta={remain / 3600:.1f}h"
+    if remain >= 90:
+        return f"eta={remain / 60:.1f}m"
+    return f"eta={remain:.0f}s"
 WORKLOADS = ("gsm8k", "game24", "humaneval", "tot", "react", "multi")
 # GSM8K needs a finished #### line; 256 tokens still truncates 8B/14B.
 GSM8K_DECODE_DEFAULT = 512
@@ -610,14 +665,28 @@ def run_quality_forkserve(
     e2e = 0.0
     peak = 0
     n_tok = 0
+    t_job = _now()
+    progress(
+        args,
+        f"start {_sys_tp(args, 'forkserve')} {workload} n={len(problems)} "
+        f"chunk={_chunk_size(args)} decode={n_dec} quality-only",
+    )
     for start, batch in _iter_chunks(problems, args):
         batch_p = prompts[start : start + len(batch)]
-        print(f"quality {workload} {start + len(batch)}/{len(problems)}", flush=True)
         t0 = _now()
         chunk_texts, ids = _quality_generate_forkserve(eng, batch_p, n_dec)
-        e2e += (_now() - t0) * 1000.0
+        dt = _now() - t0
+        e2e += dt * 1000.0
         texts.extend(chunk_texts)
         n_tok += sum(len(x) for x in ids)
+        done = len(texts)
+        progress(
+            args,
+            f"{_sys_tp(args, 'forkserve')} {workload} {done}/{len(problems)} "
+            f"+{len(batch)} {_score_so_far(workload, texts, golds, gold_prompts)} "
+            f"chunk={dt:.1f}s total={e2e / 1000.0:.1f}s "
+            f"{_eta_s(done, len(problems), _now() - t_job)}",
+        )
         if hasattr(eng, "forest"):
             live = 0
             for sid in list(eng.forest.sessions):
@@ -661,16 +730,30 @@ def run_quality_vllm(
     texts: list[str] = []
     e2e = 0.0
     n_tok = 0
+    t_job = _now()
+    progress(
+        args,
+        f"start {_sys_tp(args, system)} {workload} n={len(problems)} "
+        f"chunk={_chunk_size(args)} decode={n_dec} quality-only",
+    )
     for start, batch in _iter_chunks(problems, args):
         batch_p = prompts[start : start + len(batch)]
-        print(f"quality {system} {workload} {start + len(batch)}/{len(problems)}", flush=True)
         t0 = _now()
         chunk_texts, ids = _quality_generate_vllm(
             llm, SamplingParams, TokensPrompt, batch_p, n_dec
         )
-        e2e += (_now() - t0) * 1000.0
+        dt = _now() - t0
+        e2e += dt * 1000.0
         texts.extend(chunk_texts)
         n_tok += sum(len(x) for x in ids)
+        done = len(texts)
+        progress(
+            args,
+            f"{_sys_tp(args, system)} {workload} {done}/{len(problems)} "
+            f"+{len(batch)} {_score_so_far(workload, texts, golds, gold_prompts)} "
+            f"chunk={dt:.1f}s total={e2e / 1000.0:.1f}s "
+            f"{_eta_s(done, len(problems), _now() - t_job)}",
+        )
     row = RunMetrics(
         system=system,
         workload=workload,
@@ -1253,7 +1336,7 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        print(f"forest gsm8k {start + len(batch)}/{len(problems)}", flush=True)
+        progress(args, f"{_sys_tp(args, 'forkserve')} forest gsm8k {start + len(batch)}/{len(problems)}")
         trunks = [gsm8k_trunk(item) for item in batch]
         row = run_tot_forest_forkserve(
             eng, cfg, trunks, thoughts,
@@ -1279,7 +1362,7 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        print(f"forest game24 {start + len(batch)}/{len(problems)}", flush=True)
+        progress(args, f"{_sys_tp(args, 'forkserve')} forest game24 {start + len(batch)}/{len(problems)}")
         trunks = [game24_trunk(item) for item in batch]
         row = run_tot_forest_forkserve(
             eng, cfg, trunks, thoughts,
@@ -1300,13 +1383,24 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
         texts: list[str] = []
         e2e = 0.0
         n_tok = 0
+        golds = [p.tests for p in problems]
+        prompts = [p.prompt for p in problems]
+        t_job = _now()
+        progress(args, f"start {_sys_tp(args, 'forkserve')} humaneval n={len(problems)} chunk={_chunk_size(args)} decode={args.decode} quality-only")
         for start, batch in _iter_chunks(problems, args):
-            print(f"quality humaneval {start + len(batch)}/{len(problems)}", flush=True)
             t0 = _now()
             chunk_texts, ids = _humaneval_complete_forkserve(eng, batch, args.decode)
-            e2e += (_now() - t0) * 1000.0
+            dt = _now() - t0
+            e2e += dt * 1000.0
             texts.extend(chunk_texts)
             n_tok += sum(len(x) for x in ids)
+            done = len(texts)
+            progress(
+                args,
+                f"{_sys_tp(args, 'forkserve')} humaneval {done}/{len(problems)} "
+                f"+{len(batch)} {_score_so_far('humaneval', texts, golds, prompts)} "
+                f"chunk={dt:.1f}s {_eta_s(done, len(problems), _now() - t_job)}",
+            )
             _close_all(eng)
         row = RunMetrics(
             system="forkserve",
@@ -1325,7 +1419,7 @@ def run_humaneval_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> Run
     parts: list[RunMetrics] = []
     all_texts: list[str] = []
     for start, batch in _iter_chunks(problems, args):
-        print(f"forest humaneval {start + len(batch)}/{len(problems)}", flush=True)
+        progress(args, f"{_sys_tp(args, 'forkserve')} forest humaneval {start + len(batch)}/{len(problems)}")
         items = []
         for item in batch:
             wrap, recov, obs = humaneval_react_strings(item)
@@ -1363,7 +1457,7 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        print(f"forest {system} gsm8k {start + len(batch)}/{len(problems)}", flush=True)
+        progress(args, f"{_sys_tp(args, system)} forest gsm8k {start + len(batch)}/{len(problems)}")
         trunks = [gsm8k_trunk(item) for item in batch]
         row = run_tot_forest_vllm(
             llm, SamplingParams, TokensPrompt, system, cfg_bpt,
@@ -1389,7 +1483,7 @@ def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: st
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        print(f"forest {system} game24 {start + len(batch)}/{len(problems)}", flush=True)
+        progress(args, f"{_sys_tp(args, system)} forest game24 {start + len(batch)}/{len(problems)}")
         trunks = [game24_trunk(item) for item in batch]
         row = run_tot_forest_vllm(
             llm, SamplingParams, TokensPrompt, system, cfg_bpt,
@@ -1410,15 +1504,26 @@ def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system:
         texts: list[str] = []
         e2e = 0.0
         n_tok = 0
+        golds = [p.tests for p in problems]
+        prompts = [p.prompt for p in problems]
+        t_job = _now()
+        progress(args, f"start {_sys_tp(args, system)} humaneval n={len(problems)} chunk={_chunk_size(args)} decode={args.decode} quality-only")
         for start, batch in _iter_chunks(problems, args):
-            print(f"quality {system} humaneval {start + len(batch)}/{len(problems)}", flush=True)
             t0 = _now()
             chunk_texts, ids = _humaneval_complete_vllm(
                 llm, SamplingParams, TokensPrompt, batch, args.decode
             )
-            e2e += (_now() - t0) * 1000.0
+            dt = _now() - t0
+            e2e += dt * 1000.0
             texts.extend(chunk_texts)
             n_tok += sum(len(x) for x in ids)
+            done = len(texts)
+            progress(
+                args,
+                f"{_sys_tp(args, system)} humaneval {done}/{len(problems)} "
+                f"+{len(batch)} {_score_so_far('humaneval', texts, golds, prompts)} "
+                f"chunk={dt:.1f}s {_eta_s(done, len(problems), _now() - t_job)}",
+            )
         row = RunMetrics(
             system=system,
             workload="humaneval",
@@ -1436,7 +1541,7 @@ def run_humaneval_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system:
     parts: list[RunMetrics] = []
     all_texts: list[str] = []
     for start, batch in _iter_chunks(problems, args):
-        print(f"forest {system} humaneval {start + len(batch)}/{len(problems)}", flush=True)
+        progress(args, f"{_sys_tp(args, system)} forest humaneval {start + len(batch)}/{len(problems)}")
         packed = []
         for item in batch:
             wrap, recov, obs = humaneval_react_strings(item)
@@ -1619,7 +1724,7 @@ def worker_main(args: argparse.Namespace) -> int:
     }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(payload, indent=2))
-    print(json.dumps(payload, indent=2), flush=True)
+    progress(args, f"worker done {system} tp={tp} rows={len(rows)} wrote {args.out}")
     return 0
 
 
@@ -1758,10 +1863,19 @@ def _orchestrate(args: argparse.Namespace) -> int:
     out_dir = Path(args.out).parent if args.out else Path("logs")
     out_dir.mkdir(parents=True, exist_ok=True)
     all_rows: list[dict[str, Any]] = []
-    print(
+    progress_log = str(getattr(args, "progress_log", "") or "") or os.environ.get(
+        "FORKSERVE_PROGRESS_LOG", ""
+    )
+    if not progress_log:
+        progress_log = str(Path(args.out).with_name("progress.log"))
+    args.progress_log = progress_log
+    os.environ["FORKSERVE_PROGRESS_LOG"] = progress_log
+    progress(
+        args,
         f"orchestrating systems={systems} tp={tps} gpus={devices} "
-        f"workloads={args.workloads} model={args.model}",
-        flush=True,
+        f"workloads={args.workloads} limit={args.limit} chunk={getattr(args, 'chunk', 4)} "
+        f"quality_only={bool(getattr(args, 'quality_only', False))} model={args.model} "
+        f"progress={progress_log}",
     )
     for tp in tps:
         if tp > len(devices):
@@ -1815,18 +1929,31 @@ def _orchestrate(args: argparse.Namespace) -> int:
             env = _sanitize_cuda_env()
             env["CUDA_VISIBLE_DEVICES"] = dev
             env["PYTHONUNBUFFERED"] = "1"
-            print(f"==> {system} tp={tp} devices={dev}", flush=True)
+            env["FORKSERVE_PROGRESS_LOG"] = progress_log
+            progress(args, f"==> {system} tp={tp} devices={dev}")
             if not _wait_devices_free(dev, timeout_s=180.0, max_used_mib=4096):
-                print(
-                    f"worker skipped: {system} tp={tp} — GPUs {dev} still occupied",
-                    flush=True,
-                )
+                progress(args, f"worker skipped: {system} tp={tp} — GPUs {dev} still occupied")
                 return 1
-            proc = subprocess.run(cmd, env=env)
+            proc = subprocess.Popen(
+                cmd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert proc.stdout is not None
+            for raw in proc.stdout:
+                line = raw.rstrip("\n")
+                print(line, flush=True)
+                # Worker already appended timestamped ``progress()`` lines.
+                if line and not line.startswith("["):
+                    progress(args, f"[{system} tp={tp}] {line}")
+            rc = proc.wait()
             time.sleep(2.0)
-            if proc.returncode != 0:
-                print(f"worker failed: {system} tp={tp} rc={proc.returncode}", flush=True)
-                return proc.returncode
+            if rc != 0:
+                progress(args, f"worker failed: {system} tp={tp} rc={rc}")
+                return rc
             data = json.loads(shard.read_text())
             all_rows.extend(data["rows"])
 
@@ -1844,7 +1971,7 @@ def _orchestrate(args: argparse.Namespace) -> int:
     dest = Path(args.out) if args.out else out_dir / "bench_gpu.json"
     dest.write_text(json.dumps({**report, "table": report["table"]}, indent=2))
     print("\n" + report["table"] + "\n", flush=True)
-    print(f"wrote {dest}", flush=True)
+    progress(args, f"wrote {dest}")
     return 0
 
 
@@ -1904,6 +2031,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--workloads", type=lambda s: _csv_list(s, WORKLOADS), default=["gsm8k", "game24", "humaneval"])
     p.add_argument("--out", default="logs/bench_gpu.json")
+    p.add_argument(
+        "--progress-log",
+        default=os.environ.get("FORKSERVE_PROGRESS_LOG", ""),
+        help="append timestamped chunk progress here (also FORKSERVE_PROGRESS_LOG)",
+    )
     args = p.parse_args(argv)
     if args.tp is None:
         args.tp = []

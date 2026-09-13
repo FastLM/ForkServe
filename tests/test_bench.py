@@ -1,4 +1,6 @@
 from forkserve.bench import (
+    _eta_s,
+    _score_so_far,
     default_tps,
     format_table,
     kv_bytes_per_token,
@@ -169,6 +171,12 @@ def test_limit_zero_reads_entire_jsonl_csv() -> None:
     assert inv["counts"]["gsm8k_test"] == 1319
     assert inv["counts"]["humaneval"] == 164
     assert inv["counts"]["total"] == len(gsm) + len(game) + len(he)
+
+
+def test_progress_eta_and_running_score() -> None:
+    assert _eta_s(0, 100, 10) == "eta=?"
+    assert "m" in _eta_s(8, 1319, 80) or "h" in _eta_s(8, 1319, 80)
+    assert "accuracy=1.000 (2/2)" in _score_so_far("gsm8k", ["#### 18", "#### 3"], ["18", "3"])
 
 
 def test_quality_only_mock_scores_slice() -> None:

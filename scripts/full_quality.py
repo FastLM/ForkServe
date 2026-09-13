@@ -104,9 +104,13 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         args.out,
     ]
-    log("exec: " + " ".join(cmd))
+    progress_log = LOG / "progress.log"
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    env["FORKSERVE_PROGRESS_LOG"] = str(progress_log)
+    cmd.extend(["--progress-log", str(progress_log)])
+    log("exec: " + " ".join(cmd))
+    log(f"progress -> {progress_log}  (tail -f this file)")
     proc = subprocess.run(cmd, cwd=str(ROOT), env=env)
     if proc.returncode != 0:
         return proc.returncode
