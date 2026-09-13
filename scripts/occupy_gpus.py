@@ -180,7 +180,9 @@ def main() -> int:
     except Exception:
         pass
 
-    cmd = rest[1:] if rest and rest[0] == "--" else rest
+    cmd = list(rest)
+    while cmd and cmd[0] == "--":
+        cmd = cmd[1:]
     if not cmd:
         root = os.environ.get("FORKSERVE_ROOT", os.path.expanduser("~/ForkServe"))
         model = os.environ.get("FORKSERVE_MODEL", os.path.expanduser("~/models/Qwen3-8B"))
