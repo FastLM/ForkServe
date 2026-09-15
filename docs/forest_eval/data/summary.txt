@@ -1,0 +1,8 @@
+forkserve        game24     n= 14 last=112/1362 score=0.580 peak_med=784 peak_max=793 fan_med=131
+forkserve        gsm8k      n=165 last=1319/1319 score=0.845 peak_med=1030 peak_max=1232 fan_med=140
+vllm_apc         game24     n=171 last=1362/1362 score=0.269 peak_med=1280 peak_max=1290 fan_med=106
+vllm_apc         gsm8k      n=165 last=1319/1319 score=0.844 peak_med=1430 peak_max=1632 fan_med=87
+vllm_apc         humaneval  n= 21 last=164/164 score=0.628 peak_med=1688 peak_max=2211 fan_med=49
+vllm_recompute   game24     n=171 last=1362/1362 score=0.283 peak_med=3032 peak_max=3072 fan_med=251
+vllm_recompute   gsm8k      n=165 last=1319/1319 score=0.847 peak_med=4136 peak_max=4944 fan_med=326
+vllm_recompute   humaneval  n= 21 last=164/164 score=0.634 peak_med=3232 peak_max=4278 fan_med=254
