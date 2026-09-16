@@ -359,11 +359,13 @@ def fig_e2e_gsm8k() -> None:
 
 
 def fig_rl_round3() -> None:
-    """Successful forest pairs from rl_improve round 3 (n=4). Omit tp=4 GSM8K."""
+    """Setting B (n=4, tp=2): time vs APC and peak KV on the same runs."""
     workloads = ["GSM8K", "Game24", "HumanEval"]
     rec = [1844, 1508, 1406]
     apc = [659, 638, 739]
     fs = [459, 390, 695]
+    delta = [-0.27, -0.71, 0.07]  # (FS-APC)/APC * 100; HE uses TTFT
+
     fig, ax = plt.subplots(figsize=(6.4, 3.35))
     x = np.arange(3)
     w = 0.25
@@ -372,23 +374,43 @@ def fig_rl_round3() -> None:
     ax.bar(x + w, fs, w, color=C_FS, label="ForkServe", edgecolor=C_INK, lw=0.3)
     ax.set_xticks(x, workloads)
     ax.set_ylabel("peak_kv tokens")
-    ax.set_title("RL improve round 3, $n=4$, tp=2: peak KV")
+    ax.set_title("Setting B, $n=4$, tp=2: peak KV")
     ax.legend()
     ax.yaxis.grid(True, color=C_GRID, lw=0.6)
     ax.set_axisbelow(True)
     save(fig, "rl3_peak_tp2")
 
-    # latency relative to APC (%)
-    # gsm8k -0.3, game24 -0.7, humaneval +0.1  (e2e vs APC; HE uses ttft in judge)
-    fig, ax = plt.subplots(figsize=(6.4, 3.15))
-    delta = [-0.27, -0.71, 0.07]  # (FS-APC)/APC * 100 from e2e_ms
+    fig, (ax_t, ax_s) = plt.subplots(1, 2, figsize=(7.6, 3.25))
     colors = [C_FS if d <= 0 else "#CC3311" for d in delta]
-    ax.axhline(0, color=C_MUTE, lw=0.8)
-    ax.bar(workloads, delta, color=colors, edgecolor=C_INK, lw=0.3, width=0.55)
-    ax.set_ylabel("ForkServe e2e vs APC (%)")
-    ax.set_title("RL improve round 3, $n=4$, tp=2: latency vs APC")
-    ax.yaxis.grid(True, color=C_GRID, lw=0.6)
-    ax.set_axisbelow(True)
+    ax_t.axhline(0, color=C_MUTE, lw=0.8)
+    bars = ax_t.bar(workloads, delta, color=colors, edgecolor=C_INK, lw=0.3, width=0.55)
+    ax_t.set_ylabel("ForkServe e2e vs APC (%)")
+    ax_t.set_title("Time vs APC")
+    ax_t.set_ylim(-1.05, 0.55)
+    ax_t.yaxis.grid(True, color=C_GRID, lw=0.6)
+    ax_t.set_axisbelow(True)
+    for b, d in zip(bars, delta):
+        ax_t.text(
+            b.get_x() + b.get_width() / 2,
+            d + (0.06 if d >= 0 else -0.12),
+            f"{d:+.1f}",
+            ha="center",
+            va="bottom" if d >= 0 else "top",
+            fontsize=8,
+        )
+
+    x = np.arange(3)
+    w = 0.25
+    ax_s.bar(x - w, rec, w, color=C_REC, label="recompute", edgecolor=C_INK, lw=0.3)
+    ax_s.bar(x, apc, w, color=C_APC, label="APC", edgecolor=C_INK, lw=0.3)
+    ax_s.bar(x + w, fs, w, color=C_FS, label="ForkServe", edgecolor=C_INK, lw=0.3)
+    ax_s.set_xticks(x, workloads)
+    ax_s.set_ylabel("Peak KV tokens")
+    ax_s.set_title("Storage")
+    ax_s.legend(loc="upper right")
+    ax_s.yaxis.grid(True, color=C_GRID, lw=0.6)
+    ax_s.set_axisbelow(True)
+    fig.tight_layout(w_pad=2.0)
     save(fig, "rl3_lat_tp2")
 
 

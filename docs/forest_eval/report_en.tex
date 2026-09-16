@@ -37,7 +37,7 @@
   linkcolor=Ink,
   citecolor=Ink,
   urlcolor=APC,
-  pdftitle={ForkServe: Branch-Aware KV Sharing against Prefix Caching},
+  pdftitle={ForkServe: Branch-Aware KV Sharing for Storage-Efficient vLLM Serving},
 }
 
 \pagestyle{fancy}
@@ -54,8 +54,8 @@
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.25em}
 \setstretch{1.15}
 
-\title{\textbf{ForkServe: Experiments on Branch-Aware KV Sharing\\[-0.12em]
-against Prefix Caching in vLLM Serving}}
+\title{\textbf{ForkServe: Branch-Aware KV\\[-0.12em]
+Sharing for Storage-Efficient vLLM Serving}}
 \author{%
 \begin{tabular}[t]{c}
 Dong Liu \hspace{1.4em} Hao Wu \hspace{1.4em} Chuan Wu \\[0.55em]
@@ -70,13 +70,13 @@ The University of Hong Kong
 
 \begin{abstract}
 \noindent
-We compare ForkServe with two vLLM baselines on Qwen3-14B:
+We evaluate ForkServe, branch-aware KV sharing for storage-efficient vLLM serving, against two vLLM baselines on Qwen3-14B:
 \emph{recompute}, which turns prefix caching off, and \emph{APC} (automatic prefix caching), which hashes and reuses matching prefixes.
-ForkServe shares a common trunk by copy-on-write, prefills each branch residual, aborts unused branches, and keeps only the committed path.
+ForkServe forks a shared trunk by copy-on-write, prefills each residual, aborts unused branches, and keeps only the committed path.
 
-On the GSM8K test set ($n{=}1319$, tensor parallel $2$), ForkServe's peak resident KV is below APC on every batch of eight problems (median $1030$ vs.\ $1430$ tokens, ratio $0.72$).
-Official accuracy is $0.845$ vs.\ $0.844$, and generation takes $18.9$ vs.\ $18.6$ minutes.
-The same peak ordering holds on four-problem slices of GSM8K, Game24, and HumanEval at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$, with end-to-end time within $2\%$ of APC.
+On the GSM8K test set ($n{=}1319$, tensor parallel $2$), peak resident KV is below APC on every batch of eight problems (median $1030$ vs.\ $1430$ tokens, ratio $0.72$).
+Official accuracy is $0.845$ vs.\ $0.844$, and generation takes $18.9$ vs.\ $18.6$ minutes: less cache at APC-level latency.
+The same storage ordering holds on four-problem slices of GSM8K, Game24, and HumanEval at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$, with end-to-end time within $2\%$ of APC.
 \end{abstract}
 
 \section{Baselines and method}
@@ -90,11 +90,11 @@ Name & Role & Behavior on a $k$-way Tree-of-Thoughts / ReAct prompt \\
 \midrule
 recompute & baseline & Prefix cache off. Each branch prefills the full shared trunk. \\
 APC & baseline & vLLM automatic prefix caching. Matching prefixes are hashed and reused after requests arrive. \\
-ForkServe & method & Fork the trunk by reference, prefill residuals, abort unused branches, keep the committed path. \\
+ForkServe & method & Branch-aware sharing: fork the trunk by reference, prefill residuals, abort unused branches, keep the committed path. \\
 \bottomrule
 \end{tabular}
-\caption{Serving stacks.
-Efficiency is judged against APC; recompute is the uncached baseline.}
+\caption{Serving stacks for branched decoding in vLLM.
+Storage efficiency is peak resident KV against APC; recompute is the uncached baseline.}
 \end{table}
 
 Recompute, APC, and ForkServe use the same weights, prompts, and decode budget.
@@ -102,7 +102,7 @@ GSM8K and Game24 run Tree-of-Thoughts with $k{=}4$ candidate thoughts.
 HumanEval runs ReAct wrap and recovery ($k{=}2$) and is scored with the official function-body check (\texttt{prompt+body+check}).
 We report GSM8K accuracy, Game24 success, and HumanEval pass@1.
 
-ForkServe is more efficient when peak resident KV is strictly below APC and at least $20\%$ below recompute,
+ForkServe is storage-efficient when peak resident KV is strictly below APC and at least $20\%$ below recompute,
 \begin{equation}
 \label{eq:goal}
 \mathrm{peak}^{\mathrm{FS}}
@@ -140,7 +140,7 @@ Systems & vLLM recompute, vLLM APC, ForkServe \\
 \caption{Hardware and engine.
 Tensor parallel $\mathrm{tp}{=}2$ places the model on GPU $0,1$ ($\approx 38497$\,MiB each).
 $\mathrm{tp}{=}4$ uses GPU $0$--$3$ ($\approx 38797$\,MiB each).
-Peak KV is reported in tokens; latency scales with $\mathrm{tp}$.}
+Peak KV (tokens) is the storage metric; latency scales with $\mathrm{tp}$.}
 \end{table}
 
 \subsection{Datasets}
@@ -184,13 +184,13 @@ D. Full Game24 / HumanEval & $2$ & $0,1$ & $1362$ / $164$; batches of $8$ & Game
 \bottomrule
 \end{tabular}
 \caption{Configurations and datasets.
-Later sections report A--C in full.
+Later sections report A--C in full: storage (peak KV) and latency under branch-aware sharing.
 On D, recompute and APC are complete; ForkServe on the full Game24 and HumanEval files is in progress.}
 \end{table}
 
 Recompute, APC, and ForkServe always share weights, prompts, and the decode budget of that setting.
 
-\section{How APC shares KV}
+\section{How vLLM and ForkServe share KV}
 
 Each problem has a shared trunk of length $L$ and $k$ branch residuals $\ell_1,\ldots,\ell_k$.
 After a winner is chosen, $\ell_{\star}$ is that residual.
@@ -247,9 +247,9 @@ M_{\mathrm{spine}}
 \end{equation}
 \texttt{peak\_kv} is $M_{\mathrm{spine}}$ after abort.
 Fan-out is $T_{\mathrm{pre}}(L)+k\cdot T_{\mathrm{pre}}(\bar\ell)$ plus abort, so $T_{\mathrm{fan}}^{\mathrm{FS}}\approx T_{\mathrm{fan}}^{\mathrm{APC}}+T_{\mathrm{abort}}$.
-Sharing is a pointer at fork, before any second request has to hash.
+Sharing is a pointer at fork, before any second request has to hash: that is the branch-aware step.
 
-\section{Why ForkServe uses less KV than APC}
+\section{Why branch-aware sharing uses less KV than APC}
 
 While branches are in flight, APC and ForkServe occupy the same union ($M_{\mathrm{APC}}=M_{\mathrm{CoW}}$).
 After abort, ForkServe occupies the committed path while APC keeps the hashed union:
@@ -286,9 +286,9 @@ $M_{\mathrm{spine}}/M_{\mathrm{APC}}=(1+\varepsilon)/(1+4\varepsilon)$,
 so abort saves a $3\varepsilon/(1+4\varepsilon)$ fraction of the union.
 On the $n{=}4$ GSM8K slice ($L{\approx}118$, $\sum\ell_i{=}66$, $\ell_{\star}{=}16$) this is $134/184\approx 0.73$, against the measured peak ratio $459/659\approx 0.70$.
 
-\section{System efficiency: what is optimized, and why it is storage-efficient}
+\section{Storage-efficient serving: what is optimized}
 
-Peak KV is the serving cost; a single-batch wall-clock omits concurrency.
+Peak KV is the storage cost of vLLM serving; a single-batch wall-clock omits concurrency.
 Write one Tree-of-Thoughts item as prefill work $W$ (tokens that must be computed), resident KV after unused branches leave, and winner decode of $D$ tokens:
 \begin{equation}
 \label{eq:sys}
@@ -299,7 +299,7 @@ W_{\mathrm{APC}}=W_{\mathrm{FS}}=L+k\bar\ell,
 T_{\mathrm{e2e}}
   \approx T_{\mathrm{pre}}(W)+T_{\mathrm{dec}}(D).
 \end{equation}
-$D$ is shared. ForkServe changes $W$ relative to recompute and $M$ relative to both baselines. That is a system effect.
+$D$ is shared. Branch-aware sharing changes $W$ relative to recompute and $M$ relative to both baselines. That is the storage-efficient serving effect.
 
 \paragraph{Prefill.}
 Recompute issues $k$ independent prefills of length $L+\ell_i$, so the trunk is computed $k$ times:
@@ -341,7 +341,7 @@ End-to-end time stays within a couple of percent of APC because $T_{\mathrm{dec}
 
 \paragraph{Fan-out versus APC.}
 Both pay $W=L+k\bar\ell$; ForkServe's fan-out also includes abort.
-The efficiency claim is the product in \eqref{eq:conc}: less work than recompute, less HBM than APC, and decode in line with APC.
+The storage-efficient serving claim is the product in \eqref{eq:conc}: less work than recompute, less HBM than APC, and decode in line with APC.
 
 \begin{table}[h]
 \centering
@@ -359,11 +359,11 @@ ForkServe & $L+\sum_i\ell_i$ & $b(L+\ell_{\star})$ & $k(1+\varepsilon)/(1+\varep
 \bottomrule
 \end{tabular}
 \caption{Closed forms from \eqref{eq:rec}--\eqref{eq:ratios}.
-Prefill of ForkServe matches APC and is cheaper than recompute by $(1+k\varepsilon)/(k(1+\varepsilon))$.
-After abort, $M_{\mathrm{spine}}$ is below both, which raises $C\propto\mathrm{HBM}/M$.}
+Branch-aware sharing matches APC on prefill and is cheaper than recompute by $(1+k\varepsilon)/(k(1+\varepsilon))$.
+After abort, $M_{\mathrm{spine}}$ is the storage-efficient occupancy, below both, which raises $C\propto\mathrm{HBM}/M$.}
 \end{table}
 
-The GSM8K numbers below check this: peak KV below APC on every batch, generation time within $2\%$ of APC, and far below recompute on both KV and fan-out.
+The GSM8K numbers below check storage-efficient serving: peak KV below APC on every batch, generation time within $2\%$ of APC, and far below recompute on both KV and fan-out.
 
 \section{GSM8K test set (setting A)}
 
@@ -377,15 +377,15 @@ Peak KV is the maximum over those batches.
 \small
 \begin{tabular}{@{}lrrrrr@{}}
 \toprule
- & min & median & p95 & max & KV reduction vs.\ recompute \\
+ & min & median & p95 & max & vs.\ rec. \\
 \midrule
 recompute & 3390 & 4136 & 4702 & 4944 & --- \\
-APC & 1194 & 1430 & 1571 & 1632 & $65\%$ \\
-ForkServe & 844 & 1030 & 1171 & 1232 & $75\%$ \\
+APC & 1194 & 1430 & 1571 & 1632 & $65.43\%$ \\
+ForkServe & 844 & 1030 & 1171 & 1232 & $75.10\%$ \\
 \bottomrule
 \end{tabular}
 \caption{Peak resident KV tokens, GSM8K, $165$ batches of eight problems.
-Reduction is $1-\mathrm{med}(\mathrm{peak})/\mathrm{med}(\mathrm{peak}^{\mathrm{rec}})$ on the median.}
+Storage efficiency versus recompute is $1-\mathrm{med}(\mathrm{peak})/\mathrm{med}(\mathrm{peak}^{\mathrm{rec}})$ on the median.}
 \end{table}
 
 \begin{figure}[h]
@@ -397,7 +397,8 @@ Reduction is $1-\mathrm{med}(\mathrm{peak})/\mathrm{med}(\mathrm{peak}^{\mathrm{
 \includegraphics[width=\linewidth]{fig/peak_ratio_hist.pdf}
 \end{minipage}
 \caption{Left: peak KV on each of the $165$ GSM8K batches in the run log (eight problems per batch).
-Right: ratio $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}$, median $0.72$.}
+Branch-aware abort keeps ForkServe below APC on every batch.
+Right: ratio $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}$, median $0.72$: $28\%$ less cache than hashed prefix reuse.}
 \end{figure}
 
 \begin{figure}[h]
@@ -408,7 +409,8 @@ Right: ratio $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}$, median 
 \begin{minipage}{0.49\textwidth}
 \includegraphics[width=\linewidth]{fig/peak_median_gsm8k.pdf}
 \end{minipage}
-\caption{Left: the ForkServe--APC gap is a shift of the whole distribution. Right: median peak KV.}
+\caption{Left: the storage gap versus APC is a shift of the whole distribution.
+Right: median peak KV, $0.25\times$ recompute and $0.72\times$ APC.}
 \end{figure}
 
 \begin{table}[h]
@@ -423,7 +425,8 @@ APC       & 0.844 (1113) & 1430 & 1632 & 1572 & $87\,\mathrm{ms}$  & $18.6\,\mat
 ForkServe & \textbf{0.845 (1114)} & \textbf{1030} & \textbf{1232} & \textbf{1172} & $140\,\mathrm{ms}$ & $18.9\,\mathrm{min}$ \\
 \bottomrule
 \end{tabular}
-\caption{GSM8K, $n{=}1319$, $k{=}4$, $\mathrm{tp}{=}2$, eight problems per batch.}
+\caption{GSM8K, $n{=}1319$, $k{=}4$, $\mathrm{tp}{=}2$, eight problems per batch.
+Storage (peak KV) is the ForkServe gain; accuracy and generate time stay with APC.}
 \end{table}
 
 \begin{table}[h]
@@ -438,15 +441,15 @@ saving $S$ & $28\%$ & $75\%$ & --- & meets $\gamma$ \\
 max $\mathrm{peak}$ & $1232$ vs.\ $1632$ & $1232$ vs.\ $4944$ & --- & --- \\
 \bottomrule
 \end{tabular}
-\caption{Savings against both baselines.
+\caption{Storage savings against both vLLM baselines.
 $S_{\mathrm{APC}}{=}1-\mathrm{med}(\mathrm{peak}^{\mathrm{FS}})/\mathrm{med}(\mathrm{peak}^{\mathrm{APC}})$.
 APC already removed most of the cloned-trunk cost ($1430$ vs.\ $4136$).
-The extra $28\%$ is abort: hashed union versus committed path.}
+The extra $28\%$ is branch-aware abort: hashed union versus committed path.}
 \end{table}
 
 APC already avoids most of $M_{\mathrm{clone}}$.
 ForkServe reduces the rest because abort frees unused residuals, leaving $M_{\mathrm{spine}}$ rather than the hashed union.
-Every aligned batch satisfies $\mathrm{peak}^{\mathrm{FS}}<\mathrm{peak}^{\mathrm{APC}}$, so $\Delta>0$ holds throughout the test set.
+Every aligned batch satisfies $\mathrm{peak}^{\mathrm{FS}}<\mathrm{peak}^{\mathrm{APC}}$, so $\Delta>0$ holds throughout the test set: branch-aware sharing is storage-efficient on the full file.
 
 \subsection{Quality}
 
@@ -455,7 +458,7 @@ Every aligned batch satisfies $\mathrm{peak}^{\mathrm{FS}}<\mathrm{peak}^{\mathr
 \includegraphics[width=\textwidth]{fig/accuracy_running_gsm8k.pdf}
 \caption{\label{fig:acc}Official GSM8K extractor, running accuracy.
 Tree-of-Thoughts accuracy ($\approx 0.845$) is below single-path generation ($\approx 0.941$) because several thoughts compete.
-Recompute, APC, and ForkServe stay aligned with each other.}
+The committed path after abort is the same winner decode as APC, so scores stay aligned.}
 \end{figure}
 
 Running accuracy of recompute, APC, and ForkServe stays in $[0.83,0.85]$ (Figure~\ref{fig:acc}); the final correct counts differ by one to three problems.
@@ -475,7 +478,7 @@ T_{\mathrm{e2e}}
 $T_{\mathrm{dec}}$ is more than $95\%$ of $T_{\mathrm{e2e}}$.
 On the full test set, generate time is $18.9\,\mathrm{min}$ (ForkServe), $18.6\,\mathrm{min}$ (APC), $19.4\,\mathrm{min}$ (recompute): the $53\,\mathrm{ms}$ extra fan-out per batch is $23\,\mathrm{s}$ in $\approx 1130\,\mathrm{s}$.
 On the four-problem slices, ForkServe $T_{\mathrm{e2e}}$ is below APC on Tree-of-Thoughts (GSM8K $6992$ vs.\ $7011\,\mathrm{ms}$, Game24 $3558$ vs.\ $3583\,\mathrm{ms}$) and matches APC on HumanEval TTFT ($3568$ vs.\ $3566\,\mathrm{ms}$).
-With $M_{\mathrm{spine}}<M_{\mathrm{APC}}$, $C\propto\mathrm{HBM}/M$ is larger, so $\Theta\propto C/T_{\mathrm{e2e}}$ is the global latency optimum under a fixed GPU budget: ForkServe.
+With $M_{\mathrm{spine}}<M_{\mathrm{APC}}$, $C\propto\mathrm{HBM}/M$ is larger, so $\Theta\propto C/T_{\mathrm{e2e}}$ is the storage-efficient serving optimum under a fixed GPU budget: ForkServe.
 
 \begin{table}[h]
 \centering
@@ -490,7 +493,7 @@ ForkServe & $122$ & $140$ & $152$ & $159$ \\
 \bottomrule
 \end{tabular}
 \caption{Fan-out (ms) per GSM8K batch.
-The $140$ vs.\ $87$ median is abort and copy-on-write against matched $W$.}
+The $140$ vs.\ $87$ median is abort and copy-on-write against matched $W$; the storage-efficient claim is peak KV, not this micro-step.}
 \end{table}
 
 \begin{table}[h]
@@ -506,38 +509,24 @@ ForkServe & $140\,\mathrm{ms}$ & $18.9\,\mathrm{min}$ & $+1.6\%$ & fan-out $23\,
 \bottomrule
 \end{tabular}
 \caption{Generate time on full GSM8K.
-Decode of $D{=}512$ sets the global $T_{\mathrm{e2e}}$; ForkServe stays with APC while $M$ is lower, which is the serving optimum in \eqref{eq:conc}.}
+Decode of $D{=}512$ sets the global $T_{\mathrm{e2e}}$; ForkServe stays with APC while $M$ is lower, which is storage-efficient serving in \eqref{eq:conc}.}
 \end{table}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.62\textwidth]{fig/generate_wallclock_gsm8k.pdf}
-\caption{Generate wall-clock on GSM8K ($n{=}1319$).
-ForkServe $18.9\,\mathrm{min}$, APC $18.6\,\mathrm{min}$, recompute $19.4\,\mathrm{min}$.
-The global order follows decode; fan-out KV ops are second-order.}
-\end{figure}
 
 \section{Four-problem slices (settings B and C)}
 
 Settings B and C use the first four problems of each dataset, one Tree-of-Thoughts or ReAct step, and enough decode for the winner to finish.
 B is $\mathrm{tp}{=}2$ on GPU $0,1$ ($38497$\,MiB $\times 2$).
 C is $\mathrm{tp}{=}4$ on GPU $0$--$3$ ($38797$\,MiB $\times 4$).
-Peak follows the committed path after abort, so settings B and C share that token footprint; latency follows $\mathrm{tp}$.
+Peak follows the committed path after abort, so settings B and C share that storage footprint; latency follows $\mathrm{tp}$.
 On GSM8K under C, APC scored $1.00$ and ForkServe $0.75$ on four items; accuracy is taken from the full test set (setting A).
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.92\textwidth]{fig/rl3_peak_tp2.pdf}
-\caption{Setting B ($\mathrm{tp}{=}2$, $n{=}4$): peak KV.
-GSM8K $459{<}659$, Game24 $390{<}638$, HumanEval $695{<}739$.
-ForkServe is below APC on each task because abort leaves $M_{\mathrm{spine}}$ while APC keeps the hashed union of siblings.}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.92\textwidth]{fig/rl3_lat_tp2.pdf}
-\caption{Setting B end-to-end time vs.\ APC: $-0.3\%$, $-0.7\%$, $+0.1\%$.
-Decode dominates $T_{\mathrm{e2e}}$, so the HBM saving from abort leaves request latency in line with APC.}
+\includegraphics[width=\textwidth]{fig/rl3_lat_tp2.pdf}
+\caption{Setting B ($\mathrm{tp}{=}2$, $n{=}4$).
+Left: end-to-end time stays with APC ($-0.3\%$, $-0.7\%$, $+0.1\%$) because decode dominates $T_{\mathrm{e2e}}$.
+Right: peak resident KV on the same runs.
+Branch-aware abort compresses storage to $M_{\mathrm{spine}}$ ($0.70\times$, $0.61\times$, $0.94\times$ APC) at stable latency.}
 \end{figure}
 
 \subsection{GSM8K (settings B and C)}
@@ -561,7 +550,7 @@ $\mathrm{tp}$ & Serving & $\mathrm{peak}$ & fan-out (ms) & e2e (ms) & decode (ms
 \bottomrule
 \end{tabular}
 \caption{GSM8K, $n{=}4$.
-FS/APC peak ${=}0.70$; FS/recompute ${=}0.25$.
+FS/APC peak ${=}0.70$; FS/recompute ${=}0.25$: branch-aware sharing is storage-efficient at both $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 End-to-end vs.\ APC is $-0.3\%$ at $\mathrm{tp}{=}2$ and $-0.4\%$ at $\mathrm{tp}{=}4$.}
 \end{table}
 
@@ -588,6 +577,7 @@ $\mathrm{tp}$ & Serving & $\mathrm{peak}$ & fan-out (ms) & e2e (ms) & decode (ms
 \end{tabular}
 \caption{Game24, $n{=}4$.
 FS/APC peak ${=}0.61$; FS/recompute ${=}0.26$.
+A short trunk raises the unused-residual share, so storage-efficient abort saves more versus APC than on GSM8K.
 End-to-end vs.\ APC is $-0.7\%$ at $\mathrm{tp}{=}2$ and $-2.0\%$ at $\mathrm{tp}{=}4$.
 Success matches on all four problems.}
 \end{table}
@@ -616,6 +606,7 @@ $\mathrm{tp}$ & Serving & $\mathrm{peak}$ & fan-out (ms) & e2e (ms) & TTFT (ms) 
 \end{tabular}
 \caption{HumanEval, $n{=}4$.
 FS/APC peak ${=}0.94$; FS/recompute ${=}0.49$.
+ReAct $k{=}2$ with a long observation suffix leaves less unused KV, so the storage gap versus APC is smaller, as \eqref{eq:gap} predicts.
 TTFT vs.\ APC is $+0.1\%$ at $\mathrm{tp}{=}2$ and $+0.4\%$ at $\mathrm{tp}{=}4$.
 Pass@1 matches APC ($3/4$).}
 \end{table}
@@ -625,8 +616,8 @@ Pass@1 matches APC ($3/4$).}
 \includegraphics[width=0.72\textwidth]{fig/rl3_peak_tp4_ok.pdf}
 \caption{Setting C ($\mathrm{tp}{=}4$): Game24 and HumanEval.
 $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}$ is $0.61$ and $0.94$, as in setting B.
-Those ratios are fixed by $k$ and the residuals after abort (\eqref{eq:gap}).
-Four-way tensor parallel shards the same committed path, so the HBM advantage versus APC is a property of the serving method and applies at $\mathrm{tp}{=}4$.}
+Those storage ratios are fixed by $k$ and the residuals after abort (\eqref{eq:gap}).
+Four-way tensor parallel shards the same committed path, so the HBM advantage versus APC is a property of branch-aware sharing and applies at $\mathrm{tp}{=}4$.}
 \end{figure}
 
 \subsection{Tensor parallel B versus C}
@@ -644,7 +635,7 @@ HumanEval (TTFT) & 695 & $3568\,\mathrm{ms}$ & $2236\,\mathrm{ms}$ & $0.63$ \\
 \bottomrule
 \end{tabular}
 \caption{From $\mathrm{tp}{=}2$ to $\mathrm{tp}{=}4$, ForkServe latency (TTFT on HumanEval) scales by $0.61$--$0.63$, in line with decode on twice as many ranks.
-Peak is the committed-path length $M_{\mathrm{spine}}$, so the ratio to APC is already set by abort in setting B.
+Peak is the committed-path length $M_{\mathrm{spine}}$, so the storage ratio to APC is already set by abort in setting B.
 Four-GPU decode therefore stacks with that storage efficiency: each tree occupies less cache than APC, and $C\propto\mathrm{HBM}/M$ is larger.}
 \end{table}
 
@@ -654,28 +645,28 @@ ReAct ($k{=}2$) gives $0.94$.
 \section{Discussion}
 
 Recompute copies the trunk on every branch; APC reuses it after a hash hit and already removes most of $M_{\mathrm{rec}}$.
-ForkServe keeps that prefill saving, then drops unused branches so peak KV tracks $M_{\mathrm{spine}}$.
+ForkServe is branch-aware KV sharing: it keeps that prefill saving, then drops unused branches so peak KV tracks $M_{\mathrm{spine}}$.
 On GSM8K that is $0.72\times$ APC and $0.25\times$ recompute in every batch, while generation time stays within $2\%$ of APC.
-Fan-out carries ForkServe's copy-on-write and abort; global latency follows $T_{\mathrm{dec}}$ and $C\propto\mathrm{HBM}/M$, so ForkServe is the serving optimum in \eqref{eq:conc}.
+Fan-out carries copy-on-write and abort; global latency follows $T_{\mathrm{dec}}$ and $C\propto\mathrm{HBM}/M$, so ForkServe is the storage-efficient serving optimum in \eqref{eq:conc}.
 Settings B and C check Game24, HumanEval, and $\mathrm{tp}{=}2$ versus $\mathrm{tp}{=}4$; GSM8K quality is setting A.
 
 \section{Conclusion}
 
-ForkServe is meant to serve branched decoding---Tree-of-Thoughts and ReAct---by sharing the trunk with copy-on-write and aborting unused branches.
+ForkServe is branch-aware KV sharing for storage-efficient vLLM serving of Tree-of-Thoughts and ReAct: the trunk is forked by copy-on-write, unused branches are aborted, and only the committed path remains.
 Against recompute, the relevant quantities are prefill work
 $W_{\mathrm{rec}}=k(L+\bar\ell)$ versus $W_{\mathrm{FS}}=L+k\bar\ell$,
 and clone memory $M_{\mathrm{rec}}$ versus the committed path $M_{\mathrm{spine}}=b(L+\ell_{\star})$.
-Against APC, prefill matches, $W_{\mathrm{APC}}=W_{\mathrm{FS}}$, and the remaining gap is
+Against APC, prefill matches, $W_{\mathrm{APC}}=W_{\mathrm{FS}}$, and the remaining storage gap is
 \begin{equation}
 \Delta = M_{\mathrm{APC}}-M_{\mathrm{spine}} = b\sum_{i\neq\star}\ell_i,
 \end{equation}
 the hashed union that remains under APC.
-A run is an efficiency win when \eqref{eq:goal} holds and official scores stay with APC.
+A run is storage-efficient when \eqref{eq:goal} holds and official scores stay with APC.
 The serving objective is system throughput $\Theta\propto C/T_{\mathrm{e2e}}$ with $C\propto\mathrm{HBM}/M$ (\eqref{eq:conc}).
 
 The completed measurements support that claim on more than one task and tensor-parallel width.
 The GSM8K test set ($n{=}1319$, $\mathrm{tp}{=}2$) is the main Tree-of-Thoughts result: peak KV below APC on all $165$ batches (median ratio $0.72$), accuracy aligned with APC, and $T_{\mathrm{e2e}}$ within $2\%$.
-Four-problem slices reproduce the same peak ordering on Tree-of-Thoughts (GSM8K, Game24) and ReAct (HumanEval) at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$.
+Four-problem slices reproduce the same storage ordering on Tree-of-Thoughts (GSM8K, Game24) and ReAct (HumanEval) at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$.
 Where $k{=}4$, $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ sits in $[0.61,0.72]$; where $k{=}2$, the ratio rises to $0.94$, as \eqref{eq:gap} predicts when residuals are large relative to $L$.
 
 The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.
