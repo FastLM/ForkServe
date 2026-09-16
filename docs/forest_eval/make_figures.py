@@ -140,24 +140,43 @@ def fig_peak_trace(by) -> None:
 
 
 def fig_peak_scatter(by) -> None:
-    fs = {x["done"]: x["peak"] for x in series(by, "forkserve", "gsm8k")}
-    ap = {x["done"]: x["peak"] for x in series(by, "vllm_apc", "gsm8k")}
-    keys = sorted(set(fs) & set(ap))
-    x = np.array([ap[k] for k in keys])
-    y = np.array([fs[k] for k in keys])
-    fig, ax = plt.subplots(figsize=(4.4, 4.2))
-    ax.scatter(x, y, s=14, c=C_FS, alpha=0.75, edgecolors="none", zorder=3)
-    lo, hi = 800, 1700
-    ax.plot([lo, hi], [lo, hi], color=C_MUTE, ls="--", lw=0.9, label="$y=x$ (APC)")
-    ax.fill_between([lo, hi], [lo, hi], [hi, hi], color=C_APC, alpha=0.06, zorder=0)
-    ax.set_xlim(lo, hi)
-    ax.set_ylim(lo, hi)
-    ax.set_aspect("equal")
-    ax.set_xlabel("APC peak KV tokens")
-    ax.set_ylabel("ForkServe peak KV tokens")
-    ax.set_title("Every GSM8K chunk: ForkServe below APC")
-    ax.legend(loc="upper left")
-    ax.text(0.97, 0.06, "165/165 below diagonal", transform=ax.transAxes, ha="right", color=C_MUTE, fontsize=8)
+    """Per-batch peaks from the GSM8K run log."""
+    ap = series(by, "vllm_apc", "gsm8k")
+    fs = series(by, "forkserve", "gsm8k")
+    fig, ax = plt.subplots(figsize=(4.6, 3.35))
+    ax.plot(
+        [x["done"] for x in ap],
+        [x["peak"] for x in ap],
+        color=C_APC,
+        lw=0.9,
+        marker="o",
+        ms=2.4,
+        mew=0,
+        alpha=0.88,
+        label="APC",
+        zorder=2,
+    )
+    ax.plot(
+        [x["done"] for x in fs],
+        [x["peak"] for x in fs],
+        color=C_FS,
+        lw=0.9,
+        marker="o",
+        ms=2.4,
+        mew=0,
+        alpha=0.88,
+        label="ForkServe",
+        zorder=3,
+    )
+    ax.set_xlabel("Items completed")
+    ax.set_ylabel("Peak KV tokens")
+    ax.set_xlim(0, 1320)
+    ymax = max(x["peak"] for x in ap + fs)
+    ymin = min(x["peak"] for x in ap + fs)
+    ax.set_ylim(ymin - 40, ymax + 40)
+    ax.legend(loc="upper right", ncol=2)
+    ax.yaxis.grid(True, color=C_GRID, lw=0.6)
+    ax.set_axisbelow(True)
     save(fig, "peak_scatter_fs_vs_apc")
 
 
