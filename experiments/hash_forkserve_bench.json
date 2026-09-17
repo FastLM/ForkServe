@@ -1,0 +1,32 @@
+[
+  {
+    "mode": "apc_only",
+    "wall_ms": 2.7916249964619055,
+    "live_pages": 96,
+    "hash_hits": 624,
+    "hash_misses": 40,
+    "fork_aliases": 0,
+    "pages_hashed": 96,
+    "sessions": 40
+  },
+  {
+    "mode": "cow_fork_only",
+    "wall_ms": 0.8899999957066029,
+    "live_pages": 56,
+    "hash_hits": 144,
+    "hash_misses": 1,
+    "fork_aliases": 640,
+    "pages_hashed": 16,
+    "sessions": 50
+  },
+  {
+    "mode": "hash_forkserve",
+    "wall_ms": 5.781416999525391,
+    "live_pages": 56,
+    "hash_hits": 484,
+    "hash_misses": 1,
+    "fork_aliases": 640,
+    "pages_hashed": 660,
+    "sessions": 70
+  }
+]

@@ -6,6 +6,7 @@ Speculation never feeds unverified tokens into decode.
 
 from forkserve.api import Engine
 from forkserve.config import ForkServeConfig
+from forkserve.hash_forkserve import HashForkServe
 from forkserve.orchestrator import Orchestrator
 from forkserve.types import (
     BranchId,
@@ -19,6 +20,7 @@ __all__ = [
     "BranchId",
     "Engine",
     "ForkServeConfig",
+    "HashForkServe",
     "JoinPolicy",
     "NodeId",
     "NodeMode",
