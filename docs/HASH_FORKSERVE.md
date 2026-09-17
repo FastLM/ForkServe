@@ -1,5 +1,7 @@
 # HashForkServe — APC ⊕ ForkServe
 
+Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). vLLM mapping: [`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md).
+
 ## Why combine them
 
 | | vLLM Automatic Prefix Caching | ForkServe |
