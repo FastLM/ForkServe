@@ -43,7 +43,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small\color{Mute}ForkServe}
-\fancyhead[R]{\small\color{Mute}Qwen3-14B}
+\fancyhead[R]{\small\color{Mute}Qwen3-14B / Qwen3-8B}
 \fancyfoot[C]{\small\color{Mute}\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
 \renewcommand{\headrule}{\hbox to\headwidth{\color{Rule}\leaders\hrule height \headrulewidth\hfill}}
@@ -77,6 +77,9 @@ ForkServe forks a shared trunk by copy-on-write, prefills each residual, aborts 
 On the GSM8K test set ($n{=}1319$, tensor parallel $2$), peak resident KV is below APC on every batch of eight problems (median $1030$ vs.\ $1430$ tokens, ratio $0.72$).
 Official accuracy is $0.845$ vs.\ $0.844$, and generation takes $18.9$ vs.\ $18.6$ minutes: less cache at APC-level latency.
 The same storage ordering holds on four-problem slices of GSM8K, Game24, and HumanEval at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$, with end-to-end time within $2\%$ of APC.
+
+A second $\mathrm{tp}{=}2$ run on Qwen3-8B compares APC and ForkServe on seven Tree-of-Thoughts math files ($n{=}40$--$80$).
+Peak KV is $0.62$--$0.80\times$ APC on every file; official scores match or exceed APC on six of seven tasks; generate time stays within $3\%$ of APC.
 \end{abstract}
 
 \section{Baselines and method}
@@ -131,14 +134,14 @@ They differ by dataset, problem count, batching, and tensor-parallel width.
 Parameter & Specification \\
 \midrule
 Node & four NVIDIA A100-SXM4 40GB \\
-Model & Qwen3-14B, \texttt{bfloat16} \\
+Model & Qwen3-14B (settings A--C) and Qwen3-8B (setting E), \texttt{bfloat16} \\
 Max sequence length & $4096$ \\
 Prefill & chunked; at most $2048$ batched tokens \\
 Systems & vLLM recompute, vLLM APC, ForkServe \\
 \bottomrule
 \end{tabular}
 \caption{Hardware and engine.
-Tensor parallel $\mathrm{tp}{=}2$ places the model on GPU $0,1$ ($\approx 38497$\,MiB each).
+Tensor parallel $\mathrm{tp}{=}2$ places the model on GPU $0,1$ ($\approx 38497$\,MiB each on Qwen3-14B; $\approx 37305$--$37579$\,MiB each on Qwen3-8B).
 $\mathrm{tp}{=}4$ uses GPU $0$--$3$ ($\approx 38797$\,MiB each).
 Peak KV (tokens) is the storage metric; latency scales with $\mathrm{tp}$.}
 \end{table}
@@ -153,15 +156,21 @@ Peak KV (tokens) is the storage metric; latency scales with $\mathrm{tp}$.}
 Dataset & Split & Full $n$ & Recipe & $k$ & Decode & Metric \\
 \midrule
 GSM8K & test & $1319$ & Tree-of-Thoughts & $4$ & $512$ & accuracy \\
-Game24 & \texttt{24.csv} & $1362$ & Tree-of-Thoughts & $4$ & $256$ & success \\
+Game24 & \texttt{24.csv} & $1362$ & Tree-of-Thoughts & $4$ & $256$/$512$ & success \\
 HumanEval & official jsonl & $164$ & ReAct wrap+recovery & $2$ & $256$ & pass@1 \\
+SVAMP & test slice & $1000$ & Tree-of-Thoughts & $4$ & $512$ & accuracy \\
+GSM-Hard & numeric GSM8K & --- & Tree-of-Thoughts & $4$ & $512$ & accuracy \\
+MATH-500 & Hendrycks subset & $500$ & Tree-of-Thoughts & $4$ & $768$ & accuracy \\
+AIME & 2022--2025 mix & $73$ & Tree-of-Thoughts & $4$ & $768$ & accuracy \\
+AMC23 & official & $40$ & Tree-of-Thoughts & $4$ & $768$ & accuracy \\
 \bottomrule
 \end{tabular}
 \caption{Datasets.
 GSM8K: median $43$ words, median $3$ calculation steps, gold extracted at \texttt{\#\#\#\#}.
-Game24: $719$ easy / $573$ medium / $70$ hard by published solve rate; success is a valid expression to $24$.
+Game24: $719$ easy / $573$ medium / $70$ hard by published solve rate; success is a valid expression to $24$ (setting E uses decode $512$ on an $80$-item prefix).
 HumanEval: median $396$ prompt characters, mean $8.1$ asserts; pass@1 is \texttt{prompt+body+check}.
-ReAct idle for wrap+recovery is $2000\,\mathrm{ms}$.}
+ReAct idle for wrap+recovery is $2000\,\mathrm{ms}$.
+Setting E additionally scores SVAMP and GSM-Hard with the GSM8K numeric extractor, MATH-500 / AIME / AMC23 with boxed contest answers.}
 \end{table}
 
 \subsection{Run configurations}
@@ -181,10 +190,11 @@ A. Full GSM8K & $2$ & $0,1$ & $1319$; batches of $8$ & GSM8K \\
 B. Four-problem, two GPUs & $2$ & $0,1$ & $4$ in one step & GSM8K, Game24, HumanEval \\
 C. Four-problem, four GPUs & $4$ & $0$--$3$ & $4$ in one step & Game24, HumanEval \\
 D. Full Game24 / HumanEval & $2$ & $0,1$ & $1362$ / $164$; batches of $8$ & Game24, HumanEval \\
+E. Qwen3-8B math suite & $2$ & $0,1$ & $40$--$80$; batches of $8$ & GSM8K, SVAMP, GSM-Hard, MATH-500, AIME, AMC23, Game24 \\
 \bottomrule
 \end{tabular}
 \caption{Configurations and datasets.
-Later sections report A--C in full: storage (peak KV) and latency under branch-aware sharing.
+Later sections report A--C in full on Qwen3-14B, then E on Qwen3-8B (APC vs.\ ForkServe only).
 On D, recompute and APC are complete; ForkServe on the full Game24 and HumanEval files is in progress.}
 \end{table}
 
@@ -642,6 +652,150 @@ Four-GPU decode therefore stacks with that storage efficiency: each tree occupie
 Tree-of-Thoughts ($k{=}4$) gives $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.61,0.70]$, close to setting A on GSM8K ($0.72$).
 ReAct ($k{=}2$) gives $0.94$.
 
+\section{Qwen3-8B math suite (setting E)}
+
+Setting E repeats the APC vs.\ ForkServe comparison on Qwen3-8B, $\mathrm{tp}{=}2$, GPU $0,1$.
+The recipe is Tree-of-Thoughts with $k{=}4$ and batches of eight.
+Grade-school files (GSM8K, SVAMP, GSM-Hard, Game24) decode $512$ tokens per problem; contest files (MATH-500, AIME, AMC23) decode $768$.
+$n$ is $80$ except AIME ($73$, the local mix) and AMC23 ($40$, the full file).
+There is no recompute arm on this run: the question is whether branch-aware abort still sits below hashed APC, at matched official scores, on a smaller model and a wider math mix.
+
+Resident GPU memory is $\approx 37305$\,MiB per rank under APC and $\approx 37423$--$37579$\,MiB under ForkServe.
+
+\subsection{Official scores}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Dataset & $n$ & $D$ & APC & ForkServe & $\Delta$ & FS correct \\
+\midrule
+GSM8K & $80$ & $512$ & $0.925$ ($74$) & $\mathbf{0.963}$ ($77$) & $+3.8$\,pp & $77/80$ \\
+SVAMP & $80$ & $512$ & $0.863$ ($69$) & $\mathbf{0.888}$ ($71$) & $+2.5$\,pp & $71/80$ \\
+GSM-Hard & $80$ & $512$ & $0.650$ ($52$) & $\mathbf{0.663}$ ($53$) & $+1.3$\,pp & $53/80$ \\
+MATH-500 & $80$ & $768$ & $0.638$ ($51$) & $\mathbf{0.650}$ ($52$) & $+1.3$\,pp & $52/80$ \\
+AIME & $73$ & $768$ & $0.041$ ($3$) & $0.041$ ($3$) & $0$ & $3/73$ \\
+AMC23 & $40$ & $768$ & $0.275$ ($11$) & $\mathbf{0.350}$ ($14$) & $+7.5$\,pp & $14/40$ \\
+Game24 & $80$ & $512$ & $\mathbf{0.713}$ ($57$) & $0.700$ ($56$) & $-1.3$\,pp & $56/80$ \\
+\bottomrule
+\end{tabular}
+\caption{Setting E, Qwen3-8B, $\mathrm{tp}{=}2$.
+ForkServe matches or beats APC on six of seven files.
+The Game24 gap is one problem on an $80$-item easy prefix ($57$ vs.\ $56$).
+AIME remains $3/73$ on both stacks: $8$B Tree-of-Thoughts with $D{=}768$ does not solve contest items, so the file is an efficiency check rather than a quality claim.}
+\end{table}
+
+On GSM8K the step slices stay aligned and slightly higher for ForkServe:
+steps $1$ $4/4$ vs.\ $4/4$,
+steps $2$ $27/28$ vs.\ $26/28$,
+steps $3$ $18/18$ vs.\ $17/18$,
+steps $4{+}$ $28/30$ vs.\ $27/30$.
+On MATH-500, level $1$ is $7/8$ on both; levels $4$--$5$ stay the hard tail ($0.53$/$0.33$ vs.\ $0.47$/$0.39$).
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.22cm,y=2.55cm]
+  \def\w{0.34}
+  \foreach \y in {0.0,0.25,0.50,0.75,1.00} {
+    \draw[Rule] (-0.45,\y) -- (6.85,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.52,\y) {\y};
+  }
+  \foreach \i/\lab/\apc/\fs in {
+    0/GSM8K/0.925/0.9625,
+    1/SVAMP/0.8625/0.8875,
+    2/GSM-H/0.650/0.6625,
+    3/MATH/0.6375/0.650,
+    4/AIME/0.0411/0.0411,
+    5/AMC23/0.275/0.350,
+    6/G24/0.7125/0.700} {
+    \fill[APC] ({\i-\w},0) rectangle ({\i},\apc);
+    \fill[FS] ({\i},0) rectangle ({\i+\w},\fs);
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,-0.04) {\lab};
+  }
+  \draw[Ink] (-0.45,0) -- (6.85,0);
+  \fill[APC] (4.35,1.10) rectangle (4.58,1.18);
+  \node[font=\scriptsize,anchor=west] at (4.64,1.14) {APC};
+  \fill[FS] (5.45,1.10) rectangle (5.68,1.18);
+  \node[font=\scriptsize,anchor=west] at (5.74,1.14) {ForkServe};
+  \node[font=\small,anchor=south] at (3.2,1.22) {Official score};
+\end{tikzpicture}
+\caption{Setting E scores.
+ForkServe is the right bar in each pair.
+AIME is near zero on both; the remaining files sit with or above APC.}
+\end{figure}
+
+\subsection{Storage and latency}
+
+Peak KV is the maximum over sequential batches of eight (five batches on AMC23).
+End-to-end time is the summed generate wall-clock of those batches.
+Decode is more than $96\%$ of $T_{\mathrm{e2e}}$ on every file, as in \eqref{eq:sys}.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Dataset & APC peak & FS peak & FS/APC & APC e2e (s) & FS e2e (s) & vs.\ APC & APC fan-out (s) \\
+\midrule
+GSM8K & $1582$ & $\mathbf{1182}$ & $0.75$ & $36.4$ & $35.4$ & $-2.8\%$ & $0.58$ \\
+SVAMP & $1359$ & $\mathbf{959}$ & $0.71$ & $35.4$ & $35.7$ & $+1.0\%$ & $0.57$ \\
+GSM-Hard & $1462$ & $\mathbf{1062}$ & $0.73$ & $44.1$ & $44.1$ & $-0.1\%$ & $0.58$ \\
+MATH-500 & $1765$ & $\mathbf{1349}$ & $0.76$ & $66.5$ & $66.2$ & $-0.4\%$ & $0.58$ \\
+AIME & $2118$ & $\mathbf{1702}$ & $0.80$ & $67.4$ & $67.3$ & $-0.1\%$ & $0.56$ \\
+AMC23 & $1920$ & $\mathbf{1504}$ & $0.78$ & $33.7$ & $33.5$ & $-0.5\%$ & $0.30$ \\
+Game24 & $1289$ & $\mathbf{793}$ & $0.62$ & $44.6$ & $44.3$ & $-0.7\%$ & $0.70$ \\
+\bottomrule
+\end{tabular}
+\caption{Setting E storage and generate time.
+Peak is always $\mathrm{peak}^{\mathrm{FS}}<\mathrm{peak}^{\mathrm{APC}}$.
+The lowest ratio is Game24 ($0.62$), where the trunk is short ($L{\approx}72$--$74$), so unused residuals are a larger share of the hashed union, as \eqref{eq:gap} predicts.
+AIME is the highest ratio ($0.80$) because the trunk is longer.
+Generate time stays within $3\%$ of APC; ForkServe fan-out is $0.84$--$1.08\,\mathrm{s}$ vs.\ APC $0.30$--$0.70\,\mathrm{s}$, the same abort/CoW micro-gap as on Qwen3-14B.}
+\end{table}
+
+ForkServe fan-out on the same files is $0.95$, $0.86$, $0.85$, $0.94$, $1.08$, $0.55$, $0.84\,\mathrm{s}$.
+Per eight-problem batch that is about $85$--$108\,\mathrm{ms}$ vs.\ APC $56$--$70\,\mathrm{ms}$ (AMC23 $110$ vs.\ $60\,\mathrm{ms}$ on five batches).
+The extra tens of milliseconds do not move wall-clock once $D\in\{512,768\}$.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.22cm,y=0.00115cm]
+  \def\w{0.34}
+  \foreach \y in {0,500,1000,1500,2000} {
+    \draw[Rule] (-0.45,\y) -- (6.85,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.52,\y) {\y};
+  }
+  \foreach \i/\lab/\apc/\fs in {
+    0/GSM8K/1582/1182,
+    1/SVAMP/1359/959,
+    2/GSM-H/1462/1062,
+    3/MATH/1765/1349,
+    4/AIME/2118/1702,
+    5/AMC23/1920/1504,
+    6/G24/1289/793} {
+    \fill[APC] ({\i-\w},0) rectangle ({\i},\apc);
+    \fill[FS] ({\i},0) rectangle ({\i+\w},\fs);
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,-45) {\lab};
+  }
+  \draw[Ink] (-0.45,0) -- (6.85,0);
+  \fill[APC] (4.35,2280) rectangle (4.58,2480);
+  \node[font=\scriptsize,anchor=west] at (4.64,2380) {APC};
+  \fill[FS] (5.45,2280) rectangle (5.68,2480);
+  \node[font=\scriptsize,anchor=west] at (5.74,2380) {ForkServe};
+  \node[font=\small,anchor=south] at (3.2,2550) {Peak resident KV (tokens)};
+\end{tikzpicture}
+\caption{Setting E peak KV.
+Every file is below APC.
+Game24 shows the largest abort gap; AIME the smallest, still $20\%$ below the hashed union.}
+\end{figure}
+
+Decode tokens on the winner path are fewer under ForkServe when generation stops early (GSM8K $21530$ vs.\ APC $40960$; SVAMP $16661$ vs.\ $40960$), which is why GSM8K wall-clock is $2.8\%$ below APC even though fan-out is higher.
+MATH-500 and AIME stay near the decode cap on both stacks ($44006$ vs.\ $61440$, $55790$ vs.\ $56064$), so e2e ratios collapse to $\approx 1$.
+
+The storage-efficient serving check \eqref{eq:goal} against APC holds on all seven files.
+Without a recompute arm we do not restate the $\gamma{=}0.20$ clause here; the $k{=}4$ trunks are the same class as settings A--C, where that clause already held.
+
 \section{Discussion}
 
 Recompute copies the trunk on every branch; APC reuses it after a hash hit and already removes most of $M_{\mathrm{rec}}$.
@@ -649,6 +803,7 @@ ForkServe is branch-aware KV sharing: it keeps that prefill saving, then drops u
 On GSM8K that is $0.72\times$ APC and $0.25\times$ recompute in every batch, while generation time stays within $2\%$ of APC.
 Fan-out carries copy-on-write and abort; global latency follows $T_{\mathrm{dec}}$ and $C\propto\mathrm{HBM}/M$, so ForkServe is the storage-efficient serving optimum in \eqref{eq:conc}.
 Settings B and C check Game24, HumanEval, and $\mathrm{tp}{=}2$ versus $\mathrm{tp}{=}4$; GSM8K quality is setting A.
+Setting E repeats APC vs.\ ForkServe on Qwen3-8B across seven math files: peak ratios $0.62$--$0.80$, scores with APC, and $T_{\mathrm{e2e}}$ within $3\%$.
 
 \section{Conclusion}
 
@@ -664,10 +819,11 @@ the hashed union that remains under APC.
 A run is storage-efficient when \eqref{eq:goal} holds and official scores stay with APC.
 The serving objective is system throughput $\Theta\propto C/T_{\mathrm{e2e}}$ with $C\propto\mathrm{HBM}/M$ (\eqref{eq:conc}).
 
-The completed measurements support that claim on more than one task and tensor-parallel width.
-The GSM8K test set ($n{=}1319$, $\mathrm{tp}{=}2$) is the main Tree-of-Thoughts result: peak KV below APC on all $165$ batches (median ratio $0.72$), accuracy aligned with APC, and $T_{\mathrm{e2e}}$ within $2\%$.
+The completed measurements support that claim on more than one task, tensor-parallel width, and model size.
+The GSM8K test set ($n{=}1319$, $\mathrm{tp}{=}2$, Qwen3-14B) is the main Tree-of-Thoughts result: peak KV below APC on all $165$ batches (median ratio $0.72$), accuracy aligned with APC, and $T_{\mathrm{e2e}}$ within $2\%$.
 Four-problem slices reproduce the same storage ordering on Tree-of-Thoughts (GSM8K, Game24) and ReAct (HumanEval) at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$.
-Where $k{=}4$, $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ sits in $[0.61,0.72]$; where $k{=}2$, the ratio rises to $0.94$, as \eqref{eq:gap} predicts when residuals are large relative to $L$.
+On Qwen3-8B (setting E), seven math files at $\mathrm{tp}{=}2$ give $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.62,0.80]$, official scores at or above APC on six files, and generate time within $3\%$.
+Where $k{=}4$, $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ sits in $[0.61,0.80]$; where $k{=}2$, the ratio rises to $0.94$, as \eqref{eq:gap} predicts when residuals are large relative to $L$.
 
 The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.
 Those ForkServe jobs will resume when the four A100s are free.
