@@ -21,6 +21,18 @@ def test_gsm8k_accuracy_is_final_number_not_trace() -> None:
     assert scored.preds == ["72", "0"]
 
 
+def test_boxed_math_answers() -> None:
+    from forkserve.quality import extract_boxed, math_correct
+
+    assert extract_boxed(r"so we get $\boxed{\frac{14}{3}}$") == r"\frac{14}{3}"
+    assert math_correct(r"therefore \boxed{p - q}", r"p - q")
+    assert math_correct(r"\boxed{\left( 3, \frac{\pi}{2} \right)}", r"\left( 3, \frac{\pi}{2} \right)")
+    assert math_correct("#### 204", "204")
+    assert not math_correct(r"\boxed{13}", "12")
+    scored = score_task("math500", [r"\boxed{9}", r"\boxed{8}"], ["9", "9"])
+    assert scored.score == 0.5
+
+
 def test_game24_success_checks_value_and_cards() -> None:
     gold = "Use 4, 8, 3, 12 each once"
     assert game24_correct("(4 + 8) * 3 - 12 = 24", gold)

@@ -6,6 +6,9 @@ visible against vLLM recompute / APC.
 
 * ``gsm8k`` — grade-school word problems, Tree-of-Thoughts / self-consistency
   fan-out (same stem, B strategy prefixes). Protocol of Cobbe et al. 2021.
+* ``svamp`` / ``gsmhard`` — same ToT contract on grade-school variants
+  (structure-perturbed / large-number GSM).
+* ``math500`` / ``aime`` / ``amc23`` — contest math, ToT fan-out, boxed gold.
 * ``game24`` — the ToT paper's math puzzle (Yao et al. 2023): four numbers
   to make 24, high branching on a tiny trunk.
 * ``humaneval`` — function-completion + pytest tool-idle. Same ToT contract:
@@ -372,3 +375,196 @@ def load_humaneval(limit: int) -> list[CodeItem]:
         if _hit_cap(len(items), limit):
             break
     return items or take(HUMANEVAL_SLICE, limit)
+
+
+CONTEST_STRATEGIES = (
+    "Rewrite the given conditions algebraically, then solve.",
+    "Look for symmetry, an invariant, or a substitution that collapses the problem.",
+    "Try a small case or count, then generalize to the asked quantity.",
+    "Work backwards from the requested quantity to the given numbers.",
+    "Factor, complete a square, or clear denominators before combining terms.",
+    "Convert to a standard contest form (AM-GM, roots of unity, similar triangles).",
+)
+
+
+def math_data_dir() -> Path:
+    env = os.environ.get("MATH_DATA") or os.environ.get("MATH_REASONING_DATA")
+    if env:
+        return Path(env).expanduser()
+    home = Path.home() / "math-reasoning-datasets" / "data"
+    if home.is_dir():
+        return home
+    return benchmarks_dir()
+
+
+def numeric_math_trunk(item: MathItem) -> str:
+    return gsm8k_trunk(item)
+
+
+def contest_math_trunk(item: MathItem) -> str:
+    system = (
+        "You are a contest mathematician. Write a short solution. "
+        "The last line must contain the final answer in \\boxed{}."
+    )
+    user = (
+        f"{item.question}\n\n"
+        "Put the final answer in \\boxed{}. Do not list alternate plans.\n"
+        "/no_think"
+    )
+    return _chat(system, user)
+
+
+def contest_thoughts(branching: int) -> list[str]:
+    w = ToolWrappers()
+    out: list[str] = []
+    for i in range(branching):
+        out.append(w.thought_prefix(i) + CONTEST_STRATEGIES[i % len(CONTEST_STRATEGIES)])
+    return out
+
+
+def _read_json_or_jsonl(path: Path) -> list[dict]:
+    if not path.is_file():
+        return []
+    text = path.read_text()
+    if path.suffix == ".json":
+        data = json.loads(text)
+        return list(data) if isinstance(data, list) else []
+    rows: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        rows.append(json.loads(line))
+    return rows
+
+
+def load_svamp(limit: int) -> list[MathItem]:
+    path = benchmarks_dir() / "svamp" / "test.json"
+    if not path.is_file():
+        alt = math_data_dir() / "SVAMP" / "test.json"
+        path = alt if alt.is_file() else path
+    items: list[MathItem] = []
+    for i, row in enumerate(_read_json_or_jsonl(path)):
+        body = str(row.get("Body") or "").strip()
+        q = str(row.get("Question") or "").strip()
+        if not q:
+            continue
+        ans = row.get("Answer")
+        items.append(
+            MathItem(
+                item_id=str(row.get("ID") or f"svamp-{i}"),
+                question=f"{body} {q}".strip(),
+                answer=str(ans).strip(),
+            )
+        )
+        if _hit_cap(len(items), limit):
+            break
+    return items or take(GSM8K_SLICE, limit)
+
+
+def load_gsmhard(limit: int) -> list[MathItem]:
+    path = benchmarks_dir() / "gsmhard" / "gsmhardv2.jsonl"
+    if not path.is_file():
+        alt = math_data_dir() / "gsm-hard" / "gsmhardv2.jsonl"
+        path = alt if alt.is_file() else path
+    items: list[MathItem] = []
+    for i, row in enumerate(_read_json_or_jsonl(path)):
+        q = str(row.get("input") or row.get("question") or "").strip()
+        if not q:
+            continue
+        ans = row.get("target", row.get("answer", ""))
+        items.append(MathItem(item_id=f"gsmhard-{i}", question=q, answer=str(ans).strip()))
+        if _hit_cap(len(items), limit):
+            break
+    return items or take(GSM8K_SLICE, limit)
+
+
+def load_math500(limit: int) -> list[MathItem]:
+    path = benchmarks_dir() / "math500" / "test.jsonl"
+    if not path.is_file():
+        alt = math_data_dir() / "MATH-500" / "test.jsonl"
+        path = alt if alt.is_file() else path
+    items: list[MathItem] = []
+    for i, row in enumerate(_read_json_or_jsonl(path)):
+        q = str(row.get("problem") or row.get("question") or "").strip()
+        if not q:
+            continue
+        level_s = str(row.get("level") or "0")
+        try:
+            level = int(float(level_s))
+        except ValueError:
+            level = 0
+        items.append(
+            MathItem(
+                item_id=str(row.get("unique_id") or f"math500-{i}"),
+                question=q,
+                answer=str(row.get("answer") or "").strip(),
+                n_steps=level,
+            )
+        )
+        if _hit_cap(len(items), limit):
+            break
+    return items or take(GSM8K_SLICE, limit)
+
+
+def _aime_item(row: dict, fallback_id: str) -> MathItem | None:
+    q = str(row.get("problem") or row.get("Problem") or row.get("question") or "").strip()
+    if not q:
+        return None
+    ans = str(row.get("answer") or row.get("Answer") or "").strip()
+    iid = str(row.get("id") or row.get("ID") or fallback_id)
+    return MathItem(item_id=f"aime-{iid}", question=q, answer=ans)
+
+
+def load_aime(limit: int) -> list[MathItem]:
+    root = benchmarks_dir() / "aime"
+    paths = [
+        root / "aime2024_hf.jsonl",
+        root / "aime2024_problems.jsonl",
+        root / "aime2025.jsonl",
+        math_data_dir() / "aime_2025_opencompass" / "aime2025-I.jsonl",
+        math_data_dir() / "aime_2025_opencompass" / "aime2025-II.jsonl",
+    ]
+    seen: set[str] = set()
+    items: list[MathItem] = []
+    n = 0
+    for path in paths:
+        for row in _read_json_or_jsonl(path):
+            item = _aime_item(row, f"{path.stem}-{n}")
+            if item is None:
+                continue
+            key = " ".join(item.question.split())
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+            n += 1
+            if _hit_cap(len(items), limit):
+                return items
+    return items or take(GSM8K_SLICE, limit)
+
+
+def load_amc23(limit: int) -> list[MathItem]:
+    path = benchmarks_dir() / "amc23" / "test.jsonl"
+    items: list[MathItem] = []
+    for i, row in enumerate(_read_json_or_jsonl(path)):
+        q = str(row.get("question") or row.get("problem") or "").strip()
+        if not q:
+            continue
+        ans = str(row.get("answer") or "").strip()
+        if ans.endswith(".0"):
+            try:
+                ans = str(int(float(ans)))
+            except ValueError:
+                pass
+        items.append(
+            MathItem(
+                item_id=f"amc23-{row.get('id', i)}",
+                question=q,
+                answer=ans,
+            )
+        )
+        if _hit_cap(len(items), limit):
+            break
+    return items or take(GSM8K_SLICE, limit)
+

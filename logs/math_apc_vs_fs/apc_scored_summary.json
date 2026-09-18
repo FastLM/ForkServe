@@ -1,0 +1,163 @@
+[
+  {
+    "system": "vllm_apc",
+    "workload": "gsm8k",
+    "tp": 2,
+    "e2e_ms": 36416.64589755237,
+    "fanout_ms": 582.8803684562445,
+    "decode_ms": 35321.940679103136,
+    "peak_kv_tokens": 1582,
+    "trunk_tokens": 118,
+    "sessions": 80,
+    "branching": 4,
+    "task_metric": "accuracy",
+    "task_n": 80,
+    "task_score": 0.925,
+    "kv_saving": 0.9503412987049444,
+    "gpu_mem_mib": [
+      37305,
+      37305,
+      0,
+      0
+    ],
+    "decode_per_item": 512
+  },
+  {
+    "system": "vllm_apc",
+    "workload": "svamp",
+    "tp": 2,
+    "e2e_ms": 35371.38341926038,
+    "fanout_ms": 568.1482795625925,
+    "decode_ms": 34360.83741672337,
+    "peak_kv_tokens": 1359,
+    "trunk_tokens": 107,
+    "sessions": 80,
+    "branching": 4,
+    "task_metric": "accuracy",
+    "task_n": 80,
+    "task_score": 0.8625,
+    "kv_saving": 0.9487555346129802,
+    "gpu_mem_mib": [
+      37305,
+      37305,
+      0,
+      0
+    ],
+    "decode_per_item": 512
+  },
+  {
+    "system": "vllm_apc",
+    "workload": "gsmhard",
+    "tp": 2,
+    "e2e_ms": 44099.98136386275,
+    "fanout_ms": 580.8529518544674,
+    "decode_ms": 43042.68222860992,
+    "peak_kv_tokens": 1462,
+    "trunk_tokens": 125,
+    "sessions": 80,
+    "branching": 4,
+    "task_metric": "accuracy",
+    "task_n": 80,
+    "task_score": 0.65,
+    "kv_saving": 0.9519612410183175,
+    "gpu_mem_mib": [
+      37305,
+      37305,
+      0,
+      0
+    ],
+    "decode_per_item": 512
+  },
+  {
+    "system": "vllm_apc",
+    "workload": "math500",
+    "tp": 2,
+    "e2e_ms": 66472.41651080549,
+    "fanout_ms": 584.7843382507563,
+    "decode_ms": 65385.4273725301,
+    "peak_kv_tokens": 1765,
+    "trunk_tokens": 102,
+    "sessions": 80,
+    "branching": 4,
+    "task_metric": "accuracy",
+    "task_n": 80,
+    "task_score": 0.6375,
+    "kv_saving": 0.9488454167725744,
+    "gpu_mem_mib": [
+      37305,
+      37305,
+      0,
+      0
+    ],
+    "decode_per_item": 768
+  },
+  {
+    "system": "vllm_apc",
+    "workload": "aime",
+    "tp": 2,
+    "e2e_ms": 67384.86084342003,
+    "fanout_ms": 564.8253429681063,
+    "decode_ms": 66183.99414420128,
+    "peak_kv_tokens": 2118,
+    "trunk_tokens": 187,
+    "sessions": 73,
+    "branching": 4,
+    "task_metric": "accuracy",
+    "task_n": 73,
+    "task_score": 0.0410958904109589,
+    "kv_saving": 0.9275542137718642,
+    "gpu_mem_mib": [
+      37331,
+      37331,
+      0,
+      0
+    ],
+    "decode_per_item": 768
+  },
+  {
+    "system": "vllm_apc",
+    "workload": "amc23",
+    "tp": 2,
+    "e2e_ms": 33668.30492950976,
+    "fanout_ms": 298.420075327158,
+    "decode_ms": 33030.70363402367,
+    "peak_kv_tokens": 1920,
+    "trunk_tokens": 132,
+    "sessions": 40,
+    "branching": 4,
+    "task_metric": "accuracy",
+    "task_n": 40,
+    "task_score": 0.275,
+    "kv_saving": 0.9522363718119013,
+    "gpu_mem_mib": [
+      37331,
+      37331,
+      0,
+      0
+    ],
+    "decode_per_item": 768
+  },
+  {
+    "system": "vllm_apc",
+    "workload": "game24",
+    "tp": 2,
+    "e2e_ms": 44624.82054531574,
+    "fanout_ms": 702.8308548033237,
+    "decode_ms": 43592.66416542232,
+    "peak_kv_tokens": 1289,
+    "trunk_tokens": 72,
+    "sessions": 80,
+    "branching": 4,
+    "task_metric": "success_rate",
+    "task_n": 80,
+    "task_score": 0.7125,
+    "kv_saving": 0.9341904275904731,
+    "gpu_mem_mib": [
+      37331,
+      37331,
+      0,
+      0
+    ],
+    "decode_per_item": 512
+  }
+]

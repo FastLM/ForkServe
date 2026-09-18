@@ -31,6 +31,7 @@ def test_forkserve_extra_tags_class() -> None:
     assert s["forkserve_class"] == "speculative"
     assert s["forkserve_node"] == 7
     assert s["forkserve_parent_node"] == 3
+    assert s["forkserve_parent"] == 3
     c = forkserve_extra(speculative=False, node_id=1)
     assert c["forkserve_class"] == "committed"
 

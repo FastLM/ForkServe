@@ -96,6 +96,21 @@ def test_mock_gsm8k_cow_saves_kv() -> None:
     assert all(len(s) >= 1 for s in gsm.decode_ids)
 
 
+def test_mock_math500_cow_saves_kv() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "math500",
+            "--branching", "4", "--limit", "2", "--decode", "2",
+            "--out", "/tmp/forkserve-bench-math500.json",
+        ]
+    )
+    row = run_mock(args)[0]
+    assert row.workload == "math500"
+    assert row.sessions == 2
+    assert row.kv_saving > 0.3
+    assert row.peak_kv_tokens > 0
+
+
 def test_mock_game24_fanout() -> None:
     args = parse_args(
         [
@@ -151,6 +166,23 @@ def test_loads_local_benchmark_files() -> None:
     assert "def " in he[0].prompt
     game = load_game24(1)
     assert "24" in game[0].question
+
+
+def test_loads_extra_math_sets() -> None:
+    from forkserve.bench_tasks import load_aime, load_amc23, load_math500, load_svamp
+
+    sv = load_svamp(3)
+    assert len(sv) == 3
+    assert sv[0].question and sv[0].answer
+    m = load_math500(2)
+    assert len(m) == 2
+    assert m[0].answer
+    aime = load_aime(5)
+    assert len(aime) == 5
+    amc = load_amc23(2)
+    assert amc[0].answer
+    assert load_aime(0)
+    assert load_math500(0)
 
 
 def test_limit_zero_reads_entire_jsonl_csv() -> None:

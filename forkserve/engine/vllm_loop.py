@@ -84,6 +84,7 @@ def forkserve_extra(
         extra["forkserve_node"] = int(node_id)
     if parent_node is not None:
         extra["forkserve_parent_node"] = int(parent_node)
+        extra["forkserve_parent"] = int(parent_node)
     return extra
 
 
@@ -306,7 +307,7 @@ def _groups_from_live(coord: Any, parent_req: str) -> tuple[list[list[Any]], int
     return groups, n_est, block_size
 
 
-def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int] | None:
+def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int, int] | None:
     """O(1) fork: reuse the parent's snapshotted (or live) block table."""
     extra = extra_of(request)
     parent_node = extra.get("forkserve_parent_node")
@@ -350,7 +351,8 @@ def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int] | None:
     ids = [b.block_id for g in groups for b in g]
     table.pin_ro(ids)
     table.note_fork(len(ids))
-    return mgr.create_kv_cache_blocks(tuple(groups)), n_tokens
+    # vLLM V1 scheduler unpacks (blocks, n_hit, shared_prefix_boundary).
+    return mgr.create_kv_cache_blocks(tuple(groups)), n_tokens, 0
 
 
 def TwoClassVllmScheduler(*args: Any, **kwargs: Any):  # noqa: N802

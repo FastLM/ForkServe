@@ -48,7 +48,7 @@ class TaskScore:
 
 
 def metric_for(workload: str) -> str:
-    if workload == "gsm8k":
+    if workload in ("gsm8k", "svamp", "gsmhard", "aime", "amc23", "math500"):
         return "accuracy"
     if workload == "game24":
         return "success_rate"
@@ -71,19 +71,99 @@ def extract_gsm8k_answer(text: str) -> str:
         m = _NUM.search(tail.replace("\n", " "))
         if m:
             return normalize_num(m.group(0))
+    boxed = extract_boxed(text)
+    if boxed:
+        m = _NUM.search(boxed.replace("\n", " "))
+        if m:
+            return normalize_num(m.group(0))
+        return boxed.strip()
     found = _NUM.findall(text.replace("\n", " "))
     return normalize_num(found[-1]) if found else ""
 
 
 def gsm8k_correct(text: str, gold: str) -> bool:
     pred = extract_gsm8k_answer(text)
-    g = normalize_num(gold)
-    if not pred or not g:
+    return _answers_match(pred, gold)
+
+
+def extract_boxed(text: str) -> str:
+    """Last ``\\boxed{...}`` with nested braces; empty if none."""
+    raw = text or ""
+    key = r"\boxed"
+    start = raw.rfind(key)
+    if start < 0:
+        return ""
+    i = start + len(key)
+    while i < len(raw) and raw[i].isspace():
+        i += 1
+    if i >= len(raw):
+        return ""
+    if raw[i] != "{":
+        rest = raw[i:].split("\n", 1)[0]
+        return rest.strip().strip("$")
+    depth = 0
+    out: list[str] = []
+    for ch in raw[i:]:
+        if ch == "{":
+            depth += 1
+            if depth == 1:
+                continue
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return "".join(out).strip()
+        if depth:
+            out.append(ch)
+    return "".join(out).strip()
+
+
+def _frac_to_slash(s: str) -> str:
+    pat = re.compile(r"\\(?:dfrac|tfrac|frac)\s*\{([^{}]+)\}\s*\{([^{}]+)\}")
+    prev = None
+    cur = s
+    while prev != cur:
+        prev = cur
+        cur = pat.sub(r"(\1)/(\2)", cur)
+    return cur
+
+
+def normalize_math_ans(text: str) -> str:
+    s = (text or "").strip()
+    if s.startswith("$") and s.endswith("$") and len(s) >= 2:
+        s = s[1:-1]
+    s = s.replace("\\left", "").replace("\\right", "")
+    s = s.replace("\\,", "").replace("\\!", "").replace("\\;", "").replace("\\:", "")
+    s = re.sub(r"\\text\{([^{}]*)\}", r"\1", s)
+    s = re.sub(r"\\mathrm\{([^{}]*)\}", r"\1", s)
+    s = _frac_to_slash(s)
+    s = s.replace("\\pi", "pi").replace("\\cdot", "*").replace("\\times", "*")
+    s = s.replace("{", "").replace("}", "").replace("$", "")
+    s = s.replace("\\", "")
+    s = s.replace(" ", "").replace(",", "")
+    if s.endswith("."):
+        s = s[:-1]
+    return s.lower()
+
+
+def _answers_match(pred: str, gold: str) -> bool:
+    p = normalize_math_ans(pred)
+    g = normalize_math_ans(gold)
+    if not p or not g:
         return False
+    if p == g:
+        return True
     try:
-        return abs(float(pred) - float(g)) < 1e-6
+        return abs(float(normalize_num(p)) - float(normalize_num(g))) < 1e-6
     except ValueError:
-        return pred == g
+        return False
+
+
+def math_correct(text: str, gold: str) -> bool:
+    """Contest / grade-school: boxed, ####, or last number vs gold."""
+    boxed = extract_boxed(text)
+    if boxed and _answers_match(boxed, gold):
+        return True
+    return gsm8k_correct(text, gold)
 
 
 def extract_game24_nums(gold: str) -> list[int]:
@@ -174,7 +254,7 @@ def quality_collapsed(workload: str, texts: Sequence[str], golds: Sequence[str])
     n = min(len(texts), len(golds))
     if n < 3:
         return False
-    if workload == "gsm8k":
+    if workload in ("gsm8k", "svamp", "gsmhard", "aime", "amc23", "math500"):
         preds = [extract_gsm8k_answer(t or "") for t in texts[:n]]
         return len(set(normalize_num(g) for g in golds[:n])) >= 3 and len(set(preds)) == 1
     if workload == "game24":
@@ -244,8 +324,10 @@ def humaneval_pass(completion: str, tests: str, prompt: str = "") -> bool:
 
 
 def pred_for(workload: str, text: str, gold: str = "", prompt: str = "") -> str:
-    if workload == "gsm8k":
+    if workload in ("gsm8k", "svamp", "gsmhard"):
         return extract_gsm8k_answer(text)
+    if workload in ("math500", "aime", "amc23"):
+        return extract_boxed(text) or extract_gsm8k_answer(text)
     if workload == "game24":
         return extract_game24_expr(text)
     if workload == "humaneval":
@@ -272,8 +354,10 @@ def score_task(
         text = texts[i] or ""
         gold = golds[i] or ""
         prompt = prompts[i] if i < len(prompts) else ""
-        if workload == "gsm8k":
+        if workload in ("gsm8k", "svamp", "gsmhard"):
             flags.append(gsm8k_correct(text, gold))
+        elif workload in ("math500", "aime", "amc23"):
+            flags.append(math_correct(text, gold))
         elif workload == "game24":
             flags.append(game24_correct(text, gold))
         elif workload == "humaneval":

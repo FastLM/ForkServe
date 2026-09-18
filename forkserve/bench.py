@@ -2,7 +2,8 @@
 
 Workloads
 
-* ``gsm8k`` — grade-school math, ToT / self-consistency fan-out on a shared stem.
+* ``gsm8k`` / ``svamp`` / ``gsmhard`` — grade-school math, ToT fan-out.
+* ``math500`` / ``aime`` / ``amc23`` — contest math, ToT fan-out, boxed gold.
 * ``game24`` — ToT paper 24-game; high branching, tiny trunk.
 * ``humaneval`` — function completion + pytest tool-idle (ReAct wrappers).
 * ``tot`` / ``react`` / ``multi`` — synthetic microbenchmarks of the same verbs.
@@ -83,20 +84,39 @@ def _eta_s(done: int, total: int, elapsed_s: float) -> str:
     if remain >= 90:
         return f"eta={remain / 60:.1f}m"
     return f"eta={remain:.0f}s"
-WORKLOADS = ("gsm8k", "game24", "humaneval", "tot", "react", "multi")
+WORKLOADS = (
+    "gsm8k",
+    "svamp",
+    "gsmhard",
+    "math500",
+    "aime",
+    "amc23",
+    "game24",
+    "humaneval",
+    "tot",
+    "react",
+    "multi",
+)
+GRADE_MATH = ("gsm8k", "svamp", "gsmhard")
+CONTEST_MATH = ("math500", "aime", "amc23")
 # GSM8K needs a finished #### line; 256 tokens still truncates 8B/14B.
 GSM8K_DECODE_DEFAULT = 512
+CONTEST_DECODE_DEFAULT = 768
 
 
 def workload_decode(args: argparse.Namespace, workload: str) -> int:
     """Per-workload decode. Tests that pass a tiny ``--decode`` keep that value."""
     n = int(getattr(args, "decode", 256) or 256)
-    if workload != "gsm8k":
+    if n < 64:
+        return n
+    if workload in CONTEST_MATH:
+        return max(n, CONTEST_DECODE_DEFAULT)
+    if workload not in GRADE_MATH:
         return n
     gs = getattr(args, "gsm8k_decode", None)
     if gs is not None:
         return int(gs)
-    return n if n < 64 else max(n, GSM8K_DECODE_DEFAULT)
+    return max(n, GSM8K_DECODE_DEFAULT)
 
 
 @dataclass
@@ -1491,6 +1511,78 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
     return merge_metrics(parts)
 
 
+def _math_workload_spec(name: str):
+    from forkserve import bench_tasks as t
+
+    table = {
+        "svamp": (t.load_svamp, t.numeric_math_trunk, t.gsm8k_thoughts),
+        "gsmhard": (t.load_gsmhard, t.numeric_math_trunk, t.gsm8k_thoughts),
+        "math500": (t.load_math500, t.contest_math_trunk, t.contest_thoughts),
+        "aime": (t.load_aime, t.contest_math_trunk, t.contest_thoughts),
+        "amc23": (t.load_amc23, t.contest_math_trunk, t.contest_thoughts),
+    }
+    if name not in table:
+        raise KeyError(name)
+    return table[name]
+
+
+def run_named_math_forkserve(eng: Any, cfg: Any, args: argparse.Namespace, workload: str) -> RunMetrics:
+    load, trunk_fn, thoughts_fn = _math_workload_spec(workload)
+    problems = load(args.limit)
+    n_dec = workload_decode(args, workload)
+    if getattr(args, "quality_only", False):
+        return run_quality_forkserve(
+            eng, args, workload, problems,
+            [trunk_fn(p) for p in problems],
+            [p.answer for p in problems],
+            decode_n=n_dec,
+        )
+    thoughts = thoughts_fn(args.branching)
+    parts: list[RunMetrics] = []
+    for start, batch in _iter_chunks(problems, args):
+        trunks = [trunk_fn(item) for item in batch]
+        row = run_tot_forest_forkserve(
+            eng, cfg, trunks, thoughts,
+            decode_n=n_dec, idle_ms=0.0, workload=workload,
+        )
+        _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _log_forest_chunk(args, "forkserve", workload, start, batch, len(problems), row, parts)
+        _close_all(eng)
+    return merge_metrics(parts)
+
+
+def run_named_math_vllm(
+    llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float,
+    args: argparse.Namespace, workload: str,
+) -> RunMetrics:
+    load, trunk_fn, thoughts_fn = _math_workload_spec(workload)
+    problems = load(args.limit)
+    n_dec = workload_decode(args, workload)
+    if getattr(args, "quality_only", False):
+        return run_quality_vllm(
+            llm, SamplingParams, TokensPrompt, system, args, workload, problems,
+            [trunk_fn(p) for p in problems],
+            [p.answer for p in problems],
+            decode_n=n_dec,
+        )
+    thoughts = thoughts_fn(args.branching)
+    parts: list[RunMetrics] = []
+    for start, batch in _iter_chunks(problems, args):
+        trunks = [trunk_fn(item) for item in batch]
+        row = run_tot_forest_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+            trunks, thoughts,
+            decode_n=n_dec, prefix_cache=(system == "vllm_apc"), workload=workload,
+        )
+        _set_golds(row, [p.answer for p in batch], _vllm_texts(llm, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _log_forest_chunk(args, system, workload, start, batch, len(problems), row, parts)
+    return merge_metrics(parts)
+
+
 def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str, cfg_bpt: float, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import game24_thoughts, game24_trunk, load_game24
 
@@ -1604,6 +1696,10 @@ def run_mock(args: argparse.Namespace) -> list[RunMetrics]:
     if "gsm8k" in args.workloads:
         rows.append(run_gsm8k_forkserve(eng, cfg, args))
         eng, cfg = _mock_engine(bpt)
+    for name in ("svamp", "gsmhard", "math500", "aime", "amc23"):
+        if name in args.workloads:
+            rows.append(run_named_math_forkserve(eng, cfg, args, name))
+            eng, cfg = _mock_engine(bpt)
     if "game24" in args.workloads:
         rows.append(run_game24_forkserve(eng, cfg, args))
         eng, cfg = _mock_engine(bpt)
@@ -1672,6 +1768,10 @@ def worker_main(args: argparse.Namespace) -> int:
         if "gsm8k" in args.workloads:
             rows.append(run_gsm8k_forkserve(eng, cfg, args))
             _close_all(eng)
+        for name in ("svamp", "gsmhard", "math500", "aime", "amc23"):
+            if name in args.workloads:
+                rows.append(run_named_math_forkserve(eng, cfg, args, name))
+                _close_all(eng)
         if "game24" in args.workloads:
             rows.append(run_game24_forkserve(eng, cfg, args))
             _close_all(eng)
@@ -1690,6 +1790,9 @@ def worker_main(args: argparse.Namespace) -> int:
     else:
         if "gsm8k" in args.workloads:
             rows.append(run_gsm8k_vllm(llm, SamplingParams, TokensPrompt, system, bpt, args))
+        for name in ("svamp", "gsmhard", "math500", "aime", "amc23"):
+            if name in args.workloads:
+                rows.append(run_named_math_vllm(llm, SamplingParams, TokensPrompt, system, bpt, args, name))
         if "game24" in args.workloads:
             rows.append(run_game24_vllm(llm, SamplingParams, TokensPrompt, system, bpt, args))
         if "humaneval" in args.workloads:
@@ -1775,8 +1878,8 @@ def default_tps(n_gpu: int, requested: Sequence[int] | None) -> list[int]:
 
 def format_table(rows: list[dict[str, Any]]) -> str:
     lines = [
-        "system           tp  workload  e2e_ms  fanout_ms  ttft_obs_ms  peak_kv  task_score  metric        kv_save  vs_recompute",
-        "-" * 124,
+        "system           tp  workload    e2e_ms  fanout_ms  ttft_obs_ms  peak_kv  task_score  metric        kv_save  vs_recompute",
+        "-" * 128,
     ]
     def _metric(row: dict[str, Any]) -> float:
         if row["workload"] in ("react", "humaneval") and float(row.get("ttft_from_obs_ms") or 0) > 0:
@@ -1799,7 +1902,7 @@ def format_table(rows: list[dict[str, Any]]) -> str:
         metric = str(r.get("task_metric") or "")
         sc_s = f"{float(score):10.3f}" if score is not None and float(score) >= 0 else "       n/a"
         lines.append(
-            f"{r['system']:<16} {r['tp']:>2}  {r['workload']:<8} "
+            f"{r['system']:<16} {r['tp']:>2}  {r['workload']:<10} "
             f"{r['e2e_ms']:7.1f}  {r['fanout_ms']:9.1f}  {r['ttft_from_obs_ms']:11.1f}  "
             f"{r['peak_kv_tokens']:7d}  {sc_s}  {metric:<12}  "
             f"{r['kv_saving']:7.2f}  {speed:5.2f}x"
@@ -2037,7 +2140,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--limit",
         type=int,
         default=4,
-        help="problems per gsm8k/game24/humaneval slice; 0 = entire jsonl/csv",
+        help="problems per math/coding slice; 0 = entire jsonl/csv",
     )
     p.add_argument(
         "--chunk",
