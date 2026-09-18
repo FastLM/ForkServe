@@ -59,6 +59,15 @@ class ForkServeConfig:
     prior_width: int = 2048
     prior_depth: int = 4
 
+    # ForkServe+: lazy abort, prune, spec-pool. Baseline forkserve leaves these off.
+    lazy_abort: bool = False
+    pointer_swap: bool = True
+    prune_enabled: bool = False
+    prune_threshold: float = 0.15
+    early_prune_frac: float = 0.20
+    spec_pool_frac: float = 0.0
+    decode_stop: tuple[str, ...] = ()
+
     extra: dict[str, float] = field(default_factory=dict)
 
     def prefill_ms(self, n_tokens: int) -> float:

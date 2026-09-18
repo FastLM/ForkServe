@@ -82,7 +82,9 @@ class TwoClassScheduler:
         """One tick: fill B_c then B_s from leftover token budget."""
         self.tick += 1
         dt = self.cfg.tick_ms
+        extra = int((self.cfg.extra or {}).get("spec_pool_tokens", 0) or 0)
         B_t = leftover_hint if leftover_hint is not None else self.cfg.max_batched_tokens
+        B_t = max(1, int(B_t) + extra)
 
         # Committed demand first (program-FCFS + PLAS). Eq. (6)/(7): B^s is
         # whatever remains after committed work takes its tokens this tick.

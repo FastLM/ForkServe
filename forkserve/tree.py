@@ -50,6 +50,7 @@ class Node:
     children: list[NodeId] = field(default_factory=list)
     counters: Counters = field(default_factory=Counters)
     join_open: bool = False
+    pages_released: bool = False
 
     @property
     def trunk_len(self) -> int:
@@ -78,6 +79,7 @@ class ContextTree:
         self.worker = worker
         self._nodes: dict[NodeId, Node] = {}
         self._next_id = 1
+        self._lazy_dead: list[NodeId] = []
         self.root: NodeId | None = None
         self.tip: NodeId | None = None
         self.opened_at = monotonic()
@@ -172,9 +174,8 @@ class ContextTree:
             parent=parent.table,
             alias_len=len(parent.tokens),
         )
-        # Alias: incref every page the parent currently maps.
-        for pid in self.pool.alias_pages(parent.table):
-            self.pool.incref(pid)
+        # Pointer swap: incref aliased frames, no KV memcpy.
+        self.pool.pointer_swap(self.pool.alias_pages(parent.table))
         node = Node(
             id=nid,
             session=self.session,
@@ -213,7 +214,7 @@ class ContextTree:
         node.last_decode_at = monotonic()
         self.last_decode_at = node.last_decode_at
 
-    def abort(self, nid: NodeId, *, cascade: bool = True) -> int:
+    def abort(self, nid: NodeId, *, cascade: bool = True, lazy: bool = False) -> int:
         """Mark v and descendants Dead; free residual pages (Lemma 3).
 
         Post-order: children release their fork-time alias increfs before the
@@ -223,15 +224,31 @@ class ContextTree:
         children, abort that ancestor and continue upward. The walk stops at the
         root, a committed/idle spine node, or a parent that still has a live child
         (example: C's four leaves die ⇒ C1, C2, then C; Root lives via A, B).
+
+        ``lazy`` only marks Dead and queues reclaim. Call ``drain_lazy()`` after
+        winner decode so abort does not sit on TTFT.
         """
         if nid not in self._nodes:
             return 0
-        freed = self._abort_down(nid)
+        freed = self._abort_down(nid, lazy=lazy)
         if cascade:
-            freed += self._cascade_orphans(nid)
+            freed += self._cascade_orphans(nid, lazy=lazy)
         return freed
 
-    def _abort_down(self, nid: NodeId) -> int:
+    def drain_lazy(self) -> int:
+        """Reclaim pages of lazily aborted nodes. Safe after winner decode."""
+        n = 0
+        for nid in self._lazy_dead:
+            node = self._nodes.get(nid)
+            if node is None or node.mode is not NodeMode.DEAD or node.pages_released:
+                continue
+            n += self._release_node(node)
+            node.pages_released = True
+            self.pool.lazy_decrefs += 1
+        self._lazy_dead.clear()
+        return n
+
+    def _abort_down(self, nid: NodeId, *, lazy: bool = False) -> int:
         order: list[NodeId] = []
         stack = [nid]
         seen: set[NodeId] = set()
@@ -247,12 +264,18 @@ class ContextTree:
             node = self._nodes[cur_id]
             if node.mode is NodeMode.DEAD:
                 continue
+            if lazy:
+                self._lazy_dead.append(cur_id)
+                node.mode = NodeMode.DEAD
+                node.counters.cancelled += 1
+                continue
             freed += self._release_node(node)
+            node.pages_released = True
             node.mode = NodeMode.DEAD
             node.counters.cancelled += 1
         return freed
 
-    def _cascade_orphans(self, nid: NodeId) -> int:
+    def _cascade_orphans(self, nid: NodeId, *, lazy: bool = False) -> int:
         """Abort Spec ancestors that no longer have any live child."""
         if nid not in self._nodes:
             return 0
@@ -268,7 +291,7 @@ class ContextTree:
             if self.children_of(parent.id, live_only=True):
                 break
             next_id = parent.parent
-            freed += self._abort_down(parent.id)
+            freed += self._abort_down(parent.id, lazy=lazy)
             parent_id = next_id
         return freed
 

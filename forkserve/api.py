@@ -8,14 +8,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from time import monotonic
-from typing import Iterable
+from typing import Iterable, Sequence
 from uuid import uuid4
 
 from forkserve.commit import CommitProtocol, CommitResult
 from forkserve.config import ForkServeConfig
 from forkserve.engine.protocol import DecodeRequest, EngineBackend, PrefillRequest
 from forkserve.join import JoinExecutor, JoinResult
-from forkserve.metrics import SessionMetrics
+from forkserve.metrics import FanoutBreakdown, SessionMetrics
 from forkserve.pages import PagePool
 from forkserve.planner import (
     Candidate,
@@ -64,6 +64,7 @@ class Engine:
     priors: CountMinPrior = field(init=False)
     ngrams: NGramResidual = field(init=False)
     metrics: dict[SessionId, SessionMetrics] = field(default_factory=dict)
+    last_fanout: FanoutBreakdown = field(default_factory=FanoutBreakdown)
     _pending_spec: dict[SessionId, list[PrefillChunk]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -338,35 +339,86 @@ class Engine:
         tree.tip = node
         return node
 
-    def abort(self, session: SessionId | str, node: NodeId) -> int:
+    def abort(self, session: SessionId | str, node: NodeId, *, lazy: bool | None = None) -> int:
+        lazy = self.config.lazy_abort if lazy is None else lazy
         tree = self.forest.get(SessionId(str(session)))
         victims = tree.live_subtree(node)
-        n = tree.abort(node)
+        n = tree.abort(node, lazy=lazy)
         self.scheduler.cancel_node(node)
         cancel = getattr(self.backend, "cancel_prefill", None)
         if callable(cancel):
             cancel(node)
         for vid in victims:
-            self._release_backend_node(tree.session, vid)
+            self._release_backend_node(tree.session, vid, lazy=lazy)
         self.metrics[tree.session].aborts += 1
-        # Spec ancestors that cascade-died also drop in-flight chunks.
         cur = tree.get(node).parent
         while cur is not None:
             parent = tree.get(cur)
             if parent.mode is not NodeMode.DEAD:
                 break
             self.scheduler.cancel_node(cur)
-            self._release_backend_node(tree.session, cur)
+            self._release_backend_node(tree.session, cur, lazy=lazy)
             self.metrics[tree.session].aborts += 1
             cur = parent.parent
         return n
 
-    def _release_backend_node(self, session: SessionId, node: NodeId) -> None:
+    def drain_aborts(self) -> int:
+        """Reclaim lazily aborted KV after winner decode (off the TTFT path)."""
+        n = 0
+        for tree in self.forest.live_trees():
+            n += tree.drain_lazy()
+        drain = getattr(self.backend, "drain_releases", None)
+        if callable(drain):
+            n += int(drain() or 0)
+        return n
+
+    def queue_fanout_prefills(
+        self,
+        session: SessionId | str,
+        kids: list[NodeId],
+        texts: Sequence[str] | None = None,
+        *,
+        winner: int = 0,
+    ) -> FanoutBreakdown:
+        """Queue GPU prefills; skip pruned siblings when plus-mode is on."""
+        from forkserve.prune import BranchPruner, BranchScore
+
+        sid = SessionId(str(session))
+        bd = FanoutBreakdown()
+        if self.config.prune_enabled and texts is not None:
+            ranked = BranchPruner(self.config, winner=winner).rank(texts)
+        else:
+            ranked = [BranchScore(i, True, 1.0, "all") for i in range(len(kids))]
+        bd.pointer_swaps = int(getattr(self.backend.pool, "pointer_swaps", 0))
+        bd.cow_copies = int(getattr(self.backend.pool, "cow_copies", 0))
+        for row in ranked:
+            if row.index >= len(kids):
+                continue
+            if row.keep:
+                self.queue_known_prefill(sid, kids[row.index])
+                bd.prefilled_branches += 1
+            else:
+                bd.pruned += 1
+                self.metrics[sid].pruned_branches += 1
+        self.last_fanout = bd
+        return bd
+
+    def _release_backend_node(
+        self,
+        session: SessionId,
+        node: NodeId,
+        *,
+        lazy: bool = False,
+    ) -> None:
         drop = getattr(self.backend, "release_node", None)
         if callable(drop):
-            drop(node, session=str(session))
+            try:
+                drop(node, session=str(session), lazy=lazy)
+            except TypeError:
+                drop(node, session=str(session))
 
     def close(self, session: SessionId | str) -> None:
+        self.drain_aborts()
         sid = SessionId(str(session))
         self.forest.close(sid)
         self.router.close(sid)
@@ -418,6 +470,8 @@ class Engine:
         if out:
             tree.append_tokens(tip.id, tuple(out), committed=True)
             self.metrics[tree.session].committed_tokens += len(out)
+        if self.config.lazy_abort:
+            self.drain_aborts()
         return tuple(out)
 
     def generate_many(
@@ -475,6 +529,8 @@ class Engine:
                 tree.append_tokens(tip.id, tokens, committed=True)
                 self.metrics[tree.session].committed_tokens += len(tokens)
             result.append(tokens)
+        if self.config.lazy_abort:
+            self.drain_aborts()
         return result
 
     def queue_known_prefill(self, session: SessionId | str, node: NodeId) -> None:

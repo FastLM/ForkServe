@@ -6,6 +6,35 @@ from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
+class FanoutBreakdown:
+    cow_ms: float = 0.0
+    prefill_ms: float = 0.0
+    abort_mark_ms: float = 0.0
+    abort_reclaim_ms: float = 0.0
+    pointer_swaps: int = 0
+    cow_copies: int = 0
+    pruned: int = 0
+    prefilled_branches: int = 0
+
+    @property
+    def fanout_ms(self) -> float:
+        return self.cow_ms + self.prefill_ms + self.abort_mark_ms
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "cow_ms": self.cow_ms,
+            "prefill_ms": self.prefill_ms,
+            "abort_mark_ms": self.abort_mark_ms,
+            "abort_reclaim_ms": self.abort_reclaim_ms,
+            "pointer_swaps": float(self.pointer_swaps),
+            "cow_copies": float(self.cow_copies),
+            "pruned": float(self.pruned),
+            "prefilled_branches": float(self.prefilled_branches),
+            "fanout_ms": self.fanout_ms,
+        }
+
+
+@dataclass(slots=True)
 class SessionMetrics:
     forks: int = 0
     speculates: int = 0
@@ -21,6 +50,7 @@ class SessionMetrics:
     committed_tokens: int = 0
     commit_tail_tokens: int = 0
     cancelled_chunks: int = 0
+    pruned_branches: int = 0
     ttft_ms: list[float] = field(default_factory=list)
     tbt_ms: list[float] = field(default_factory=list)
 

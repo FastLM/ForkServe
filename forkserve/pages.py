@@ -79,6 +79,9 @@ class PagePool:
         self._free: list[PageId] = []
         self._next = 1
         self.bytes_live = 0
+        self.pointer_swaps: int = 0
+        self.cow_copies: int = 0
+        self.lazy_decrefs: int = 0
 
     @property
     def page_size(self) -> int:
@@ -115,6 +118,15 @@ class PagePool:
             self._pages[pid] = page
         self.bytes_live += self.page_size * self.cfg.bytes_per_token
         return pid
+
+    def pointer_swap(self, pids: Iterable[PageId]) -> int:
+        """Alias pages by id only — no KV memcpy. Kernel slot map stays shared."""
+        n = 0
+        for pid in pids:
+            self.incref(pid)
+            n += 1
+        self.pointer_swaps += n
+        return n
 
     def incref(self, pid: PageId) -> None:
         self._pages[pid].ref += 1
@@ -154,6 +166,7 @@ class PagePool:
         if src is not None:
             new_page.handle = self.store.copy_rows(src, page.n_valid)
         new_page.n_valid = page.n_valid
+        self.cow_copies += 1
         self.decref(pid)
         return new_id
 
@@ -169,6 +182,7 @@ class PagePool:
         if src is not None:
             new_page.handle = self.store.copy_rows(src, keep_valid)
         new_page.n_valid = keep_valid
+        self.cow_copies += 1
         self.decref(pid)
         return new_id
 

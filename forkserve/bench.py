@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 
-SYSTEMS = ("vllm_recompute", "vllm_apc", "forkserve")
+SYSTEMS = ("vllm_recompute", "vllm_apc", "forkserve", "forkserve_plus")
 
 
 def _now_stamp() -> str:
@@ -158,6 +158,13 @@ class RunMetrics:
     quality_ref_score: float = -1.0
     quality_delta: float = 0.0
     quality_collapsed: bool = False
+    cow_ms: float = 0.0
+    prefill_ms: float = 0.0
+    abort_mark_ms: float = 0.0
+    abort_reclaim_ms: float = 0.0
+    pointer_swaps: int = 0
+    pruned_branches: int = 0
+    prefilled_branches: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -276,6 +283,8 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
     from forkserve.api import Engine
     from forkserve.config import ForkServeConfig
     from forkserve.engine.vllm_backend import VllmBackend
+    from forkserve.prune import plus_config
+    from forkserve.spec_pool import extra_batched_tokens
 
     bpt = bytes_per_token_from_config(model)
     cfg = ForkServeConfig(
@@ -284,6 +293,12 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
         bytes_per_token=bpt,
         num_workers=1,
     )
+    plus = str(getattr(args, "system", "")) == "forkserve_plus"
+    if plus:
+        cfg = plus_config(cfg)
+        cfg.extra["spec_pool_tokens"] = float(
+            extra_batched_tokens(cfg.max_batched_tokens, 0.26, cfg.spec_pool_frac)
+        )
     backend = VllmBackend(
         config=cfg,
         model=model,
@@ -664,6 +679,13 @@ def merge_metrics(parts: Sequence[RunMetrics]) -> RunMetrics:
         notes=f"{sum(p.sessions for p in parts)} items; {len(parts)} chunks; {a.notes}",
         decode_ids=decode_ids,
         item_ids=ids,
+        cow_ms=sum(p.cow_ms for p in parts),
+        prefill_ms=sum(p.prefill_ms for p in parts),
+        abort_mark_ms=sum(p.abort_mark_ms for p in parts),
+        abort_reclaim_ms=sum(p.abort_reclaim_ms for p in parts),
+        pointer_swaps=sum(p.pointer_swaps for p in parts),
+        pruned_branches=sum(p.pruned_branches for p in parts),
+        prefilled_branches=sum(p.prefilled_branches for p in parts),
     )
     return _set_golds(out, golds, texts, prompts)
 
@@ -1086,6 +1108,9 @@ def run_tot_forest_forkserve(
     residuals: list[int] = []
     trunk_n = 0
     k = max(len(thought_ids), 1)
+    plus = bool(getattr(eng.config, "prune_enabled", False) or getattr(eng.config, "lazy_abort", False))
+    sys_name = "forkserve_plus" if plus else "forkserve"
+    t_cow0 = _now()
     for h in handles:
         tree = eng.tree(h.id)
         trunk_n = len(tree.get(h.tip).tokens)
@@ -1094,12 +1119,19 @@ def run_tot_forest_forkserve(
             nid = eng.fork(h.id, h.tip, f"thought-{i}", known)
             kids.append(nid)
             residuals.append(len(known))
-            eng.queue_known_prefill(h.id, nid)
         all_kids.append(kids)
+        if hasattr(eng, "queue_fanout_prefills"):
+            eng.queue_fanout_prefills(h.id, kids, list(thoughts), winner=0)
+        else:
+            for nid in kids:
+                eng.queue_known_prefill(h.id, nid)
+    t_cow = _now()
     eng.flush()
     t_fan = _now()
+    t_ab0 = _now()
     for h, kids in zip(handles, all_kids, strict=True):
         _select_winner(eng, h.id, kids, winner=0)
+    t_ab1 = _now()
     peak = _resident_kv(eng, handles)
     if hasattr(eng, "generate_many"):
         outs = eng.generate_many([h.id for h in handles], decode_n)
@@ -1109,13 +1141,14 @@ def run_tot_forest_forkserve(
     t1 = _now()
     cow, clone, saving = _peak_memory(cfg, trunk_n * len(handles), residuals, len(handles) * k)
     hits = [eng.metrics[h.id].known_suffix_hit_rate for h in handles]
+    bd = getattr(eng, "last_fanout", None)
     return RunMetrics(
-        system="forkserve",
+        system=sys_name,
         workload=workload,
         tp=0,
         e2e_ms=(t1 - t0) * 1000.0,
-        fanout_ms=(t_fan - t_open) * 1000.0,
-        decode_ms=(t1 - t_fan) * 1000.0,
+        fanout_ms=(t_fan - t_open) * 1000.0 + (t_ab1 - t_ab0) * 1000.0,
+        decode_ms=(t1 - t_ab1) * 1000.0,
         trunk_tokens=trunk_n,
         residual_tokens=residuals,
         peak_kv_tokens=int(peak),
@@ -1129,7 +1162,16 @@ def run_tot_forest_forkserve(
         decode_ids=[[int(t) for t in o] for o in outs],
         sessions=len(handles),
         branching=len(thoughts),
-        notes=f"{len(handles)} items; CoW fan-out then abort losers; peak is winner spine",
+        notes=(
+            f"{len(handles)} items; CoW fan-out then "
+            f"{'lazy' if plus else 'sync'} abort losers; peak is winner spine"
+        ),
+        cow_ms=(t_cow - t_cow0) * 1000.0,
+        prefill_ms=(t_fan - t_cow) * 1000.0,
+        abort_mark_ms=(t_ab1 - t_ab0) * 1000.0,
+        pointer_swaps=int(getattr(bd, "pointer_swaps", 0) or 0),
+        pruned_branches=int(getattr(bd, "pruned", 0) or 0),
+        prefilled_branches=int(getattr(bd, "prefilled_branches", 0) or 0),
     )
 
 
@@ -1739,7 +1781,7 @@ def worker_main(args: argparse.Namespace) -> int:
     bpt = bytes_per_token_from_config(model)
     rows: list[RunMetrics] = []
 
-    if system == "forkserve":
+    if system in ("forkserve", "forkserve_plus"):
         eng, backend, cfg = _engine(model, tp, args)
         tokenize = backend.tokenize
         h = eng.open("warmup ping")
@@ -1763,7 +1805,7 @@ def worker_main(args: argparse.Namespace) -> int:
     ]
     prefix = system == "vllm_apc"
 
-    if system == "forkserve":
+    if system in ("forkserve", "forkserve_plus"):
         assert eng is not None and cfg is not None
         if "gsm8k" in args.workloads:
             rows.append(run_gsm8k_forkserve(eng, cfg, args))
@@ -1821,11 +1863,11 @@ def worker_main(args: argparse.Namespace) -> int:
 
     for r in rows:
         r.tp = tp
-    if system == "forkserve" and backend is not None:
+    if system in ("forkserve", "forkserve_plus") and backend is not None:
         closer = getattr(backend, "shutdown", None)
         if callable(closer):
             closer()
-    elif system != "forkserve":
+    elif system not in ("forkserve", "forkserve_plus"):
         try:
             del llm
         except Exception:

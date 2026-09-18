@@ -129,6 +129,8 @@ class CowBlockTable:
     alias_blocks: int = 0
     cow_copies: int = 0
     releases: int = 0
+    pointer_swaps: int = 0
+    tombstones: list[tuple[str | None, int]] = field(default_factory=list)
 
     def pin_ro(self, block_ids: Iterable[int] | int) -> None:
         if isinstance(block_ids, int):
@@ -148,6 +150,7 @@ class CowBlockTable:
     def note_fork(self, n_blocks: int) -> None:
         self.forks += 1
         self.alias_blocks += n_blocks
+        self.pointer_swaps += n_blocks
 
     def note_cow_copy(self) -> None:
         self.cow_copies += 1
@@ -171,8 +174,17 @@ class CowBlockTable:
         self.node_snap[key] = snap
         return snap
 
-    def release_node(self, node_id: int, *, session: str | None = None) -> bool:
+    def release_node(
+        self,
+        node_id: int,
+        *,
+        session: str | None = None,
+        lazy: bool = False,
+    ) -> bool:
         """Drop a dead child's snapshot. Trunk pins stay for live siblings."""
+        if lazy:
+            self.tombstones.append((session, int(node_id)))
+            return True
         key = cow_node_key(session, node_id)
         if key is None:
             return False
@@ -183,14 +195,27 @@ class CowBlockTable:
             self.releases += 1
         return had
 
+    def drain_releases(self) -> int:
+        pending = list(self.tombstones)
+        self.tombstones.clear()
+        n = 0
+        for session, node_id in pending:
+            if self.release_node(node_id, session=session, lazy=False):
+                n += 1
+        return n
 
-def release_cow_node(node_id: int, *, session: str | None = None) -> int:
+
+def release_cow_node(node_id: int, *, session: str | None = None, lazy: bool = False) -> int:
     """Forget aborted-node snaps on every live BlockPool CoW table."""
     n = 0
     for table in _COW_TABLES:
-        if table.release_node(int(node_id), session=session):
+        if table.release_node(int(node_id), session=session, lazy=lazy):
             n += 1
     return n
+
+
+def drain_cow_releases() -> int:
+    return sum(table.drain_releases() for table in _COW_TABLES)
 
 
 def cow_of(block_pool: Any) -> CowBlockTable:

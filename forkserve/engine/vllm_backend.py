@@ -171,7 +171,7 @@ class VllmBackend:
         seed: int | None = None,
         session: str | None = None,
     ) -> Any:
-        return self._SamplingParams(
+        kwargs: dict[str, Any] = dict(
             max_tokens=max_tokens,
             temperature=0.0,
             seed=seed,
@@ -182,6 +182,10 @@ class VllmBackend:
                 session=session,
             ),
         )
+        stops = tuple(self.config.decode_stop or ())
+        if stops and not speculative:
+            kwargs["stop"] = list(stops)
+        return self._SamplingParams(**kwargs)
 
     def _generate(
         self,
@@ -377,10 +381,14 @@ class VllmBackend:
         self._pending = [r for r in self._pending if r.node_id != node_id]
         return None
 
-    def release_node(self, node_id: NodeId, session: str | None = None) -> None:
-        """Forget CoW snapshots for an aborted thought / wrap sibling."""
+    def release_node(self, node_id: NodeId, session: str | None = None, lazy: bool = False) -> None:
         self._pending = [r for r in self._pending if r.node_id != node_id]
-        release_cow_node(int(node_id), session=session)
+        release_cow_node(int(node_id), session=session, lazy=lazy)
+
+    def drain_releases(self) -> int:
+        from forkserve.engine.vllm_loop import drain_cow_releases
+
+        return drain_cow_releases()
 
     def tbt_headroom_ms(self) -> float:
         return max(0.0, self.config.tbt_slo_ms * 0.4)
