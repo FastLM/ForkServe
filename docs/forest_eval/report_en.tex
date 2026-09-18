@@ -84,6 +84,7 @@ The same storage ordering holds on four-problem slices of GSM8K, Game24, and Hum
 A second run compares APC and ForkServe on seven Tree-of-Thoughts math files ($n{=}40$--$80$) for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B, at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 Peak KV is $0.58$--$0.80\times$ APC on every file and does not change when the tensor width doubles: peak tracks the committed path, not the number of ranks.
 Generate time at $\mathrm{tp}{=}4$ is $0.56$--$0.66\times$ the two-GPU run and stays within a few percent of APC on Qwen; on DeepSeek-R1 with $D{=}2048$ it stays within $13\%$ and the $513$-item micro-average is $+2$\,pp over APC at both widths.
+An analytical concurrency sweep that plugs the measured DeepSeek GSM8K peaks into \eqref{eq:conc} raises the SLO-feasible QPS from $192$ (APC) to $256$ (ForkServe+) and peak decode throughput by $35\%$.
 \end{abstract}
 
 \section{Baselines and method}
@@ -201,10 +202,11 @@ G. Qwen3-14B math, two GPUs & $2$ & $0,1$ & $40$--$80$; batches of $8$ & same as
 H. Qwen3-14B math, four GPUs & $4$ & $0$--$3$ & same files as E & same as E \\
 I. DeepSeek-R1 8B math, two GPUs & $2$ & $0,1$ & $40$--$80$; batches of $8$; $D{=}2048$ & same as E \\
 J. DeepSeek-R1 8B math, four GPUs & $4$ & $0$--$3$ & same files as I & same as I \\
+K. ForkServe+ concurrency & --- & analytical & GSM8K peaks $1563$/$1163$ & QPS / P99 TTFT sweep \\
 \bottomrule
 \end{tabular}
 \caption{Configurations and datasets.
-Later sections report A--C in full on Qwen3-14B, then G--H (14B), E--F (8B), and I--J (DeepSeek-R1 8B) on the seven-file math suite (APC vs.\ ForkServe only).
+Later sections report A--C in full on Qwen3-14B, then G--H (14B), E--F (8B), and I--J (DeepSeek-R1 8B) on the seven-file math suite (APC vs.\ ForkServe only), then K (ForkServe+ concurrency from those peaks).
 On D, recompute and APC are complete; ForkServe on the full Game24 and HumanEval files is in progress.}
 \end{table}
 
@@ -1475,6 +1477,204 @@ The abort/CoW tax is tenths of a second against $56$--$179\,\mathrm{s}$ generate
 The storage-efficient serving check \eqref{eq:goal} against APC holds on all seven files at both tensor widths.
 Mean peak-KV saving versus APC is $28.9\%$; decode share of e2e is $0.99$.
 
+\section{Cross-model summary}
+
+The seven-file suite is the same $513$ items on three checkpoints.
+Peak KV for Qwen3-8B and Qwen3-14B is identical (same tokenizer and prompts); DeepSeek-R1 uses a Llama tokenizer and $D{=}2048$, so the peaks shift by a few tens of tokens but the FS/APC ratio stays in the same band.
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+Model & $\mathrm{tp}$ & APC acc & FS acc & $\Delta$ & peak FS/APC & FS e2e vs.\ APC & $4/2$ \\
+\midrule
+Qwen3-8B & $2$ & $0.618$ ($317$) & $\mathbf{0.635}$ ($326$) & $+1.8$\,pp & $0.62$--$0.80$ & within $3\%$ & --- \\
+Qwen3-8B & $4$ & $\mathbf{0.622}$ ($319$) & $0.608$ ($312$) & $-1.4$\,pp & $0.62$--$0.80$ & within $6\%$ & $0.66$ \\
+Qwen3-14B & $2$ & $0.591$ ($303$) & $\mathbf{0.596}$ ($306$) & $+0.6$\,pp & $0.62$--$0.80$ & within $5\%$ & --- \\
+Qwen3-14B & $4$ & $\mathbf{0.591}$ ($303$) & $0.577$ ($296$) & $-1.4$\,pp & $0.62$--$0.80$ & within $2\%$ & $0.61$--$0.64$ \\
+DeepSeek-R1 8B & $2$ & $0.368$ ($189$) & $\mathbf{0.388}$ ($199$) & $+2.0$\,pp & $0.58$--$0.77$ & $-0.5\%$ pool & --- \\
+DeepSeek-R1 8B & $4$ & $0.374$ ($192$) & $\mathbf{0.396}$ ($203$) & $+2.1$\,pp & $0.58$--$0.77$ & $+1.3\%$ pool & $0.56$--$0.64$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Micro-average accuracy and system summary on the $513$-item union.
+Storage ratios are unchanged by tensor width.
+Quality stays within a few problems of APC on Qwen and is ahead on DeepSeek-R1.
+Four-GPU wall-clock is $0.56$--$0.66\times$ two GPUs on every checkpoint.}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=2.15cm,y=2.55cm]
+  \def\bw{0.18}
+  \foreach \y in {0.0,0.25,0.50,0.75} {
+    \draw[Rule] (-0.65,\y) -- (5.55,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.72,\y) {\y};
+  }
+  \foreach \i/\lab/\atwo/\ftwo/\afour/\ffour in {
+    0/Qwen3-8B/0.618/0.635/0.622/0.608,
+    1/Qwen3-14B/0.591/0.596/0.591/0.577,
+    2/R1-8B/0.368/0.388/0.374/0.396} {
+    \fill[APC]  ({\i-1.5*\bw-\bw},0) rectangle ({\i-0.5*\bw-\bw},\atwo);
+    \fill[FS]   ({\i-0.5*\bw-\bw},0) rectangle ({\i-0.5*\bw},\ftwo);
+    \fill[APCp] ({\i-0.5*\bw},0) rectangle ({\i+0.5*\bw},\afour);
+    \fill[FSp]  ({\i+0.5*\bw},0) rectangle ({\i+1.5*\bw},\ffour);
+    \node[font=\scriptsize,anchor=east,rotate=20] at (\i,-0.04) {\lab};
+  }
+  \draw[Ink] (-0.65,0) -- (5.55,0);
+  \fill[APC] (0.1,0.82) rectangle (0.33,0.90);
+  \node[font=\scriptsize,anchor=west] at (0.37,0.86) {APC $\mathrm{tp}{=}2$};
+  \fill[FS] (2.0,0.82) rectangle (2.23,0.90);
+  \node[font=\scriptsize,anchor=west] at (2.27,0.86) {FS $\mathrm{tp}{=}2$};
+  \fill[APCp] (0.1,0.70) rectangle (0.33,0.78);
+  \node[font=\scriptsize,anchor=west] at (0.37,0.74) {APC $\mathrm{tp}{=}4$};
+  \fill[FSp] (2.0,0.70) rectangle (2.23,0.78);
+  \node[font=\scriptsize,anchor=west] at (2.27,0.74) {FS $\mathrm{tp}{=}4$};
+  \node[font=\small,anchor=south] at (2.4,0.94) {Micro-average accuracy, $n{=}513$};
+\end{tikzpicture}
+\caption{Pool accuracy across checkpoints.
+Orange sits on blue inside each model; the vertical gap between Qwen and R1 is the checkpoint and $D{=}2048$, not APC vs.\ ForkServe.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.22cm,y=2.8cm]
+  \def\bw{0.28}
+  \foreach \y in {0.50,0.60,0.70,0.80,0.90} {
+    \draw[Rule] (-0.45,\y) -- (6.85,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.52,\y) {\y};
+  }
+  \foreach \i/\lab/\qwen/\rone in {
+    0/GSM8K/0.75/0.74,
+    1/SVAMP/0.71/0.70,
+    2/GSM-H/0.73/0.72,
+    3/MATH/0.76/0.72,
+    4/AIME/0.80/0.77,
+    5/AMC23/0.78/0.74,
+    6/G24/0.62/0.58} {
+    \fill[APC] ({\i-\bw},0.50) rectangle ({\i},{\qwen});
+    \fill[FS] ({\i},0.50) rectangle ({\i+\bw},{\rone});
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,0.46) {\lab};
+  }
+  \draw[Ink] (-0.45,0.50) -- (6.85,0.50);
+  \fill[APC] (4.2,0.92) rectangle (4.43,0.97);
+  \node[font=\scriptsize,anchor=west] at (4.47,0.945) {Qwen $8$B/$14$B};
+  \fill[FS] (4.2,0.84) rectangle (4.43,0.89);
+  \node[font=\scriptsize,anchor=west] at (4.47,0.865) {DeepSeek-R1};
+  \node[font=\small,anchor=south] at (3.2,1.00) {Peak KV, FS/APC};
+\end{tikzpicture}
+\caption{Storage ratio by file.
+Qwen3-8B and Qwen3-14B share the left bar.
+Every ratio is below $1$; Game24 is the largest abort gap on both families.}
+\end{figure}
+
+\section{ForkServe+ concurrency (setting K)}
+
+Setting K does not rerun the GPU forest.
+It takes the measured DeepSeek-R1 GSM8K peaks ($M_{\mathrm{APC}}{=}1563$ tokens, $M_{\mathrm{spine}}{=}1163$) and the capacity identity \eqref{eq:conc}, with an $8$\,GiB KV pool after weights on one A100 ($b{=}147456$\,B/token).
+That yields $C^{\mathrm{APC}}{=}37$ concurrent trees and $C^{\mathrm{FS}}{=}50$ ($+35\%$).
+A mock control-plane microbench on the same ToT shape records prune: ForkServe+ skips two of four residuals ($2$ prefilled vs.\ $4$) and cuts abort-mark from $0.22$ to $0.10$\,ms; those times are not GPU wall-clock.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ & prefilled & pruned & abort-mark (ms) & fan-out (ms) & CoW (ms) & peak KV \\
+\midrule
+ForkServe & $4$ & $0$ & $0.22$ & $1.31$ & $1.09$ & $1064$ \\
+ForkServe+ & $2$ & $2$ & $0.10$ & $1.65$ & $1.55$ & $1064$ \\
+\bottomrule
+\end{tabular}
+\caption{Mock ToT micro-fan-out ($8$ sessions, $k{=}4$).
+Plus prunes two residuals before GPU prefill; peak KV is still the committed path.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}rrrrrrrr@{}}
+\toprule
+QPS & in-flight & APC run & FS run & APC tok/s & FS+ tok/s & APC p99 (s) & FS+ p99 (s) \\
+\midrule
+$8$   & $3$  & $3$  & $3$  & $1920$  & $1920$  & $0.020$ & $0.020$ \\
+$16$  & $6$  & $6$  & $6$  & $3840$  & $3840$  & $0.020$ & $0.020$ \\
+$32$  & $13$ & $13$ & $13$ & $8320$  & $8320$  & $0.020$ & $0.020$ \\
+$48$  & $19$ & $19$ & $19$ & $12160$ & $12160$ & $0.020$ & $0.020$ \\
+$64$  & $26$ & $26$ & $26$ & $16640$ & $16640$ & $0.020$ & $0.020$ \\
+$96$  & $38$ & $37$ & $38$ & $23680$ & $24320$ & $0.042$ & $0.020$ \\
+$128$ & $51$ & $37$ & $50$ & $23680$ & $32000$ & $0.323$ & $0.036$ \\
+$192$ & $77$ & $37$ & $50$ & $23680$ & $32000$ & $0.885$ & $0.452$ \\
+$256$ & $102$& $37$ & $50$ & $23680$ & $32000$ & $1.425$ & $0.852$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Analytical QPS sweep from \eqref{eq:conc} with GSM8K peaks $1563$ vs.\ $1163$.
+APC saturates at $37$ slots / $23680$ tok/s; ForkServe+ at $50$ / $32000$ tok/s ($+35\%$).
+Max QPS with P99 TTFT $\le 1\,\mathrm{s}$ is $192$ (APC) vs.\ $256$ (ForkServe+).}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=0.032cm,y=0.00011cm]
+  \foreach \y in {0,8000,16000,24000,32000} {
+    \draw[Rule] (0,\y) -- (270,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-6,\y) {\y};
+  }
+  \draw[Ink] (0,0) -- (270,0);
+  \draw[Ink] (0,0) -- (0,34000);
+  \foreach \q/\apc/\fs in {
+    8/1920/1920, 16/3840/3840, 32/8320/8320, 48/12160/12160,
+    64/16640/16640, 96/23680/24320, 128/23680/32000, 192/23680/32000, 256/23680/32000} {
+    \fill[APC] ({\q-5},0) rectangle ({\q},\apc);
+    \fill[FS] ({\q},0) rectangle ({\q+5},\fs);
+  }
+  \foreach \q in {8,64,128,192,256} {
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\q,-800) {\q};
+  }
+  \fill[APC] (170,30000) rectangle (182,31200);
+  \node[font=\scriptsize,anchor=west] at (186,30600) {APC};
+  \fill[FS] (210,30000) rectangle (222,31200);
+  \node[font=\scriptsize,anchor=west] at (226,30600) {FS+};
+  \node[font=\small,anchor=south] at (128,33000) {Decode throughput (tok/s) vs.\ offered QPS};
+\end{tikzpicture}
+\caption{Setting K throughput.
+The two stacks match until the APC slot cap ($37$ trees).
+ForkServe+ continues to $50$ trees / $32000$ tok/s.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=0.032cm,y=2.4cm]
+  \foreach \y in {0.0,0.5,1.0,1.5} {
+    \draw[Rule] (0,\y) -- (270,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-6,\y) {\y};
+  }
+  \draw[Ink] (0,0) -- (270,0);
+  \draw[dashed,Mute] (0,1.0) -- (270,1.0);
+  \node[font=\scriptsize,Mute,anchor=west] at (272,1.0) {SLO};
+  \foreach \q/\apc/\fs in {
+    8/0.020/0.020, 16/0.020/0.020, 32/0.020/0.020, 48/0.020/0.020,
+    64/0.020/0.020, 96/0.042/0.020, 128/0.323/0.036, 192/0.885/0.452, 256/1.425/0.852} {
+    \fill[APC] ({\q-5},0) rectangle ({\q},\apc);
+    \fill[FS] ({\q},0) rectangle ({\q+5},\fs);
+  }
+  \foreach \q in {8,64,128,192,256} {
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\q,-0.08) {\q};
+  }
+  \fill[APC] (170,1.55) rectangle (182,1.65);
+  \node[font=\scriptsize,anchor=west] at (186,1.60) {APC};
+  \fill[FS] (210,1.55) rectangle (222,1.65);
+  \node[font=\scriptsize,anchor=west] at (226,1.60) {FS+};
+  \node[font=\small,anchor=south] at (128,1.72) {P99 TTFT (s) vs.\ offered QPS};
+\end{tikzpicture}
+\caption{Setting K tail latency.
+APC crosses the $1\,\mathrm{s}$ SLO between $192$ and $256$ QPS; ForkServe+ remains under the SLO at $256$.}
+\end{figure}
+
 \section{Discussion}
 
 Recompute copies the trunk on every branch; APC reuses it after a hash hit and already removes most of $M_{\mathrm{rec}}$.
@@ -1485,6 +1685,7 @@ Settings B and C check Game24, HumanEval, and $\mathrm{tp}{=}2$ versus $\mathrm{
 Settings G and H run the seven-file math suite on Qwen3-14B: the same peak ratios $0.62$--$0.80$, pool accuracy within $7$ problems of APC, and $T_{\mathrm{e2e}}$ within a few percent, with four-GPU wall-clock $0.61$--$0.64\times$ two GPUs.
 Settings E and F repeat that recipe on Qwen3-8B, where four-GPU time scales by $0.66$.
 Settings I and J repeat it on DeepSeek-R1-Distill-Llama-8B with $D{=}2048$: peak $0.58$--$0.77\times$ APC, pool accuracy $+10$ and $+11$ problems, and four-GPU time $0.56$--$0.64\times$ two GPUs.
+Setting K plugs those GSM8K peaks into \eqref{eq:conc}: $35\%$ more concurrent trees, $35\%$ more saturated tok/s, and SLO-feasible QPS $256$ vs.\ $192$.
 
 \section{Conclusion}
 
@@ -1507,6 +1708,7 @@ On Qwen3-14B (settings G and H) and Qwen3-8B (settings E and F), seven math file
 On DeepSeek-R1-Distill-Llama-8B (settings I and J) the same files with $D{=}2048$ give $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.58,0.77]$, micro-accuracy $+2.0$ and $+2.1$\,pp over APC, and $T_{\mathrm{e2e}}$ $-0.5\%$ / $+1.3\%$.
 Generate time at four GPUs is $0.56$--$0.66\times$ the two-GPU run and stays with APC.
 Where $k{=}4$, $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ sits in $[0.58,0.80]$; where $k{=}2$, the ratio rises to $0.94$, as \eqref{eq:gap} predicts when residuals are large relative to $L$.
+Setting K turns that $M$ gap into concurrency: $C^{\mathrm{FS}}/C^{\mathrm{APC}}{=}50/37$ and $35\%$ more peak tok/s under a $1\,\mathrm{s}$ P99 TTFT SLO.
 
 The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.
 Those ForkServe jobs will resume when the four A100s are free.
@@ -1514,7 +1716,7 @@ They test $\Delta>0$ at full $n$ on short trunks (Game24) and on wrap-dominated 
 
 Further work targets the terms that still limit $\Theta$.
 Fan-out $T_{\mathrm{fan}}^{\mathrm{FS}}$ is above $T_{\mathrm{fan}}^{\mathrm{APC}}$ at matched $W$; reducing abort and copy-on-write overhead should close that micro-gap while keeping $M_{\mathrm{spine}}$.
-A concurrent-load experiment should measure $C$ and $\Theta$ on the live scheduler.
+A live-scheduler concurrent-load experiment should confirm the analytical $C$ and $\Theta$ of setting K.
 We also plan a mix of committed thoughts with speculative branches, to test whether $M_{\mathrm{spine}}$ remains the right peak when some children are guessed.
 
 \end{document}
