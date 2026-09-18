@@ -9,7 +9,7 @@ from dataclasses import dataclass
 class ToolWrappers:
     # Default matches Qwen3-8B (the bench model). Llama3 tokens on Qwen
     # leaked <|eot_id|> and wasted the short decode budget.
-    style: str = "qwen"  # qwen | openai_xml | hermes | llama | bfcl
+    style: str = "qwen"  # qwen | openai_xml | hermes | llama | bfcl | deepseek_r1
 
     def chat(self, system: str, user: str) -> str:
         if self.style == "qwen":
@@ -17,6 +17,12 @@ class ToolWrappers:
                 f"<|im_start|>system\n{system}<|im_end|>\n"
                 f"<|im_start|>user\n{user}<|im_end|>\n"
                 f"<|im_start|>assistant\n"
+            )
+        if self.style == "deepseek_r1":
+            # Official R1-distill template: bos + system + User/Assistant + <think>.
+            return (
+                f"<｜begin▁of▁sentence｜>{system}"
+                f"<｜User｜>{user}<｜Assistant｜><think>\n"
             )
         return (
             f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"

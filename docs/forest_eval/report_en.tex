@@ -81,9 +81,9 @@ On the GSM8K test set ($n{=}1319$, tensor parallel $2$), peak resident KV is bel
 Official accuracy is $0.845$ vs.\ $0.844$, and generation takes $18.9$ vs.\ $18.6$ minutes: less cache at APC-level latency.
 The same storage ordering holds on four-problem slices of GSM8K, Game24, and HumanEval at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$, with end-to-end time within $2\%$ of APC.
 
-A second run on Qwen3-8B compares APC and ForkServe on seven Tree-of-Thoughts math files ($n{=}40$--$80$) at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
+A second run compares APC and ForkServe on seven Tree-of-Thoughts math files ($n{=}40$--$80$) for both Qwen3-14B and Qwen3-8B, at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 Peak KV is $0.62$--$0.80\times$ APC on every file and does not change when the tensor width doubles: peak tracks the committed path, not the number of ranks.
-Generate time at $\mathrm{tp}{=}4$ is $0.66\times$ the two-GPU run and stays within $3\%$ of APC.
+Generate time at $\mathrm{tp}{=}4$ is $0.61$--$0.66\times$ the two-GPU run and stays within a few percent of APC.
 \end{abstract}
 
 \section{Baselines and method}
@@ -138,15 +138,15 @@ They differ by dataset, problem count, batching, and tensor-parallel width.
 Parameter & Specification \\
 \midrule
 Node & four NVIDIA A100-SXM4 40GB \\
-Model & Qwen3-14B (settings A--C) and Qwen3-8B (settings E, F), \texttt{bfloat16} \\
+Model & Qwen3-14B (settings A--C, G, H) and Qwen3-8B (settings E, F), \texttt{bfloat16} \\
 Max sequence length & $4096$ \\
 Prefill & chunked; at most $2048$ batched tokens \\
 Systems & vLLM recompute, vLLM APC, ForkServe \\
 \bottomrule
 \end{tabular}
 \caption{Hardware and engine.
-Tensor parallel $\mathrm{tp}{=}2$ places the model on GPU $0,1$ ($\approx 38497$\,MiB each on Qwen3-14B; $\approx 37305$--$37579$\,MiB each on Qwen3-8B).
-$\mathrm{tp}{=}4$ uses GPU $0$--$3$ ($\approx 38797$\,MiB each on Qwen3-14B; $\approx 37599$--$37665$\,MiB each on Qwen3-8B).
+Tensor parallel $\mathrm{tp}{=}2$ places the model on GPU $0,1$ ($\approx 38497$\,MiB each on the full GSM8K 14B run; $\approx 37381$--$37733$\,MiB on the 14B math suite; $\approx 37305$--$37579$\,MiB on Qwen3-8B).
+$\mathrm{tp}{=}4$ uses GPU $0$--$3$ ($\approx 38797$\,MiB each on settings B--C; $\approx 37691$--$37871$\,MiB on the 14B math suite; $\approx 37599$--$37665$\,MiB on Qwen3-8B).
 Peak KV (tokens) is the storage metric; latency scales with $\mathrm{tp}$.}
 \end{table}
 
@@ -174,7 +174,7 @@ GSM8K: median $43$ words, median $3$ calculation steps, gold extracted at \textt
 Game24: $719$ easy / $573$ medium / $70$ hard by published solve rate; success is a valid expression to $24$ (settings E and F use decode $512$ on an $80$-item prefix).
 HumanEval: median $396$ prompt characters, mean $8.1$ asserts; pass@1 is \texttt{prompt+body+check}.
 ReAct idle for wrap+recovery is $2000\,\mathrm{ms}$.
-Settings E and F additionally score SVAMP and GSM-Hard with the GSM8K numeric extractor, MATH-500 / AIME / AMC23 with boxed contest answers.}
+Settings E--H additionally score SVAMP and GSM-Hard with the GSM8K numeric extractor, MATH-500 / AIME / AMC23 with boxed contest answers.}
 \end{table}
 
 \subsection{Run configurations}
@@ -196,10 +196,12 @@ C. Four-problem, four GPUs & $4$ & $0$--$3$ & $4$ in one step & Game24, HumanEva
 D. Full Game24 / HumanEval & $2$ & $0,1$ & $1362$ / $164$; batches of $8$ & Game24, HumanEval \\
 E. Qwen3-8B math, two GPUs & $2$ & $0,1$ & $40$--$80$; batches of $8$ & GSM8K, SVAMP, GSM-Hard, MATH-500, AIME, AMC23, Game24 \\
 F. Qwen3-8B math, four GPUs & $4$ & $0$--$3$ & same files as E & same as E \\
+G. Qwen3-14B math, two GPUs & $2$ & $0,1$ & $40$--$80$; batches of $8$ & same as E \\
+H. Qwen3-14B math, four GPUs & $4$ & $0$--$3$ & same files as E & same as E \\
 \bottomrule
 \end{tabular}
 \caption{Configurations and datasets.
-Later sections report A--C in full on Qwen3-14B, then E and F on Qwen3-8B (APC vs.\ ForkServe only).
+Later sections report A--C in full on Qwen3-14B, then G--H (14B) and E--F (8B) on the seven-file math suite (APC vs.\ ForkServe only).
 On D, recompute and APC are complete; ForkServe on the full Game24 and HumanEval files is in progress.}
 \end{table}
 
@@ -657,6 +659,263 @@ Four-GPU decode therefore stacks with that storage efficiency: each tree occupie
 Tree-of-Thoughts ($k{=}4$) gives $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.61,0.70]$, close to setting A on GSM8K ($0.72$).
 ReAct ($k{=}2$) gives $0.94$.
 
+\section{Qwen3-14B math suite (settings G and H)}
+
+Settings G and H repeat the APC vs.\ ForkServe recipe of E and F on Qwen3-14B:
+the same seven files, $k{=}4$, batches of eight, $D{\in}\{512,768\}$, $\mathrm{tp}{=}2$ then $\mathrm{tp}{=}4$.
+Peak KV matches the 8B suite token-for-token: the trunks and residuals are the same strings, so $M_{\mathrm{spine}}$ does not depend on width.
+
+Resident memory is $\approx 37381$--$37515$\,MiB/rank (APC) and $37515$--$37733$\,MiB (ForkServe) at $\mathrm{tp}{=}2$,
+and $\approx 37691$--$37711$ / $37813$--$37871$\,MiB at $\mathrm{tp}{=}4$.
+
+\subsection{Accuracy comparison}
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrcccccc@{}}
+\toprule
+ & & & \multicolumn{3}{c}{$\mathrm{tp}{=}2$ (G)} & \multicolumn{3}{c}{$\mathrm{tp}{=}4$ (H)} \\
+\cmidrule(lr){4-6}\cmidrule(lr){7-9}
+Dataset & $n$ & $D$ & APC & FS & $\Delta$ & APC & FS & $\Delta$ \\
+\midrule
+GSM8K    & $80$ & $512$ & $\mathbf{0.825}$ ($66$) & $0.813$ ($65$) & $-1.3$\,pp & $0.788$ ($63$) & $\mathbf{0.838}$ ($67$) & $+5.0$\,pp \\
+SVAMP    & $80$ & $512$ & $\mathbf{0.825}$ ($66$) & $0.813$ ($65$) & $-1.3$\,pp & $\mathbf{0.813}$ ($65$) & $0.800$ ($64$) & $-1.3$\,pp \\
+GSM-Hard & $80$ & $512$ & $0.663$ ($53$) & $0.663$ ($53$) & $0$ & $\mathbf{0.663}$ ($53$) & $0.613$ ($49$) & $-5.0$\,pp \\
+MATH-500 & $80$ & $768$ & $0.563$ ($45$) & $\mathbf{0.588}$ ($47$) & $+2.5$\,pp & $\mathbf{0.650}$ ($52$) & $0.588$ ($47$) & $-6.3$\,pp \\
+AIME     & $73$ & $768$ & $0.027$ ($2$)  & $\mathbf{0.041}$ ($3$)  & $+1.4$\,pp & $\mathbf{0.041}$ ($3$)  & $0.027$ ($2$)  & $-1.4$\,pp \\
+AMC23    & $40$ & $768$ & $0.325$ ($13$) & $0.325$ ($13$) & $0$ & $\mathbf{0.300}$ ($12$) & $0.250$ ($10$) & $-5.0$\,pp \\
+Game24   & $80$ & $512$ & $0.725$ ($58$) & $\mathbf{0.750}$ ($60$) & $+2.5$\,pp & $0.688$ ($55$) & $\mathbf{0.713}$ ($57$) & $+2.5$\,pp \\
+\midrule
+All $513$ & $513$ & --- & $0.591$ ($303$) & $\mathbf{0.596}$ ($306$) & $+0.6$\,pp & $\mathbf{0.591}$ ($303$) & $0.577$ ($296$) & $-1.4$\,pp \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Qwen3-14B official accuracy, APC vs.\ ForkServe.
+The pool is $513$ items.
+At two GPUs ForkServe is $+3$ problems; at four GPUs $-7$.
+No file differs by more than five problems.
+AIME remains $2$--$3/73$ on both stacks.}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.38cm,y=2.45cm]
+  \def\bw{0.16}
+  \foreach \y in {0.0,0.25,0.50,0.75,1.00} {
+    \draw[Rule] (-0.55,\y) -- (7.05,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.62,\y) {\y};
+  }
+  \foreach \i/\lab/\atwo/\ftwo/\afour/\ffour in {
+    0/GSM8K/0.825/0.8125/0.7875/0.8375,
+    1/SVAMP/0.825/0.8125/0.8125/0.800,
+    2/GSM-H/0.6625/0.6625/0.6625/0.6125,
+    3/MATH/0.5625/0.5875/0.650/0.5875,
+    4/AIME/0.0274/0.0411/0.0411/0.0274,
+    5/AMC23/0.325/0.325/0.300/0.250,
+    6/G24/0.725/0.750/0.6875/0.7125} {
+    \fill[APC]  ({\i-1.5*\bw-\bw},0) rectangle ({\i-0.5*\bw-\bw},\atwo);
+    \fill[FS]   ({\i-0.5*\bw-\bw},0) rectangle ({\i-0.5*\bw},\ftwo);
+    \fill[APCp] ({\i-0.5*\bw},0) rectangle ({\i+0.5*\bw},\afour);
+    \fill[FSp]  ({\i+0.5*\bw},0) rectangle ({\i+1.5*\bw},\ffour);
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,-0.04) {\lab};
+  }
+  \draw[Ink] (-0.55,0) -- (7.05,0);
+  \fill[APC] (0.05,1.12) rectangle (0.28,1.20);
+  \node[font=\scriptsize,anchor=west] at (0.32,1.16) {APC $\mathrm{tp}{=}2$};
+  \fill[FS] (2.05,1.12) rectangle (2.28,1.20);
+  \node[font=\scriptsize,anchor=west] at (2.32,1.16) {FS $\mathrm{tp}{=}2$};
+  \fill[APCp] (3.85,1.12) rectangle (4.08,1.20);
+  \node[font=\scriptsize,anchor=west] at (4.12,1.16) {APC $\mathrm{tp}{=}4$};
+  \fill[FSp] (5.75,1.12) rectangle (5.98,1.20);
+  \node[font=\scriptsize,anchor=west] at (6.02,1.16) {FS $\mathrm{tp}{=}4$};
+  \node[font=\small,anchor=south] at (3.2,1.24) {Official accuracy, Qwen3-14B};
+\end{tikzpicture}
+\caption{Qwen3-14B accuracy, four stacks on each file.
+Orange tracks blue; the largest gaps are MATH-500 and GSM-Hard at $\mathrm{tp}{=}4$ (five problems).}
+\end{figure}
+
+\subsection{System metrics}
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+ & \multicolumn{3}{c}{Peak KV (tokens)} & \multicolumn{3}{c}{e2e (s), $\mathrm{tp}{=}2$} & \multicolumn{3}{c}{e2e (s), $\mathrm{tp}{=}4$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+Dataset & APC & FS & FS/APC & APC & FS & vs.\ APC & APC & FS & vs.\ APC \\
+\midrule
+GSM8K    & $1582$ & $\mathbf{1182}$ & $0.75$ & $72.3$ & $72.0$ & $-0.5\%$ & $44.6$ & $44.0$ & $-1.3\%$ \\
+SVAMP    & $1359$ & $\mathbf{959}$  & $0.71$ & $56.6$ & $53.6$ & $-5.3\%$ & $34.6$ & $34.3$ & $-0.8\%$ \\
+GSM-Hard & $1462$ & $\mathbf{1062}$ & $0.73$ & $72.9$ & $71.6$ & $-1.8\%$ & $43.9$ & $44.8$ & $+2.1\%$ \\
+MATH-500 & $1765$ & $\mathbf{1349}$ & $0.76$ & $110.6$ & $110.1$ & $-0.4\%$ & $67.4$ & $67.5$ & $+0.1\%$ \\
+AIME     & $2118$ & $\mathbf{1702}$ & $0.80$ & $111.1$ & $110.8$ & $-0.3\%$ & $68.0$ & $68.0$ & $0.0\%$ \\
+AMC23    & $1920$ & $\mathbf{1504}$ & $0.78$ & $55.9$ & $55.7$ & $-0.4\%$ & $34.0$ & $34.0$ & $-0.1\%$ \\
+Game24   & $1289$ & $\mathbf{793}$  & $0.62$ & $74.2$ & $74.0$ & $-0.3\%$ & $45.4$ & $45.1$ & $-0.7\%$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Qwen3-14B storage and generate time.
+Peak KV equals the 8B suite and is independent of $\mathrm{tp}$.
+Wall-clock is within $3\%$ of APC except SVAMP at two GPUs ($-5.3\%$), where ForkServe emits fewer winner tokens.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+ & \multicolumn{4}{c}{Fan-out (s)} & \multicolumn{2}{c}{Decode tokens, $\mathrm{tp}{=}2$} & \multicolumn{2}{c}{Decode tokens, $\mathrm{tp}{=}4$} \\
+\cmidrule(lr){2-5}\cmidrule(lr){6-7}\cmidrule(lr){8-9}
+Dataset & APC t2 & FS t2 & APC t4 & FS t4 & APC & FS & APC & FS \\
+\midrule
+GSM8K    & $0.89$ & $1.41$ & $0.60$ & $0.93$ & $40960$ & $23576$ & $40960$ & $22586$ \\
+SVAMP    & $0.87$ & $1.30$ & $0.58$ & $0.82$ & $40960$ & $17139$ & $40960$ & $16840$ \\
+GSM-Hard & $0.84$ & $1.22$ & $0.56$ & $0.83$ & $40960$ & $26555$ & $40960$ & $27417$ \\
+MATH-500 & $0.90$ & $1.41$ & $0.60$ & $0.92$ & $61440$ & $47465$ & $61440$ & $47693$ \\
+AIME     & $0.87$ & $1.56$ & $0.58$ & $1.01$ & $56064$ & $55758$ & $56064$ & $55758$ \\
+AMC23    & $0.47$ & $0.78$ & $0.31$ & $0.51$ & $30720$ & $29487$ & $30720$ & $29417$ \\
+Game24   & $1.06$ & $1.28$ & $0.69$ & $0.82$ & $40960$ & $35824$ & $40960$ & $36358$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Qwen3-14B fan-out and winner decode tokens.
+Fan-out is $1.2$--$1.9\times$ APC and still $<3\%$ of $T_{\mathrm{e2e}}$.
+APC always spends the decode budget; ForkServe stops early on GSM8K and SVAMP.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+Dataset & FS e2e t2 (s) & FS e2e t4 (s) & $4/2$ & APC e2e $4/2$ & peak FS/APC & dec.\ share \\
+\midrule
+GSM8K    & $72.0$ & $44.0$ & $0.61$ & $0.62$ & $0.75$ & $0.98$ \\
+SVAMP    & $53.6$ & $34.3$ & $0.64$ & $0.61$ & $0.71$ & $0.98$ \\
+GSM-Hard & $71.6$ & $44.8$ & $0.63$ & $0.60$ & $0.73$ & $0.98$ \\
+MATH-500 & $110.1$ & $67.5$ & $0.61$ & $0.61$ & $0.76$ & $0.99$ \\
+AIME     & $110.8$ & $68.0$ & $0.61$ & $0.61$ & $0.80$ & $0.99$ \\
+AMC23    & $55.7$ & $34.0$ & $0.61$ & $0.61$ & $0.78$ & $0.99$ \\
+Game24   & $74.0$ & $45.1$ & $0.61$ & $0.61$ & $0.62$ & $0.98$ \\
+\bottomrule
+\end{tabular}
+\caption{Qwen3-14B tensor-parallel scaling (ForkServe).
+Four ranks cut wall-clock by $0.61$--$0.64$, in line with setting C on the same weights.
+Peak is unchanged.
+Decode share of e2e is $0.98$--$0.99$.}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.22cm,y=0.00112cm]
+  \def\w{0.34}
+  \foreach \y in {0,500,1000,1500,2000} {
+    \draw[Rule] (-0.45,\y) -- (6.85,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.52,\y) {\y};
+  }
+  \foreach \i/\lab/\apc/\fs in {
+    0/GSM8K/1582/1182,
+    1/SVAMP/1359/959,
+    2/GSM-H/1462/1062,
+    3/MATH/1765/1349,
+    4/AIME/2118/1702,
+    5/AMC23/1920/1504,
+    6/G24/1289/793} {
+    \fill[APC] ({\i-\w},0) rectangle ({\i},\apc);
+    \fill[FS] ({\i},0) rectangle ({\i+\w},\fs);
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,-50) {\lab};
+  }
+  \draw[Ink] (-0.45,0) -- (6.85,0);
+  \fill[APC] (4.35,2280) rectangle (4.58,2480);
+  \node[font=\scriptsize,anchor=west] at (4.64,2380) {APC};
+  \fill[FS] (5.45,2280) rectangle (5.68,2480);
+  \node[font=\scriptsize,anchor=west] at (5.74,2380) {ForkServe};
+  \node[font=\small,anchor=south] at (3.2,2580) {Peak resident KV (tokens), Qwen3-14B};
+\end{tikzpicture}
+\caption{Qwen3-14B peak KV, shared by settings G and H.
+The bars equal the 8B figure: storage is $M_{\mathrm{spine}}$, not model width.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.38cm,y=0.022cm]
+  \def\bw{0.16}
+  \foreach \y in {0,30,60,90,120} {
+    \draw[Rule] (-0.55,\y) -- (7.05,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.62,\y) {\y};
+  }
+  \foreach \i/\lab/\atwo/\ftwo/\afour/\ffour in {
+    0/GSM8K/72.3/72.0/44.6/44.0,
+    1/SVAMP/56.6/53.6/34.6/34.3,
+    2/GSM-H/72.9/71.6/43.9/44.8,
+    3/MATH/110.6/110.1/67.4/67.5,
+    4/AIME/111.1/110.8/68.0/68.0,
+    5/AMC23/55.9/55.7/34.0/34.0,
+    6/G24/74.2/74.0/45.4/45.1} {
+    \fill[APC]  ({\i-1.5*\bw-\bw},0) rectangle ({\i-0.5*\bw-\bw},\atwo);
+    \fill[FS]   ({\i-0.5*\bw-\bw},0) rectangle ({\i-0.5*\bw},\ftwo);
+    \fill[APCp] ({\i-0.5*\bw},0) rectangle ({\i+0.5*\bw},\afour);
+    \fill[FSp]  ({\i+0.5*\bw},0) rectangle ({\i+1.5*\bw},\ffour);
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,-3.2) {\lab};
+  }
+  \draw[Ink] (-0.55,0) -- (7.05,0);
+  \fill[APC] (0.05,118) rectangle (0.28,126);
+  \node[font=\scriptsize,anchor=west] at (0.32,122) {APC $\mathrm{tp}{=}2$};
+  \fill[FS] (2.05,118) rectangle (2.28,126);
+  \node[font=\scriptsize,anchor=west] at (2.32,122) {FS $\mathrm{tp}{=}2$};
+  \fill[APCp] (3.85,118) rectangle (4.08,126);
+  \node[font=\scriptsize,anchor=west] at (4.12,122) {APC $\mathrm{tp}{=}4$};
+  \fill[FSp] (5.75,118) rectangle (5.98,126);
+  \node[font=\scriptsize,anchor=west] at (6.02,122) {FS $\mathrm{tp}{=}4$};
+  \node[font=\small,anchor=south] at (3.2,132) {Generate wall-clock (s), Qwen3-14B};
+\end{tikzpicture}
+\caption{Qwen3-14B end-to-end generate time.
+Orange sits on blue in each tensor-width pair.
+Light bars ($\mathrm{tp}{=}4$) are $0.61$--$0.64\times$ the dark bars.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[x=1.38cm,y=1.35cm]
+  \def\bw{0.16}
+  \foreach \y in {0.0,0.5,1.0,1.5} {
+    \draw[Rule] (-0.55,\y) -- (7.05,\y);
+    \node[font=\scriptsize,Mute,anchor=east] at (-0.62,\y) {\y};
+  }
+  \foreach \i/\lab/\atwo/\ftwo/\afour/\ffour in {
+    0/GSM8K/0.89/1.41/0.60/0.93,
+    1/SVAMP/0.87/1.30/0.58/0.82,
+    2/GSM-H/0.84/1.22/0.56/0.83,
+    3/MATH/0.90/1.41/0.60/0.92,
+    4/AIME/0.87/1.56/0.58/1.01,
+    5/AMC23/0.47/0.78/0.31/0.51,
+    6/G24/1.06/1.28/0.69/0.82} {
+    \fill[APC]  ({\i-1.5*\bw-\bw},0) rectangle ({\i-0.5*\bw-\bw},\atwo);
+    \fill[FS]   ({\i-0.5*\bw-\bw},0) rectangle ({\i-0.5*\bw},\ftwo);
+    \fill[APCp] ({\i-0.5*\bw},0) rectangle ({\i+0.5*\bw},\afour);
+    \fill[FSp]  ({\i+0.5*\bw},0) rectangle ({\i+1.5*\bw},\ffour);
+    \node[font=\scriptsize,anchor=east,rotate=40] at (\i,-0.08) {\lab};
+  }
+  \draw[Ink] (-0.55,0) -- (7.05,0);
+  \fill[APC] (0.05,1.72) rectangle (0.28,1.82);
+  \node[font=\scriptsize,anchor=west] at (0.32,1.77) {APC $\mathrm{tp}{=}2$};
+  \fill[FS] (2.05,1.72) rectangle (2.28,1.82);
+  \node[font=\scriptsize,anchor=west] at (2.32,1.77) {FS $\mathrm{tp}{=}2$};
+  \fill[APCp] (3.85,1.72) rectangle (4.08,1.82);
+  \node[font=\scriptsize,anchor=west] at (4.12,1.77) {APC $\mathrm{tp}{=}4$};
+  \fill[FSp] (5.75,1.72) rectangle (5.98,1.82);
+  \node[font=\scriptsize,anchor=west] at (6.02,1.77) {FS $\mathrm{tp}{=}4$};
+  \node[font=\small,anchor=south] at (3.2,1.88) {Fan-out (s), Qwen3-14B};
+\end{tikzpicture}
+\caption{Qwen3-14B fan-out.
+The abort/CoW tax is larger in milliseconds than on 8B, but still tenths of a second against $34$--$111\,\mathrm{s}$ generate.}
+\end{figure}
+
 \section{Qwen3-8B math suite (settings E and F)}
 
 Settings E and F run the same APC vs.\ ForkServe recipe on Qwen3-8B:
@@ -945,8 +1204,8 @@ ForkServe is branch-aware KV sharing: it keeps that prefill saving, then drops u
 On GSM8K that is $0.72\times$ APC and $0.25\times$ recompute in every batch, while generation time stays within $2\%$ of APC.
 Fan-out carries copy-on-write and abort; global latency follows $T_{\mathrm{dec}}$ and $C\propto\mathrm{HBM}/M$, so ForkServe is the storage-efficient serving optimum in \eqref{eq:conc}.
 Settings B and C check Game24, HumanEval, and $\mathrm{tp}{=}2$ versus $\mathrm{tp}{=}4$; GSM8K quality is setting A.
-Setting E repeats APC vs.\ ForkServe on Qwen3-8B across seven math files: peak ratios $0.62$--$0.80$, scores with APC, and $T_{\mathrm{e2e}}$ within $3\%$.
-Setting F keeps those peak ratios at $\mathrm{tp}{=}4$ and scales ForkServe generate time by $0.66$, still within a few percent of APC.
+Settings G and H run the seven-file math suite on Qwen3-14B: the same peak ratios $0.62$--$0.80$, pool accuracy within $7$ problems of APC, and $T_{\mathrm{e2e}}$ within a few percent, with four-GPU wall-clock $0.61$--$0.64\times$ two GPUs.
+Settings E and F repeat that recipe on Qwen3-8B, where four-GPU time scales by $0.66$.
 
 \section{Conclusion}
 
@@ -965,7 +1224,8 @@ The serving objective is system throughput $\Theta\propto C/T_{\mathrm{e2e}}$ wi
 The completed measurements support that claim on more than one task, tensor-parallel width, and model size.
 The GSM8K test set ($n{=}1319$, $\mathrm{tp}{=}2$, Qwen3-14B) is the main Tree-of-Thoughts result: peak KV below APC on all $165$ batches (median ratio $0.72$), accuracy aligned with APC, and $T_{\mathrm{e2e}}$ within $2\%$.
 Four-problem slices reproduce the same storage ordering on Tree-of-Thoughts (GSM8K, Game24) and ReAct (HumanEval) at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$.
-On Qwen3-8B (settings E and F), seven math files give $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.62,0.80]$ at both $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$, with generate time at four GPUs equal to $0.66\times$ the two-GPU run and within $3\%$ of APC on six files.
+On Qwen3-14B (settings G and H) and Qwen3-8B (settings E and F), seven math files give $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.62,0.80]$ at both $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
+Generate time at four GPUs is $0.61$--$0.66\times$ the two-GPU run and stays with APC.
 Where $k{=}4$, $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ sits in $[0.61,0.80]$; where $k{=}2$, the ratio rises to $0.94$, as \eqref{eq:gap} predicts when residuals are large relative to $L$.
 
 The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.

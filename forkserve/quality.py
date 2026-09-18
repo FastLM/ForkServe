@@ -29,6 +29,14 @@ _CHAT_MARK = re.compile(r"<\|[^|]*\|>")
 _DEF = re.compile(r"def\s+(\w+)\s*\(")
 
 
+def strip_think(text: str) -> str:
+    """R1-style traces: grade the answer after ``</think>`` when present."""
+    raw = text or ""
+    if "</think>" in raw:
+        return raw.rsplit("</think>", 1)[-1]
+    return raw
+
+
 @dataclass(frozen=True)
 class TaskScore:
     metric: str
@@ -66,6 +74,7 @@ def normalize_num(text: str) -> str:
 
 def extract_gsm8k_answer(text: str) -> str:
     """lm-eval / Cobbe: prefer ``#### <n>``, else the last number in the text."""
+    text = strip_think(text)
     if "####" in text:
         tail = text.rsplit("####", 1)[-1]
         m = _NUM.search(tail.replace("\n", " "))
@@ -88,7 +97,7 @@ def gsm8k_correct(text: str, gold: str) -> bool:
 
 def extract_boxed(text: str) -> str:
     """Last ``\\boxed{...}`` with nested braces; empty if none."""
-    raw = text or ""
+    raw = strip_think(text)
     key = r"\boxed"
     start = raw.rfind(key)
     if start < 0:
@@ -184,7 +193,7 @@ def _clean_game24_expr(raw: str) -> str:
 
 def iter_game24_exprs(text: str) -> list[str]:
     """First-to-last candidates — do not prefer the longest (noisy) line."""
-    raw = (text or "").replace("\\n", "\n")
+    raw = strip_think(text or "").replace("\\n", "\n")
     seen: list[str] = []
     for ln in raw.splitlines():
         ln = ln.strip()

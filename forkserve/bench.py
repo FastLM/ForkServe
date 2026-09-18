@@ -1994,6 +1994,10 @@ def _orchestrate(args: argparse.Namespace) -> int:
         progress_log = str(Path(args.out).with_name("progress.log"))
     args.progress_log = progress_log
     os.environ["FORKSERVE_PROGRESS_LOG"] = progress_log
+    os.environ["FORKSERVE_MODEL"] = str(args.model or "")
+    model_l = str(args.model or "").lower()
+    if "deepseek" in model_l or "r1-distill" in model_l:
+        os.environ.setdefault("FORKSERVE_CHAT_STYLE", "deepseek_r1")
     progress(
         args,
         f"orchestrating systems={systems} tp={tps} gpus={devices} "
@@ -2054,6 +2058,9 @@ def _orchestrate(args: argparse.Namespace) -> int:
             env["CUDA_VISIBLE_DEVICES"] = dev
             env["PYTHONUNBUFFERED"] = "1"
             env["FORKSERVE_PROGRESS_LOG"] = progress_log
+            env["FORKSERVE_MODEL"] = str(args.model or "")
+            if os.environ.get("FORKSERVE_CHAT_STYLE"):
+                env["FORKSERVE_CHAT_STYLE"] = os.environ["FORKSERVE_CHAT_STYLE"]
             progress(args, f"==> {system} tp={tp} devices={dev}")
             if not _wait_devices_free(dev, timeout_s=180.0, max_used_mib=4096):
                 progress(args, f"worker skipped: {system} tp={tp} — GPUs {dev} still occupied")

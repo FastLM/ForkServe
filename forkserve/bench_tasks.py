@@ -186,8 +186,26 @@ HUMANEVAL_SKETCHES = (
 )
 
 
+def chat_style() -> str:
+    """Qwen chat by default; DeepSeek-R1 distill uses its own special tokens."""
+    env = (os.environ.get("FORKSERVE_CHAT_STYLE") or "").strip()
+    if env:
+        return env
+    model = (os.environ.get("FORKSERVE_MODEL") or "").lower()
+    if "deepseek" in model or "r1-distill" in model:
+        return "deepseek_r1"
+    return "qwen"
+
+
+def _think_tail() -> str:
+    # Qwen3 honors /no_think. R1-distill always opens <think> in the template.
+    if chat_style() == "deepseek_r1":
+        return ""
+    return "\n/no_think"
+
+
 def _chat(system: str, user: str) -> str:
-    return ToolWrappers().chat(system, user)
+    return ToolWrappers(style=chat_style()).chat(system, user)
 
 
 def gsm8k_trunk(item: MathItem) -> str:
@@ -197,8 +215,8 @@ def gsm8k_trunk(item: MathItem) -> str:
     )
     user = (
         f"{item.question}\n\n"
-        "Do not list alternate plans. Finish with #### <number>.\n"
-        "/no_think"
+        "Do not list alternate plans. Finish with #### <number>."
+        f"{_think_tail()}"
     )
     return _chat(system, user)
 
@@ -216,7 +234,7 @@ def game24_trunk(item: MathItem) -> str:
         "You solve the 24 game. Use each number once with +, -, *, / and "
         "parentheses. Reply with an equation that equals 24."
     )
-    return _chat(system, item.question + "\n/no_think")
+    return _chat(system, item.question + _think_tail())
 
 
 def game24_thoughts(branching: int) -> list[str]:
@@ -408,8 +426,8 @@ def contest_math_trunk(item: MathItem) -> str:
     )
     user = (
         f"{item.question}\n\n"
-        "Put the final answer in \\boxed{}. Do not list alternate plans.\n"
-        "/no_think"
+        "Put the final answer in \\boxed{}. Do not list alternate plans."
+        f"{_think_tail()}"
     )
     return _chat(system, user)
 
