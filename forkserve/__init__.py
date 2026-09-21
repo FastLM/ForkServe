@@ -8,6 +8,7 @@ from forkserve.api import Engine
 from forkserve.config import ForkServeConfig
 from forkserve.hash_forkserve import HashForkServe
 from forkserve.orchestrator import Orchestrator
+from forkserve.prefill_prune import PrefillPruner, app_config
 from forkserve.types import (
     BranchId,
     JoinPolicy,
@@ -21,6 +22,8 @@ __all__ = [
     "Engine",
     "ForkServeConfig",
     "HashForkServe",
+    "PrefillPruner",
+    "app_config",
     "JoinPolicy",
     "NodeId",
     "NodeMode",

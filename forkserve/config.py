@@ -59,7 +59,7 @@ class ForkServeConfig:
     prior_width: int = 2048
     prior_depth: int = 4
 
-    # ForkServe+: lazy abort, prune, spec-pool. Baseline forkserve leaves these off.
+    # ForkServe+ / APP: lazy abort, prune, spec-pool, hash skip, disagg gate.
     lazy_abort: bool = False
     pointer_swap: bool = True
     prune_enabled: bool = False
@@ -67,6 +67,9 @@ class ForkServeConfig:
     early_prune_frac: float = 0.20
     spec_pool_frac: float = 0.0
     decode_stop: tuple[str, ...] = ()
+    hash_prune: bool = False
+    disagg_prefill: bool = False
+    disagg_transfer_us_per_token: float = 2.0
 
     extra: dict[str, float] = field(default_factory=dict)
 

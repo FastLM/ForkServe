@@ -15,10 +15,16 @@ class FanoutBreakdown:
     cow_copies: int = 0
     pruned: int = 0
     prefilled_branches: int = 0
+    hash_skips: int = 0
+    early_aborts: int = 0
+    transfer_tokens: int = 0
+    transfer_ms: float = 0.0
+    prefill_tokens: int = 0
+    skipped_prefill_tokens: int = 0
 
     @property
     def fanout_ms(self) -> float:
-        return self.cow_ms + self.prefill_ms + self.abort_mark_ms
+        return self.cow_ms + self.prefill_ms + self.abort_mark_ms + self.transfer_ms
 
     def to_dict(self) -> dict[str, float]:
         return {
@@ -30,6 +36,12 @@ class FanoutBreakdown:
             "cow_copies": float(self.cow_copies),
             "pruned": float(self.pruned),
             "prefilled_branches": float(self.prefilled_branches),
+            "hash_skips": float(self.hash_skips),
+            "early_aborts": float(self.early_aborts),
+            "transfer_tokens": float(self.transfer_tokens),
+            "transfer_ms": self.transfer_ms,
+            "prefill_tokens": float(self.prefill_tokens),
+            "skipped_prefill_tokens": float(self.skipped_prefill_tokens),
             "fanout_ms": self.fanout_ms,
         }
 

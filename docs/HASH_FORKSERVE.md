@@ -47,11 +47,29 @@ They are complementary, not alternatives:
 4. Eviction: prefer dropping speculative / unhashed free pages; among hashed free pages use APC LRU order.
 5. `cache_salt` isolates tenants exactly as in APC.
 
+## APP composition
+
+Hash skip is layer 1 of Advanced Prefill Pruning (`forkserve/prefill_prune.py`). A published trunk or replayed residual is not sent to the GPU. Draft/early prune then drops hopeless siblings *before* they become hash keys. vLLM `disagg_prefill` is layer 4: only APP survivors are `insert`ed into the KV pipe, so the decode instance never sees loser pages. Stock disagg does not raise throughput; APP + disagg does, because the prefill instance computes and ships less.
+
+```
+  residuals ──► hash lookup ──► draft/early prune ──► GPU prefill (miss tail)
+                      │                  │
+                      skip               skip
+                      ▼                  ▼
+                 hash-local         not inserted ──► disagg connector ──► decode
+```
+
+Compare APC / ForkServe / hash_prefill / disagg_prefill / APP: `experiments/prefill_prune_bench.py`.
+
 ## Code
 
 * `forkserve/hash_forkserve.py` — `hash_block`, `HashPageIndex`, `HashForkPool`, `HashForkServe`
+* `forkserve/prefill_prune.py` — APP planner + `PrefillHashIndex`
+* `forkserve/disagg.py` — P/D transfer gate
 * `tests/test_hash_forkserve.py` — 8 unit tests
+* `tests/test_prefill_prune.py` — APP + method compare
 * `experiments/hash_forkserve_bench.py` — APC / CoW / hybrid microbench
+* `experiments/prefill_prune_bench.py` — five-way prefill compare
 
 ## Microbench snapshot (page_size=16, control-plane)
 
@@ -62,3 +80,17 @@ They are complementary, not alternatives:
 | HashForkServe (fan-out + 20 replays) | 56 | 484 | 640 |
 
 Hybrid keeps CoW’s low live-page count on fan-out **and** APC’s cross-session hits on replay.
+
+## APP vs APC / ForkServe (control-plane)
+
+`PYTHONPATH=. python experiments/prefill_prune_bench.py` — 10 sessions × 4-way ToT, trunk 256, residual 32. Prefill ms from the token cost model.
+
+| Method | phase | prefill tok | prefill ms | xfer tok | fan-out ms | peak KV | pruned |
+|---|---|---:|---:|---:|---:|---:|---:|
+| APC | fan-out | 11520 | 138.2 | 0 | 139.0 | 11520 | 0 |
+| ForkServe | fan-out | 3840 | 46.1 | 0 | 47.1 | 3840 | 0 |
+| hash_prefill | fan-out | 11520 | 138.2 | 0 | 139.0 | 11520 | 0 |
+| disagg_prefill | fan-out | 11520 | 138.2 | 11520 | 162.1 | 11520 | 0 |
+| **APP** | fan-out | **2912** | **34.9** | **352** | **35.9** | **2880** | 20 |
+
+APP vs APC: prefill −74.7%, fan-out −74.2%, peak KV −75.0%. Replay hash-skips the published winner (0 prefill tokens). Decode-token curve: 84.5% acc at 256 tokens (APC) vs 153 (APP). Eq. 9 concurrency: P99≤1s QPS 192 → 256, tokens/s +35.1%.

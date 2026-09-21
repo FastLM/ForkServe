@@ -165,6 +165,9 @@ class RunMetrics:
     pointer_swaps: int = 0
     pruned_branches: int = 0
     prefilled_branches: int = 0
+    hash_skips: int = 0
+    early_aborts: int = 0
+    transfer_tokens: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -686,6 +689,9 @@ def merge_metrics(parts: Sequence[RunMetrics]) -> RunMetrics:
         pointer_swaps=sum(p.pointer_swaps for p in parts),
         pruned_branches=sum(p.pruned_branches for p in parts),
         prefilled_branches=sum(p.prefilled_branches for p in parts),
+        hash_skips=sum(p.hash_skips for p in parts),
+        early_aborts=sum(p.early_aborts for p in parts),
+        transfer_tokens=sum(p.transfer_tokens for p in parts),
     )
     return _set_golds(out, golds, texts, prompts)
 
@@ -1172,6 +1178,9 @@ def run_tot_forest_forkserve(
         pointer_swaps=int(getattr(bd, "pointer_swaps", 0) or 0),
         pruned_branches=int(getattr(bd, "pruned", 0) or 0),
         prefilled_branches=int(getattr(bd, "prefilled_branches", 0) or 0),
+        hash_skips=int(getattr(bd, "hash_skips", 0) or 0),
+        early_aborts=int(getattr(bd, "early_aborts", 0) or 0),
+        transfer_tokens=int(getattr(bd, "transfer_tokens", 0) or 0),
     )
 
 

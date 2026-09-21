@@ -80,6 +80,11 @@ class Engine:
             self.config.prior_width, self.config.prior_depth, self.config.prior_decay
         )
         self.ngrams = NGramResidual(self.config.ngram_order, self.config.ngram_prefix)
+        self.hash_index = None
+        if self.config.hash_prune:
+            from forkserve.prefill_prune import PrefillHashIndex
+
+            self.hash_index = PrefillHashIndex(self.config.page_size)
 
     # ----- verbs -------------------------------------------------------------
 
@@ -102,6 +107,8 @@ class Engine:
             if flush:
                 self._flush_backend()
             self.metrics[sid].committed_tokens += len(tok)
+        if self.hash_index is not None:
+            self.hash_index.publish(tok)
         return SessionHandle(id=sid, root=root.id, tip=root.id, tenant=tenant)
 
     def fork(
@@ -126,13 +133,6 @@ class Engine:
         if speculate:
             self.speculate(tree.session, node.id, priority=priority)
         return node.id
-
-    def queue_known_prefill(self, session: SessionId | str, node: NodeId) -> None:
-        """Queue a committed prefill of ``node.residual`` (no GPU flush)."""
-        tree = self.forest.get(SessionId(str(session)))
-        child = tree.get(node)
-        if child.residual:
-            self._issue_prefill(tree, child.id, child.residual, speculative=False)
 
     def speculate(
         self,
@@ -299,6 +299,8 @@ class Engine:
             ttft_ms=ttft,
         )
         tree.set_mode(result.winner, NodeMode.COMMIT)
+        if self.hash_index is not None:
+            self.hash_index.publish(winner.tokens)
         return result
 
     def join(
@@ -380,19 +382,61 @@ class Engine:
         *,
         winner: int = 0,
     ) -> FanoutBreakdown:
-        """Queue GPU prefills; skip pruned siblings when plus-mode is on."""
-        from forkserve.prune import BranchPruner, BranchScore
+        """Queue GPU prefills through APP (hash skip / draft prune / early abort)."""
+        from forkserve.disagg import DisaggPrefillConnector
+        from forkserve.prefill_prune import PrefillAction, PrefillDecision, PrefillPruner
 
         sid = SessionId(str(session))
+        tree = self.forest.get(sid)
         bd = FanoutBreakdown()
-        if self.config.prune_enabled and texts is not None:
-            ranked = BranchPruner(self.config, winner=winner).rank(texts)
+        residuals: list[TokenSeq] = [tree.get(nid).residual for nid in kids]
+        token_counts = [len(r) for r in residuals]
+        prompts = [tree.get(nid).tokens for nid in kids]
+        app_on = self.config.prune_enabled or self.config.hash_prune
+        plan = None
+        if app_on:
+            ranked_src: Sequence[str] | Sequence[TokenSeq]
+            ranked_src = list(texts) if texts is not None else residuals
+            plan = PrefillPruner(
+                self.config, winner=winner, hash_index=self.hash_index
+            ).plan(
+                ranked_src,
+                full_prompts=prompts,
+                token_counts=token_counts,
+            )
+            decisions = plan.decisions
+            bd.prefill_tokens = plan.prefill_tokens
+            bd.skipped_prefill_tokens = plan.skipped_tokens
         else:
-            ranked = [BranchScore(i, True, 1.0, "all") for i in range(len(kids))]
+            decisions = [
+                PrefillDecision(
+                    index=i,
+                    action=PrefillAction.PREFILL,
+                    keep=True,
+                    score=1.0,
+                    reason="all",
+                    residual_tokens=token_counts[i] if i < len(token_counts) else 0,
+                    work_tokens=token_counts[i] if i < len(token_counts) else 0,
+                )
+                for i in range(len(kids))
+            ]
+            bd.prefill_tokens = sum(d.work_tokens for d in decisions)
         bd.pointer_swaps = int(getattr(self.backend.pool, "pointer_swaps", 0))
         bd.cow_copies = int(getattr(self.backend.pool, "cow_copies", 0))
-        for row in ranked:
+        for row in decisions:
             if row.index >= len(kids):
+                continue
+            if row.action is PrefillAction.HASH_SKIP:
+                bd.hash_skips += 1
+                continue
+            if row.action is PrefillAction.DRAFT_SKIP:
+                bd.pruned += 1
+                self.metrics[sid].pruned_branches += 1
+                continue
+            if row.action is PrefillAction.EARLY_ABORT:
+                bd.early_aborts += 1
+                bd.pruned += 1
+                self.metrics[sid].pruned_branches += 1
                 continue
             if row.keep:
                 self.queue_known_prefill(sid, kids[row.index])
@@ -400,6 +444,10 @@ class Engine:
             else:
                 bd.pruned += 1
                 self.metrics[sid].pruned_branches += 1
+        if self.config.disagg_prefill and app_on and plan is not None:
+            xfer = DisaggPrefillConnector(self.config).gate(plan)
+            bd.transfer_tokens = xfer.shipped_tokens
+            bd.transfer_ms = xfer.transfer_ms
         self.last_fanout = bd
         return bd
 

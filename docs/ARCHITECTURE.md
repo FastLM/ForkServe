@@ -233,16 +233,20 @@ close(s)
 
 Adapters (`ReAct`, `ToT`, `LangGraph Send`, `OpenHands`) lower harness structure onto these verbs. `Orchestrator.react_turn` forks wrap and recovery at the first parsed tool call, speculates over \(T_{\mathrm{idle}}\), then commits \(\mathrm{wrap}\Vert\mathrm{obs}\).
 
-## 10. ForkServe+ (fan-out, prune, spec-pool)
+## 10. Advanced Prefill Pruning (APP / ForkServe+)
 
-Baseline ForkServe already aliases at `fork` and aborts losers. Plus moves three costs off the critical path without changing output identity (winner decode still sees only the committed spine).
+Fan-out is a prefill problem. APC (`hash_prefill`) skips *already published* full blocks. vLLM `disagg_prefill` ships whatever the prefill instance computed (it does not raise tokens/sec). APP is the filter between those two: it decides, per branch, whether GPU prefill and KV transfer happen at all. CoW is the storage substrate; APP is the compute/transfer filter. Winner decode still sees only the committed spine.
 
-1. **Lazy abort.** `abort(..., lazy=True)` marks Dead in \(O(\#\mathrm{nodes})\) and queues residual decref. `generate` / `generate_many` call `drain_aborts()` after the winner batch, so abort reclaim is not on TTFT. vLLM snaps use the same tombstone list (`CowBlockTable.tombstones`).
-2. **Pointer swap.** `PagePool.pointer_swap` increfs page ids; `CowBlockTable.note_fork` counts aliased `block_id`s. No KV memcpy on fan-out. A CUDA page-table store would replace this Python id copy; the control-plane contract is the same.
-3. **Prune.** `BranchPruner` scores residuals (entropy / illegal / loop). Losers skip GPU prefill (`queue_fanout_prefills`). Winner index 0 is always kept. Optional `decode_stop` ends the winner generate at `####` / `\boxed` / `</think>`.
-4. **Spec-pool.** Eq. 9: \(C\propto\mathrm{HBM}/M\). `plan_spec_pool` turns \(M_{\mathrm{CoW}}/M_{\mathrm{clone}}\) into extra scheduler tokens (`spec_pool_frac` of the saving) and extra concurrent slots.
+Skip layers, cheapest first:
 
-Enable with `plus_config()` or `--system forkserve_plus`. Evaluation: `forkserve.eval_plus` (micro fan-out split, token–accuracy curve, QPS vs P99 TTFT).
+1. **Hash skip.** `PrefillHashIndex` / HashForkServe `hash(parent, block_tokens, extra)`. A replay or a published trunk prefix is not recomputed. Spec pages stay unpublished until LCP commit.
+2. **Draft prune.** `BranchPruner` scores residuals (entropy / illegal / loop, optional draft model). Losers never start prefill (`queue_fanout_prefills`). Winner index 0 is always kept.
+3. **Early abort.** First `early_prune_frac` of a residual already fails → cancel remaining chunks. Models chunked / disagg prefill.
+4. **Disagg gate.** `DisaggPrefillConnector` is vLLM's `insert` / `drop_select` pipe. Only survivors are inserted; losers and hash-local hits never leave the prefill instance.
+5. **Lazy abort + pointer swap.** `abort(..., lazy=True)` marks Dead off TTFT; `generate` drains after the winner batch. `PagePool.pointer_swap` increfs page ids — no KV memcpy on fan-out.
+6. **Spec-pool.** Eq. 9: \(\Theta\propto C/T_{\mathrm{e2e}}\), \(C\propto\mathrm{HBM}/M\). `plan_spec_pool` turns \(M_{\mathrm{CoW}}/M_{\mathrm{clone}}\) into extra slots.
+
+Enable with `plus_config()` / `app_config()` or `--system forkserve_plus`. Evaluation: `forkserve.eval_plus` and `experiments/prefill_prune_bench.py` (APC vs ForkServe vs hash_prefill vs disagg_prefill vs APP; fan-out split, token–accuracy curve, QPS vs P99 TTFT).
 
 ## 11. Defaults and modules
 
@@ -259,7 +263,9 @@ Enable with `plus_config()` or `--system forkserve_plus`. Evaluation: `forkserve
 | `retention.RetentionManager` | node TTL, leaf-first |
 | `router.TreeStickyRouter` | pin root, residual steal |
 | `hash_forkserve` | APC index + CoW pool |
-| `prune.BranchPruner` | skip low-mass fan-out prefills |
+| `prefill_prune.PrefillPruner` | APP: hash skip ⊕ draft prune ⊕ early abort |
+| `disagg.DisaggPrefillConnector` | P/D pipe; APP gates `insert` |
+| `prune.BranchPruner` | residual score used by APP |
 | `spec_pool` | extra slots from KV saving |
 | `eval_plus` | fan-out microbench, token–acc, QPS |
 | `engine.protocol.EngineBackend` | L1 |

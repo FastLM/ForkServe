@@ -90,11 +90,13 @@ class BranchPruner:
 
 
 def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
-    """Knobs that turn baseline ForkServe into ForkServe+."""
+    """Knobs that turn baseline ForkServe into ForkServe+ / APP."""
     cfg = ForkServeConfig() if base is None else replace(base)
     cfg.lazy_abort = True
     cfg.pointer_swap = True
     cfg.prune_enabled = True
+    cfg.hash_prune = True
+    cfg.disagg_prefill = True
     cfg.spec_pool_frac = 0.25 if cfg.spec_pool_frac <= 0 else cfg.spec_pool_frac
     if not cfg.decode_stop:
         cfg.decode_stop = ("####", "\\boxed", "</think>")

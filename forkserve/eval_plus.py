@@ -68,6 +68,9 @@ def micro_fanout(
         "pointer_swaps": row.pointer_swaps,
         "pruned_branches": row.pruned_branches,
         "prefilled_branches": row.prefilled_branches,
+        "hash_skips": row.hash_skips,
+        "early_aborts": row.early_aborts,
+        "transfer_tokens": row.transfer_tokens,
         "peak_kv_tokens": row.peak_kv_tokens,
         "decode_tokens": row.decode_tokens,
         "kv_saving": row.kv_saving,
@@ -207,6 +210,7 @@ def run_suite(out_dir: Path | None = None) -> dict[str, Any]:
         "max_qps_p99_1s": {"apc": slo_apc, "forkserve_plus": slo_fs},
         "peak_tok_s": {"apc": peak_apc, "forkserve_plus": peak_fs},
         "tok_s_gain": (peak_fs / peak_apc - 1.0) if peak_apc else 0.0,
+        "prefill_methods": "experiments.prefill_prune_bench",
     }
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -1,7 +1,7 @@
 [
   {
     "mode": "apc_only",
-    "wall_ms": 2.7916249964619055,
+    "wall_ms": 2.884333000110928,
     "live_pages": 96,
     "hash_hits": 624,
     "hash_misses": 40,
@@ -11,7 +11,7 @@
   },
   {
     "mode": "cow_fork_only",
-    "wall_ms": 0.8899999957066029,
+    "wall_ms": 1.0221249999631254,
     "live_pages": 56,
     "hash_hits": 144,
     "hash_misses": 1,
@@ -21,7 +21,7 @@
   },
   {
     "mode": "hash_forkserve",
-    "wall_ms": 5.781416999525391,
+    "wall_ms": 5.692958000054205,
     "live_pages": 56,
     "hash_hits": 484,
     "hash_misses": 1,

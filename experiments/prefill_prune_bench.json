@@ -1,0 +1,1066 @@
+{
+  "methods": [
+    "apc",
+    "forkserve",
+    "hash_prefill",
+    "disagg_prefill",
+    "app"
+  ],
+  "rows": [
+    {
+      "method": "apc",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 11520,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 138.24,
+      "cow_ms": 0.0,
+      "abort_ms": 0.8,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 139.04000000000002,
+      "live_pages": 24,
+      "peak_kv_tokens": 11520,
+      "hash_hits": 696,
+      "hash_skips": 0,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.6666666666666667,
+      "decode_tokens": 2560,
+      "notes": "first fan-out clones k trunks; APC retains hashed residuals",
+      "extra": {}
+    },
+    {
+      "method": "apc",
+      "phase": "replay",
+      "sessions": 20,
+      "branching": 1,
+      "trunk_tokens": 256,
+      "prefill_tokens": 0,
+      "skipped_prefill_tokens": 5760,
+      "prefill_ms": 0.0,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 0.0,
+      "live_pages": 24,
+      "peak_kv_tokens": 5760,
+      "hash_hits": 720,
+      "hash_skips": 20,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 5120,
+      "notes": "cross-session APC hash-hit on published full blocks",
+      "extra": {}
+    },
+    {
+      "method": "forkserve",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 3840,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 46.08,
+      "cow_ms": 0.2,
+      "abort_ms": 0.8,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 47.08,
+      "live_pages": 96,
+      "peak_kv_tokens": 3840,
+      "hash_hits": 0,
+      "hash_skips": 0,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 640,
+      "kv_saving": 0.6666666666666667,
+      "decode_tokens": 2560,
+      "notes": "CoW alias; every residual prefills; sync abort",
+      "extra": {}
+    },
+    {
+      "method": "forkserve",
+      "phase": "replay",
+      "sessions": 20,
+      "branching": 1,
+      "trunk_tokens": 256,
+      "prefill_tokens": 640,
+      "skipped_prefill_tokens": 5120,
+      "prefill_ms": 7.68,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 7.68,
+      "live_pages": 96,
+      "peak_kv_tokens": 5760,
+      "hash_hits": 864,
+      "hash_skips": 20,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 5120,
+      "notes": "replay published winner; APP hash-skips the full prompt",
+      "extra": {}
+    },
+    {
+      "method": "hash_prefill",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 11520,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 138.24,
+      "cow_ms": 0.0,
+      "abort_ms": 0.8,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 139.04000000000002,
+      "live_pages": 24,
+      "peak_kv_tokens": 11520,
+      "hash_hits": 696,
+      "hash_skips": 0,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.6666666666666667,
+      "decode_tokens": 2560,
+      "notes": "first fan-out clones k trunks; APC retains hashed residuals",
+      "extra": {}
+    },
+    {
+      "method": "hash_prefill",
+      "phase": "replay",
+      "sessions": 20,
+      "branching": 1,
+      "trunk_tokens": 256,
+      "prefill_tokens": 0,
+      "skipped_prefill_tokens": 5760,
+      "prefill_ms": 0.0,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 0.0,
+      "live_pages": 24,
+      "peak_kv_tokens": 5760,
+      "hash_hits": 720,
+      "hash_skips": 20,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 5120,
+      "notes": "cross-session APC hash-hit on published full blocks",
+      "extra": {}
+    },
+    {
+      "method": "disagg_prefill",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 11520,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 138.24,
+      "cow_ms": 0.0,
+      "abort_ms": 0.8,
+      "transfer_tokens": 11520,
+      "transfer_ms": 23.04,
+      "fanout_ms": 162.08,
+      "live_pages": 24,
+      "peak_kv_tokens": 11520,
+      "hash_hits": 696,
+      "hash_skips": 0,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.6666666666666667,
+      "decode_tokens": 2560,
+      "notes": "first fan-out clones k trunks; APC retains hashed residuals",
+      "extra": {}
+    },
+    {
+      "method": "disagg_prefill",
+      "phase": "replay",
+      "sessions": 20,
+      "branching": 1,
+      "trunk_tokens": 256,
+      "prefill_tokens": 0,
+      "skipped_prefill_tokens": 5760,
+      "prefill_ms": 0.0,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 0.0,
+      "live_pages": 24,
+      "peak_kv_tokens": 5760,
+      "hash_hits": 720,
+      "hash_skips": 20,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 5120,
+      "notes": "cross-session APC hash-hit on published full blocks",
+      "extra": {}
+    },
+    {
+      "method": "app",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 2912,
+      "skipped_prefill_tokens": 928,
+      "prefill_ms": 34.944,
+      "cow_ms": 0.2,
+      "abort_ms": 0.0,
+      "transfer_tokens": 352,
+      "transfer_ms": 0.704,
+      "fanout_ms": 35.848000000000006,
+      "live_pages": 96,
+      "peak_kv_tokens": 2880,
+      "hash_hits": 658,
+      "hash_skips": 9,
+      "pruned": 20,
+      "early_aborts": 0,
+      "fork_aliases": 640,
+      "kv_saving": 0.75,
+      "decode_tokens": 2560,
+      "notes": "APP: prune losers, CoW trunk, lazy abort, disagg ships survivors",
+      "extra": {}
+    },
+    {
+      "method": "app",
+      "phase": "replay",
+      "sessions": 20,
+      "branching": 1,
+      "trunk_tokens": 256,
+      "prefill_tokens": 0,
+      "skipped_prefill_tokens": 5760,
+      "prefill_ms": 0.0,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 0.0,
+      "live_pages": 96,
+      "peak_kv_tokens": 5760,
+      "hash_hits": 360,
+      "hash_skips": 20,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 5120,
+      "notes": "replay published winner; APP hash-skips the full prompt",
+      "extra": {}
+    }
+  ],
+  "summary": {
+    "fanout_prefill_ms": {
+      "apc": 138.24,
+      "forkserve": 46.08,
+      "hash_prefill": 138.24,
+      "disagg_prefill": 138.24,
+      "app": 34.944
+    },
+    "fanout_ms": {
+      "apc": 139.04000000000002,
+      "forkserve": 47.08,
+      "hash_prefill": 139.04000000000002,
+      "disagg_prefill": 162.08,
+      "app": 35.848000000000006
+    },
+    "peak_kv": {
+      "apc": 11520,
+      "forkserve": 3840,
+      "hash_prefill": 11520,
+      "disagg_prefill": 11520,
+      "app": 2880
+    },
+    "app_vs_apc_prefill": 0.7472222222222222,
+    "app_vs_apc_fanout": 0.7421749136939011,
+    "app_vs_apc_peak_kv": 0.75,
+    "fs_vs_apc_peak_kv": 0.6666666666666667,
+    "app_pruned": 20,
+    "app_early_aborts": 0
+  },
+  "decode_curve": {
+    "target_accuracy": 0.845,
+    "apc_tokens_to_target": 256.0,
+    "app_tokens_to_target": 153.0,
+    "curve_apc": [
+      {
+        "items": 1.0,
+        "decode_tokens": 256.0,
+        "accuracy": 1.0,
+        "solved": 1.0
+      },
+      {
+        "items": 2.0,
+        "decode_tokens": 512.0,
+        "accuracy": 1.0,
+        "solved": 2.0
+      },
+      {
+        "items": 3.0,
+        "decode_tokens": 768.0,
+        "accuracy": 1.0,
+        "solved": 3.0
+      },
+      {
+        "items": 4.0,
+        "decode_tokens": 1024.0,
+        "accuracy": 1.0,
+        "solved": 4.0
+      },
+      {
+        "items": 5.0,
+        "decode_tokens": 1280.0,
+        "accuracy": 1.0,
+        "solved": 5.0
+      },
+      {
+        "items": 6.0,
+        "decode_tokens": 1536.0,
+        "accuracy": 1.0,
+        "solved": 6.0
+      },
+      {
+        "items": 7.0,
+        "decode_tokens": 1792.0,
+        "accuracy": 1.0,
+        "solved": 7.0
+      },
+      {
+        "items": 8.0,
+        "decode_tokens": 2048.0,
+        "accuracy": 1.0,
+        "solved": 8.0
+      },
+      {
+        "items": 9.0,
+        "decode_tokens": 2304.0,
+        "accuracy": 1.0,
+        "solved": 9.0
+      },
+      {
+        "items": 10.0,
+        "decode_tokens": 2560.0,
+        "accuracy": 1.0,
+        "solved": 10.0
+      },
+      {
+        "items": 11.0,
+        "decode_tokens": 2816.0,
+        "accuracy": 1.0,
+        "solved": 11.0
+      },
+      {
+        "items": 12.0,
+        "decode_tokens": 3072.0,
+        "accuracy": 1.0,
+        "solved": 12.0
+      },
+      {
+        "items": 13.0,
+        "decode_tokens": 3328.0,
+        "accuracy": 1.0,
+        "solved": 13.0
+      },
+      {
+        "items": 14.0,
+        "decode_tokens": 3584.0,
+        "accuracy": 1.0,
+        "solved": 14.0
+      },
+      {
+        "items": 15.0,
+        "decode_tokens": 3840.0,
+        "accuracy": 1.0,
+        "solved": 15.0
+      },
+      {
+        "items": 16.0,
+        "decode_tokens": 4096.0,
+        "accuracy": 1.0,
+        "solved": 16.0
+      },
+      {
+        "items": 17.0,
+        "decode_tokens": 4352.0,
+        "accuracy": 1.0,
+        "solved": 17.0
+      },
+      {
+        "items": 18.0,
+        "decode_tokens": 4608.0,
+        "accuracy": 1.0,
+        "solved": 18.0
+      },
+      {
+        "items": 19.0,
+        "decode_tokens": 4864.0,
+        "accuracy": 1.0,
+        "solved": 19.0
+      },
+      {
+        "items": 20.0,
+        "decode_tokens": 5120.0,
+        "accuracy": 1.0,
+        "solved": 20.0
+      },
+      {
+        "items": 21.0,
+        "decode_tokens": 5376.0,
+        "accuracy": 1.0,
+        "solved": 21.0
+      },
+      {
+        "items": 22.0,
+        "decode_tokens": 5632.0,
+        "accuracy": 1.0,
+        "solved": 22.0
+      },
+      {
+        "items": 23.0,
+        "decode_tokens": 5888.0,
+        "accuracy": 1.0,
+        "solved": 23.0
+      },
+      {
+        "items": 24.0,
+        "decode_tokens": 6144.0,
+        "accuracy": 1.0,
+        "solved": 24.0
+      },
+      {
+        "items": 25.0,
+        "decode_tokens": 6400.0,
+        "accuracy": 1.0,
+        "solved": 25.0
+      },
+      {
+        "items": 26.0,
+        "decode_tokens": 6656.0,
+        "accuracy": 1.0,
+        "solved": 26.0
+      },
+      {
+        "items": 27.0,
+        "decode_tokens": 6912.0,
+        "accuracy": 1.0,
+        "solved": 27.0
+      },
+      {
+        "items": 28.0,
+        "decode_tokens": 7168.0,
+        "accuracy": 1.0,
+        "solved": 28.0
+      },
+      {
+        "items": 29.0,
+        "decode_tokens": 7424.0,
+        "accuracy": 1.0,
+        "solved": 29.0
+      },
+      {
+        "items": 30.0,
+        "decode_tokens": 7680.0,
+        "accuracy": 1.0,
+        "solved": 30.0
+      },
+      {
+        "items": 31.0,
+        "decode_tokens": 7936.0,
+        "accuracy": 1.0,
+        "solved": 31.0
+      },
+      {
+        "items": 32.0,
+        "decode_tokens": 8192.0,
+        "accuracy": 1.0,
+        "solved": 32.0
+      },
+      {
+        "items": 33.0,
+        "decode_tokens": 8448.0,
+        "accuracy": 1.0,
+        "solved": 33.0
+      },
+      {
+        "items": 34.0,
+        "decode_tokens": 8704.0,
+        "accuracy": 1.0,
+        "solved": 34.0
+      },
+      {
+        "items": 35.0,
+        "decode_tokens": 8960.0,
+        "accuracy": 1.0,
+        "solved": 35.0
+      },
+      {
+        "items": 36.0,
+        "decode_tokens": 9216.0,
+        "accuracy": 1.0,
+        "solved": 36.0
+      },
+      {
+        "items": 37.0,
+        "decode_tokens": 9472.0,
+        "accuracy": 1.0,
+        "solved": 37.0
+      },
+      {
+        "items": 38.0,
+        "decode_tokens": 9728.0,
+        "accuracy": 1.0,
+        "solved": 38.0
+      },
+      {
+        "items": 39.0,
+        "decode_tokens": 9984.0,
+        "accuracy": 1.0,
+        "solved": 39.0
+      },
+      {
+        "items": 40.0,
+        "decode_tokens": 10240.0,
+        "accuracy": 1.0,
+        "solved": 40.0
+      },
+      {
+        "items": 41.0,
+        "decode_tokens": 10496.0,
+        "accuracy": 1.0,
+        "solved": 41.0
+      },
+      {
+        "items": 42.0,
+        "decode_tokens": 10752.0,
+        "accuracy": 1.0,
+        "solved": 42.0
+      },
+      {
+        "items": 43.0,
+        "decode_tokens": 11008.0,
+        "accuracy": 0.9767441860465116,
+        "solved": 42.0
+      },
+      {
+        "items": 44.0,
+        "decode_tokens": 11264.0,
+        "accuracy": 0.9545454545454546,
+        "solved": 42.0
+      },
+      {
+        "items": 45.0,
+        "decode_tokens": 11520.0,
+        "accuracy": 0.9333333333333333,
+        "solved": 42.0
+      },
+      {
+        "items": 46.0,
+        "decode_tokens": 11776.0,
+        "accuracy": 0.9130434782608695,
+        "solved": 42.0
+      },
+      {
+        "items": 47.0,
+        "decode_tokens": 12032.0,
+        "accuracy": 0.8936170212765957,
+        "solved": 42.0
+      },
+      {
+        "items": 48.0,
+        "decode_tokens": 12288.0,
+        "accuracy": 0.875,
+        "solved": 42.0
+      },
+      {
+        "items": 49.0,
+        "decode_tokens": 12544.0,
+        "accuracy": 0.8571428571428571,
+        "solved": 42.0
+      },
+      {
+        "items": 50.0,
+        "decode_tokens": 12800.0,
+        "accuracy": 0.84,
+        "solved": 42.0
+      }
+    ],
+    "curve_app": [
+      {
+        "items": 1.0,
+        "decode_tokens": 153.0,
+        "accuracy": 1.0,
+        "solved": 1.0
+      },
+      {
+        "items": 2.0,
+        "decode_tokens": 306.0,
+        "accuracy": 1.0,
+        "solved": 2.0
+      },
+      {
+        "items": 3.0,
+        "decode_tokens": 459.0,
+        "accuracy": 1.0,
+        "solved": 3.0
+      },
+      {
+        "items": 4.0,
+        "decode_tokens": 612.0,
+        "accuracy": 1.0,
+        "solved": 4.0
+      },
+      {
+        "items": 5.0,
+        "decode_tokens": 765.0,
+        "accuracy": 1.0,
+        "solved": 5.0
+      },
+      {
+        "items": 6.0,
+        "decode_tokens": 918.0,
+        "accuracy": 1.0,
+        "solved": 6.0
+      },
+      {
+        "items": 7.0,
+        "decode_tokens": 1071.0,
+        "accuracy": 1.0,
+        "solved": 7.0
+      },
+      {
+        "items": 8.0,
+        "decode_tokens": 1224.0,
+        "accuracy": 1.0,
+        "solved": 8.0
+      },
+      {
+        "items": 9.0,
+        "decode_tokens": 1377.0,
+        "accuracy": 1.0,
+        "solved": 9.0
+      },
+      {
+        "items": 10.0,
+        "decode_tokens": 1530.0,
+        "accuracy": 1.0,
+        "solved": 10.0
+      },
+      {
+        "items": 11.0,
+        "decode_tokens": 1683.0,
+        "accuracy": 1.0,
+        "solved": 11.0
+      },
+      {
+        "items": 12.0,
+        "decode_tokens": 1836.0,
+        "accuracy": 1.0,
+        "solved": 12.0
+      },
+      {
+        "items": 13.0,
+        "decode_tokens": 1989.0,
+        "accuracy": 1.0,
+        "solved": 13.0
+      },
+      {
+        "items": 14.0,
+        "decode_tokens": 2142.0,
+        "accuracy": 1.0,
+        "solved": 14.0
+      },
+      {
+        "items": 15.0,
+        "decode_tokens": 2295.0,
+        "accuracy": 1.0,
+        "solved": 15.0
+      },
+      {
+        "items": 16.0,
+        "decode_tokens": 2448.0,
+        "accuracy": 1.0,
+        "solved": 16.0
+      },
+      {
+        "items": 17.0,
+        "decode_tokens": 2601.0,
+        "accuracy": 1.0,
+        "solved": 17.0
+      },
+      {
+        "items": 18.0,
+        "decode_tokens": 2754.0,
+        "accuracy": 1.0,
+        "solved": 18.0
+      },
+      {
+        "items": 19.0,
+        "decode_tokens": 2907.0,
+        "accuracy": 1.0,
+        "solved": 19.0
+      },
+      {
+        "items": 20.0,
+        "decode_tokens": 3060.0,
+        "accuracy": 1.0,
+        "solved": 20.0
+      },
+      {
+        "items": 21.0,
+        "decode_tokens": 3213.0,
+        "accuracy": 1.0,
+        "solved": 21.0
+      },
+      {
+        "items": 22.0,
+        "decode_tokens": 3366.0,
+        "accuracy": 1.0,
+        "solved": 22.0
+      },
+      {
+        "items": 23.0,
+        "decode_tokens": 3519.0,
+        "accuracy": 1.0,
+        "solved": 23.0
+      },
+      {
+        "items": 24.0,
+        "decode_tokens": 3672.0,
+        "accuracy": 1.0,
+        "solved": 24.0
+      },
+      {
+        "items": 25.0,
+        "decode_tokens": 3825.0,
+        "accuracy": 1.0,
+        "solved": 25.0
+      },
+      {
+        "items": 26.0,
+        "decode_tokens": 3978.0,
+        "accuracy": 1.0,
+        "solved": 26.0
+      },
+      {
+        "items": 27.0,
+        "decode_tokens": 4131.0,
+        "accuracy": 1.0,
+        "solved": 27.0
+      },
+      {
+        "items": 28.0,
+        "decode_tokens": 4284.0,
+        "accuracy": 1.0,
+        "solved": 28.0
+      },
+      {
+        "items": 29.0,
+        "decode_tokens": 4437.0,
+        "accuracy": 1.0,
+        "solved": 29.0
+      },
+      {
+        "items": 30.0,
+        "decode_tokens": 4590.0,
+        "accuracy": 1.0,
+        "solved": 30.0
+      },
+      {
+        "items": 31.0,
+        "decode_tokens": 4743.0,
+        "accuracy": 1.0,
+        "solved": 31.0
+      },
+      {
+        "items": 32.0,
+        "decode_tokens": 4896.0,
+        "accuracy": 1.0,
+        "solved": 32.0
+      },
+      {
+        "items": 33.0,
+        "decode_tokens": 5049.0,
+        "accuracy": 1.0,
+        "solved": 33.0
+      },
+      {
+        "items": 34.0,
+        "decode_tokens": 5202.0,
+        "accuracy": 1.0,
+        "solved": 34.0
+      },
+      {
+        "items": 35.0,
+        "decode_tokens": 5355.0,
+        "accuracy": 1.0,
+        "solved": 35.0
+      },
+      {
+        "items": 36.0,
+        "decode_tokens": 5508.0,
+        "accuracy": 1.0,
+        "solved": 36.0
+      },
+      {
+        "items": 37.0,
+        "decode_tokens": 5661.0,
+        "accuracy": 1.0,
+        "solved": 37.0
+      },
+      {
+        "items": 38.0,
+        "decode_tokens": 5814.0,
+        "accuracy": 1.0,
+        "solved": 38.0
+      },
+      {
+        "items": 39.0,
+        "decode_tokens": 5967.0,
+        "accuracy": 1.0,
+        "solved": 39.0
+      },
+      {
+        "items": 40.0,
+        "decode_tokens": 6120.0,
+        "accuracy": 1.0,
+        "solved": 40.0
+      },
+      {
+        "items": 41.0,
+        "decode_tokens": 6273.0,
+        "accuracy": 1.0,
+        "solved": 41.0
+      },
+      {
+        "items": 42.0,
+        "decode_tokens": 6426.0,
+        "accuracy": 1.0,
+        "solved": 42.0
+      },
+      {
+        "items": 43.0,
+        "decode_tokens": 6579.0,
+        "accuracy": 0.9767441860465116,
+        "solved": 42.0
+      },
+      {
+        "items": 44.0,
+        "decode_tokens": 6732.0,
+        "accuracy": 0.9545454545454546,
+        "solved": 42.0
+      },
+      {
+        "items": 45.0,
+        "decode_tokens": 6885.0,
+        "accuracy": 0.9333333333333333,
+        "solved": 42.0
+      },
+      {
+        "items": 46.0,
+        "decode_tokens": 7038.0,
+        "accuracy": 0.9130434782608695,
+        "solved": 42.0
+      },
+      {
+        "items": 47.0,
+        "decode_tokens": 7191.0,
+        "accuracy": 0.8936170212765957,
+        "solved": 42.0
+      },
+      {
+        "items": 48.0,
+        "decode_tokens": 7344.0,
+        "accuracy": 0.875,
+        "solved": 42.0
+      },
+      {
+        "items": 49.0,
+        "decode_tokens": 7497.0,
+        "accuracy": 0.8571428571428571,
+        "solved": 42.0
+      },
+      {
+        "items": 50.0,
+        "decode_tokens": 7650.0,
+        "accuracy": 0.84,
+        "solved": 42.0
+      }
+    ]
+  },
+  "concurrency": {
+    "max_qps_p99_1s": {
+      "apc": 192,
+      "app": 256
+    },
+    "peak_tok_s": {
+      "apc": 23680.0,
+      "app": 32000.0
+    },
+    "tok_s_gain": 0.3513513513513513,
+    "sweep": [
+      {
+        "qps": 8,
+        "inflight": 3,
+        "apc_running": 3,
+        "fs_running": 3,
+        "apc_tok_s": 1920.0,
+        "fs_tok_s": 1920.0,
+        "apc_p99_ttft_s": 0.020000000000000004,
+        "fs_p99_ttft_s": 0.020000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 16,
+        "inflight": 6,
+        "apc_running": 6,
+        "fs_running": 6,
+        "apc_tok_s": 3840.0,
+        "fs_tok_s": 3840.0,
+        "apc_p99_ttft_s": 0.020000000000000004,
+        "fs_p99_ttft_s": 0.020000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 32,
+        "inflight": 13,
+        "apc_running": 13,
+        "fs_running": 13,
+        "apc_tok_s": 8320.0,
+        "fs_tok_s": 8320.0,
+        "apc_p99_ttft_s": 0.020000000000000004,
+        "fs_p99_ttft_s": 0.020000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 48,
+        "inflight": 19,
+        "apc_running": 19,
+        "fs_running": 19,
+        "apc_tok_s": 12160.0,
+        "fs_tok_s": 12160.0,
+        "apc_p99_ttft_s": 0.020000000000000004,
+        "fs_p99_ttft_s": 0.020000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 64,
+        "inflight": 26,
+        "apc_running": 26,
+        "fs_running": 26,
+        "apc_tok_s": 16640.0,
+        "fs_tok_s": 16640.0,
+        "apc_p99_ttft_s": 0.020000000000000004,
+        "fs_p99_ttft_s": 0.020000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 96,
+        "inflight": 38,
+        "apc_running": 37,
+        "fs_running": 38,
+        "apc_tok_s": 23680.0,
+        "fs_tok_s": 24320.0,
+        "apc_p99_ttft_s": 0.04162162162162163,
+        "fs_p99_ttft_s": 0.020000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 128,
+        "inflight": 51,
+        "apc_running": 37,
+        "fs_running": 50,
+        "apc_tok_s": 23680.0,
+        "fs_tok_s": 32000.0,
+        "apc_p99_ttft_s": 0.32270270270270274,
+        "fs_p99_ttft_s": 0.036000000000000004,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 192,
+        "inflight": 77,
+        "apc_running": 37,
+        "fs_running": 50,
+        "apc_tok_s": 23680.0,
+        "fs_tok_s": 32000.0,
+        "apc_p99_ttft_s": 0.8848648648648649,
+        "fs_p99_ttft_s": 0.452,
+        "apc_slo_ok": true,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      },
+      {
+        "qps": 256,
+        "inflight": 102,
+        "apc_running": 37,
+        "fs_running": 50,
+        "apc_tok_s": 23680.0,
+        "fs_tok_s": 32000.0,
+        "apc_p99_ttft_s": 1.4254054054054055,
+        "fs_p99_ttft_s": 0.8520000000000001,
+        "apc_slo_ok": false,
+        "fs_slo_ok": true,
+        "kv_saving": 0.2559181062060141,
+        "slots_apc": 37,
+        "slots_fs": 50,
+        "extra_batched_tokens": 176
+      }
+    ]
+  }
+}
