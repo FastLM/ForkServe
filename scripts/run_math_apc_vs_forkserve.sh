@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# APC vs ForkServe on multiple math ToT workloads using in-tree vllm_fs.
+# APC vs ForkServe vs APP (forkserve_plus) on multiple math ToT workloads.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_BIN="${FORKSERVE_ENV:-$HOME/envs/forkserve}/bin"
@@ -93,7 +93,7 @@ cd "$ROOT"
 log "exec math APC vs ForkServe"
 exec "$PYTHON" -u -m forkserve.bench \
   --model "$FORKSERVE_MODEL" \
-  --systems vllm_apc,forkserve \
+  --systems vllm_apc,forkserve,forkserve_plus \
   --tp "${FORKSERVE_TP:-2}" \
   --workloads gsm8k,svamp,gsmhard,math500,aime,amc23,game24 \
   --limit "${LIMIT:-80}" \

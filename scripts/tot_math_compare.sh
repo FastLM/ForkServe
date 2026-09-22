@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tree-of-Thoughts math comparison: vLLM APC vs ForkServe.
+# Tree-of-Thoughts math comparison: vLLM APC vs ForkServe vs APP.
 #
 # Main run: 4-way ToT on GSM8K, SVAMP, MATH-500, AIME, AMC23, Game-of-24.
 # Sweep: branching 2/6 on a smaller slice (efficiency vs ToT width).

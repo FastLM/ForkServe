@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run ToT math serving comparison: vLLM APC vs ForkServe, then summarize."""
+"""Run ToT math serving comparison: vLLM APC vs ForkServe vs APP, then summarize."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ OUT = ROOT / "logs" / "tot_math"
 PYTHON = sys.executable
 MODEL = os.environ.get("FORKSERVE_MODEL", str(Path.home() / "models/Qwen3-14B"))
 TP = os.environ.get("FORKSERVE_TP", "2")
-SYSTEMS = os.environ.get("FORKSERVE_SYSTEMS", "vllm_apc,forkserve")
+SYSTEMS = os.environ.get("FORKSERVE_SYSTEMS", "vllm_apc,forkserve,forkserve_plus")
 LIMIT = int(os.environ.get("TOT_MATH_LIMIT", "48"))
 CHUNK = int(os.environ.get("TOT_MATH_CHUNK", "8"))
 SWEEP_LIMIT = int(os.environ.get("TOT_MATH_SWEEP_LIMIT", "16"))

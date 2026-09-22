@@ -73,9 +73,9 @@ def index_rows(rows: list[dict[str, Any]]) -> dict[tuple[str, str, int], dict[st
     return out
 
 
-def compare_pair(apc: dict[str, Any], fs: dict[str, Any]) -> dict[str, Any]:
+def compare_pair(apc: dict[str, Any], other: dict[str, Any], label: str = "forkserve") -> dict[str, Any]:
     a = per_item(apc)
-    f = per_item(fs)
+    f = per_item(other)
     e2e_a = a["e2e_ms_per_item"]
     e2e_f = f["e2e_ms_per_item"]
     fan_a = a["fanout_ms_per_item"]
@@ -86,6 +86,7 @@ def compare_pair(apc: dict[str, Any], fs: dict[str, Any]) -> dict[str, Any]:
         "workload": apc.get("workload"),
         "branching": a["branching"] or f["branching"],
         "n": min(a["n"], f["n"]),
+        "system": label,
         "apc": a,
         "forkserve": f,
         "acc_apc": a["task_score"],
@@ -106,22 +107,33 @@ def write_summary(out_dir: Path) -> dict[str, Any]:
     # b=4 sweep may be absent; main already has b=4 at LIMIT.
 
     pairs = []
+    app_pairs = []
     by = {}
     for r in main:
         by.setdefault((r.get("workload"), _i(r, "branching")), {})[r.get("system")] = r
     for (_wl, _b), sysmap in sorted(by.items(), key=lambda x: str(x[0][0])):
-        if "vllm_apc" in sysmap and "forkserve" in sysmap:
+        if "vllm_apc" not in sysmap:
+            continue
+        if "forkserve" in sysmap:
             pairs.append(compare_pair(sysmap["vllm_apc"], sysmap["forkserve"]))
+        if "forkserve_plus" in sysmap:
+            app_pairs.append(compare_pair(sysmap["vllm_apc"], sysmap["forkserve_plus"], "forkserve_plus"))
 
     sweep_pairs = []
+    app_sweep = []
     sby: dict[tuple[Any, int], dict[str, Any]] = {}
     for r in sweep + [x for x in main if x.get("workload") in ("gsm8k", "math500", "game24")]:
         sby.setdefault((r.get("workload"), _i(r, "branching")), {})[r.get("system")] = r
     for key, sysmap in sorted(sby.items(), key=lambda x: (str(x[0][0]), x[0][1])):
-        if "vllm_apc" in sysmap and "forkserve" in sysmap:
+        if "vllm_apc" not in sysmap:
+            continue
+        if "forkserve" in sysmap:
             sweep_pairs.append(compare_pair(sysmap["vllm_apc"], sysmap["forkserve"]))
+        if "forkserve_plus" in sysmap:
+            app_sweep.append(compare_pair(sysmap["vllm_apc"], sysmap["forkserve_plus"], "forkserve_plus"))
 
     acc_ok = [p for p in pairs if p["acc_delta"] is not None]
+    app_ok = [p for p in app_pairs if p["acc_delta"] is not None]
     headline = {
         "n_workloads": len(pairs),
         "mean_acc_apc": sum(p["acc_apc"] for p in acc_ok) / len(acc_ok) if acc_ok else None,
@@ -129,12 +141,16 @@ def write_summary(out_dir: Path) -> dict[str, Any]:
         "mean_e2e_speedup": sum(p["e2e_speedup"] for p in pairs) / len(pairs) if pairs else None,
         "mean_fanout_speedup": sum(p["fanout_speedup"] for p in pairs) / len(pairs) if pairs else None,
         "mean_kv_save_vs_apc": sum(p["kv_save_vs_apc"] for p in pairs) / len(pairs) if pairs else None,
+        "mean_acc_app": sum(p["acc_fs"] for p in app_ok) / len(app_ok) if app_ok else None,
+        "mean_kv_save_app_vs_apc": sum(p["kv_save_vs_apc"] for p in app_pairs) / len(app_pairs) if app_pairs else None,
     }
     report = {
         "model": os_model(),
         "headline": headline,
         "pairs": pairs,
+        "app_pairs": app_pairs,
         "sweep": sweep_pairs,
+        "app_sweep": app_sweep,
         "rows_main": [
             {
                 "system": r.get("system"),
@@ -147,7 +163,9 @@ def write_summary(out_dir: Path) -> dict[str, Any]:
     }
     dest = out_dir / "summary.json"
     dest.write_text(json.dumps(report, indent=2))
-    table = _text_table(pairs)
+    table = _text_table(pairs, "ForkServe")
+    if app_pairs:
+        table += "\n" + _text_table(app_pairs, "APP")
     (out_dir / "summary.txt").write_text(table)
     print(table, flush=True)
     return report
@@ -159,8 +177,9 @@ def os_model() -> str:
     return os.environ.get("FORKSERVE_MODEL", "")
 
 
-def _text_table(pairs: list[dict[str, Any]]) -> str:
+def _text_table(pairs: list[dict[str, Any]], other: str = "ForkServe") -> str:
     lines = [
+        f"APC vs {other}",
         "workload  b   n  acc_apc  acc_fs  d_acc  e2e_ms/item  APC  FS  speedup  fanout APC  FS  peak_kv APC   FS  kv_save",
         "-" * 118,
     ]
