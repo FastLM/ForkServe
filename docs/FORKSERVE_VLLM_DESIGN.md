@@ -44,50 +44,50 @@ table.
 
 ### 1.1 Storage identity
 
-Let \(b\) be bytes of KV per token (one sequence, all layers), \(P\)
-the scheduler block size, \(L\) the trunk length, \(k\) live children,
-\(\ell_i\) the residual of child \(i\), \(r = L \bmod P\) the unaligned
+Let $b$ be bytes of KV per token (one sequence, all layers), $P$
+the scheduler block size, $L$ the trunk length, $k$ live children,
+$\ell_i$ the residual of child $i$, $r = L \bmod P$ the unaligned
 tail.
 
 | Scheme | Live KV tokens (distinct physical rows) |
 |---|---|
-| Clone / APC miss on a new trunk | \(kL + \sum \ell_i\) |
-| APC hash-hit, aligned (\(r=0\)) | \(L + \sum \ell_i\) |
-| APC hash-hit, unaligned | \(L + \sum \ell_i + (k-1)r\)  (tail is private per child) |
-| APC v1 with a duplicate full block | previous \(+\;P\) per duplicate |
-| APC partial-hit CoW copy | previous \(+\;kP\)  (full-block memcpy) |
-| Extra-pin CoW (today’s hook) | \(L - r + \sum (\ell_i + r)\)  (full pages shared; tail cloned) |
-| **ForkServe freeze-tail** | \(L + \sum \ell_i\)  (tail is one RO page with \(n_\mathrm{valid}=r\)) |
+| Clone / APC miss on a new trunk | $kL + \sum \ell_i$ |
+| APC hash-hit, aligned ($r=0$) | $L + \sum \ell_i$ |
+| APC hash-hit, unaligned | $L + \sum \ell_i + (k-1)r$  (tail is private per child) |
+| APC v1 with a duplicate full block | previous $+\;P$ per duplicate |
+| APC partial-hit CoW copy | previous $+\;kP$  (full-block memcpy) |
+| Extra-pin CoW (today’s hook) | $L - r + \sum (\ell_i + r)$  (full pages shared; tail cloned) |
+| **ForkServe freeze-tail** | $L + \sum \ell_i$  (tail is one RO page with $n_\mathrm{valid}=r$) |
 
-The aligned hash-hit case is already \(M_\mathrm{CoW}\). ForkServe
+The aligned hash-hit case is already $M_\mathrm{CoW}$. ForkServe
 beats APC when any of these hold: the trunk is not yet hashed (first
-fan-out / same-batch siblings), \(r \neq 0\), a duplicate was published,
+fan-out / same-batch siblings), $r \neq 0$, a duplicate was published,
 a partial-hit copied a full block, or children are speculative and
 must not wait for tokens.
 
-Worked 8B bf16 (Llama-3-8B GQA: \(b = 2 \cdot 32 \cdot 8 \cdot 128 \cdot 2 = 128\,\mathrm{KiB/tok}\)),
-\(L=8192\), \(k=4\), \(\ell_i=128\), \(P=16\), \(r=0\):
+Worked 8B bf16 (Llama-3-8B GQA: $b = 2 \cdot 32 \cdot 8 \cdot 128 \cdot 2 = 128\,\mathrm{KiB/tok}$),
+$L=8192$, $k=4$, $\ell_i=128$, $P=16$, $r=0$:
 
-* clone = \(4\cdot 8192 + 512 = 33280\) tok \(\approx 4.06\,\mathrm{GiB}\)
-* APC hit / ForkServe = \(8192+512=8704\) tok \(\approx 1.06\,\mathrm{GiB}\)
-* ratio \(\approx 3.82\times\)
+* clone = $4\cdot 8192 + 512 = 33280$ tok $\approx 4.06\,\mathrm{GiB}$
+* APC hit / ForkServe = $8192+512=8704$ tok $\approx 1.06\,\mathrm{GiB}$
+* ratio $\approx 3.82\times$
 
-Same with \(L=8191\) (\(r=15\)):
+Same with $L=8191$ ($r=15$):
 
-* APC hit = \(8191 + 512 + 3\cdot 15 = 8748\) tok
-* freeze-tail = \(8191 + 512 = 8703\) tok
-* small on one turn; \(\Theta(k)\) in \(r\) on a ToT tree of depth \(d\)
+* APC hit = $8191 + 512 + 3\cdot 15 = 8748$ tok
+* freeze-tail = $8191 + 512 = 8703$ tok
+* small on one turn; $\Theta(k)$ in $r$ on a ToT tree of depth $d$
   (each level pays the tail tax again).
 
 Same with APC *miss* (four specialists issued before any block is
 hashed, typical first planner fan-out): APC pays the clone number;
-ForkServe still pays \(8704\).
+ForkServe still pays $8704$.
 
 ---
 
 ## 2. Why the kernel is involved
 
-PagedAttention / FlashAttention / FlashInfer address token \(t\) as
+PagedAttention / FlashAttention / FlashInfer address token $t$ as
 
 ```
 block = block_table[t / P]
@@ -99,9 +99,9 @@ assumption is why APC refuses to cache a partial block, and why today’s
 hook only aliases `parent_tokens // block_size` pages
 (`select_full_blocks` in `forkserve/engine/vllm_loop.py`).
 
-Freeze-tail puts a page with \(n_\mathrm{valid}=r < P\) **in the
+Freeze-tail puts a page with $n_{\mathrm{valid}}=r \lt P$ **in the
 middle** of the child’s sequence (shared tail, then residual pages).
-A stock kernel would read \(P-r\) garbage rows as extra tokens and
+A stock kernel would read $P-r$ garbage rows as extra tokens and
 shift the residual. That is a correctness bug, not a performance
 footnote.
 
@@ -110,8 +110,8 @@ together:
 
 1. **Physical pool** — refcount + RO bit + `n_valid` (OS page frame).
 2. **Logical table** — parent alias + residual list, not a cloned
-   `block_ids` vector of length \(L/P\).
-3. **Kernel slot map** — token \(t\) is *not* always \(t/P\) once a
+   `block_ids` vector of length $L/P$.
+3. **Kernel slot map** — token $t$ is *not* always $t/P$ once a
    frozen page sits on the fork boundary.
 
 Attention itself does **not** copy KV when two sequences share a
@@ -193,14 +193,14 @@ and increfs the parent’s page *frames* in a tree-walk that can be
 deferred: the parent’s `ref_cnt` is enough if we incref the table
 object rather than every page. Two implementations, pick one:
 
-| | Incref every page id | Incref the parent table |
-|---|---|---|
-| fork CPU | \(O(L/P)\) | \(O(1)\) |
+| &nbsp; | Incref every page id | Incref the parent table |
+| --- | --- | --- |
+| fork CPU | $O(L/P)$ | $O(1)$ |
 | abort | decref residual pages | decref table; cascade when table ref hits 0 |
 | kernel flatten | walk chain | walk chain |
 
 Use **table-level refcount**. Today’s hook copies the parent’s
-`req_to_blocks` list and `touch`es every block — \(O(L/P)\) and it
+`req_to_blocks` list and `touch`es every block — $O(L/P)$ and it
 extra-pins even after the parent request is gone. Table-level ref
 keeps the frames alive without a second pin list.
 
@@ -219,23 +219,23 @@ The parent is unchanged. This is the POSIX CoW fault.
 
 On `fork(u)`:
 
-1. Let \(r = |x_u| \bmod P\). Full pages \([0, |x_u|//P)\) stay
+1. Let $r = |x_u| \bmod P$. Full pages $[0, |x_u|//P)$ stay
    shared RO.
-2. If \(r > 0\), the last page is marked RO with `n_valid = r`.
+2. If $r > 0$, the last page is marked RO with `n_valid = r`.
    It is **not** filled by any child. Each child allocates a fresh
-   residual page for tokens after \(|x_u|\).
-3. Internal fragmentation: the frozen page wastes \(P-r\) slots,
-   **once**. APC wastes \(r\) valid rows **per child**.
+   residual page for tokens after $|x_u|$.
+3. Internal fragmentation: the frozen page wastes $P-r$ slots,
+   **once**. APC wastes $r$ valid rows **per child**.
 
 Do **not** pad the prompt with dummy tokens to force alignment.
 That changes positions and logits.
 
-Allocated pages are not the same as valid rows. If \(r+\ell_i \le P\)
+Allocated pages are not the same as valid rows. If $r+\ell_i \le P$
 for every child, APC packs the unaligned tail and the residual into
-**one** private page per child (\(kP\) slots). Freeze-tail keeps a
-frozen page **plus** \(k\) residual pages (\((k+1)P\) slots) and can
+**one** private page per child ($kP$ slots). Freeze-tail keeps a
+frozen page **plus** $k$ residual pages ($(k+1)P$ slots) and can
 lose. Typical agent wrappers are tens to thousands of tokens, so
-\(\ell_i > P-r\) and freeze wins. Use an **adaptive tail**:
+$\ell_i > P-r$ and freeze wins. Use an **adaptive tail**:
 
 ```
 pages_pack  = k * ceil((r + ℓ) / P)      # clone r into each child's first page
@@ -244,21 +244,21 @@ if pages_freeze < pages_pack: freeze
 else: cow_copy_kv_rows(src, child, n_valid=r)  # pack, copy r rows not P
 ```
 
-Valid-row identity is still \(L+\sum\ell_i\) only under freeze. Pack
-pays \((k-1)r\) extra valid rows in exchange for fewer frames. The
-kernel in §4.1 makes pack cheap (copy \(r\) rows, not \(P\)).
+Valid-row identity is still $L+\sum\ell_i$ only under freeze. Pack
+pays $(k-1)r$ extra valid rows in exchange for fewer frames. The
+kernel in §4.1 makes pack cheap (copy $r$ rows, not $P$).
 
 ### 3.4 Commit by LCP, then publish
 
 `commit(u, x)` is a token procedure (the harness may have rewritten
 the wrapper):
 
-1. \(v^\star = \arg\max_{v \in \mathrm{children}(u)} \mathrm{LCP}(x, x_v)\).
-2. Pages of \(v^\star\) covering the LCP become COMMIT. If LCP lands
+1. $v^\star = \arg\max_{v \in \mathrm{children}(u)} \mathrm{LCP}(x, x_v)$.
+2. Pages of $v^\star$ covering the LCP become COMMIT. If LCP lands
    mid-page, `split_at` (copy `keep_valid` rows, drop the guessed
    tail).
 3. Prefill the unmatched tail as committed, high-priority, chunked.
-4. `abort` the other children of \(u\) — decref residual frames only.
+4. `abort` the other children of $u$ — decref residual frames only.
 5. **Then** `publish_full` every full COMMIT page into the APC index
    (`hash_block` as in `forkserve/hash_forkserve.py`). Cross-session
    `open` uses `get_computed_blocks` unchanged.
@@ -317,7 +317,7 @@ n_residual
 residual_ptr
 ```
 
-Token \(t\) (0-based in the sequence):
+Token $t$ (0-based in the sequence):
 
 ```
 if t < n_shared * P:           return shared[t / P], t % P
@@ -369,10 +369,10 @@ silently corrupting a sibling’s trunk.
 
 * No new attention score kernel. PagedAttention stays.
 * No token-level page size in the FA inner loop. Residuals stay
-  size \(P\); fragmentation of short residuals is \(\lt P\) per child,
+  size $P$; fragmentation of short residuals is $\lt P$ per child,
   which is the same as APC.
 * No mixed page sizes in v1. A later optimisation (sub-page residual
-  \(P_r=4\)) needs every backend to advertise a second kernel block
+  $P_r=4$) needs every backend to advertise a second kernel block
   size; not required to beat APC.
 
 ---
@@ -381,12 +381,12 @@ silently corrupting a sibling’s trunk.
 
 APC’s free queue is LRU over blocks. A tool pause with `ref_cnt=0`
 puts the trunk at the LRU head; the next allocate can evict it and
-the next turn recomputes \(L\) tokens. Continuum/MORI fight this at
+the next turn recomputes $L$ tokens. Continuum/MORI fight this at
 session granularity.
 
 ForkServe ranks **nodes**, not requests:
 
-1. SPEC leaves (TTL on residual size, not \(L+\ell\)).
+1. SPEC leaves (TTL on residual size, not $L+\ell$).
 2. COMMIT idle leaves.
 3. COMMIT spine / shared trunk. A trunk page’s TTL does not run while
    any child maps it (`ref_cnt > 0` or table-level ref).
@@ -396,10 +396,10 @@ pages stay in HBM while any live child needs them.
 
 Speculative admission (paper Algorithm 1) is what keeps ForkServe
 from *losing* to APC on storage: unbounded multi-child observation
-guesses allocate \(\sum |x^o|\) that APC never would. Hard caps:
+guesses allocate $\sum |x^o|$ that APC never would. Hard caps:
 
 * `M_free` residual HBM;
-* idle horizon \(T_\mathrm{idle}+\gamma\);
+* idle horizon $T_\mathrm{idle}+\gamma$;
 * `B^s_t = 0` under saturation.
 
 A miss aborts at residual cost. That is the only reason multi-child
@@ -413,13 +413,13 @@ speculation is rational.
 
 | System | How KV is shared | Fan-out storage | Partial tail | Spec pages | Idle use |
 |---|---|---|---|---|---|
-| vLLM APC | hash of full blocks, after tokens | \(L+\sum\ell_i\) on hit; \(kL+\sum\ell_i\) on miss; duplicates until free | cloned per child | n/a | none |
+| vLLM APC | hash of full blocks, after tokens | $L+\sum\ell_i$ on hit; $kL+\sum\ell_i$ on miss; duplicates until free | cloned per child | n/a | none |
 | SGLang Radix | token-identity radix, after tokens | same as APC hit once inserted | radix node = full page | n/a | none |
 | Continuum / MORI | retain/offload current session | 1 trunk, no siblings | n/a | n/a | retain / offload |
 | Sutradhara | linear tool-independent prefix | 1 continuation | suffix on critical path | no tree | overlap one prefix |
 | ForkKV | CoW LoRA residual vs base | adapters, not control flow | n/a | n/a | n/a |
 | Extra-pin hook (today) | parent snapshot + `touch` | full pages shared | cloned (`select_full_blocks`) | not hashed | two-class opt-in |
-| **ForkServe** | node-identity CoW tree, before tokens | \(L+\sum\ell_i\) | one RO freeze | residual only, evicted first | spec prefill of \(x^k\) |
+| **ForkServe** | node-identity CoW tree, before tokens | $L+\sum\ell_i$ | one RO freeze | residual only, evicted first | spec prefill of $x^k$ |
 
 ### 6.2 APC vs ForkServe, mechanism by mechanism
 
@@ -475,8 +475,8 @@ step is a strict storage improvement over the previous.
 | 0 | Keep extra-pin hook + APC publish (status quo) | aligned fan-out vs miss/clone | no |
 | 1 | `cow_copy_kv_rows`; `_apply_cow` passes `n_valid` | partial-hit copies | yes |
 | 2 | Dedupe in `cache_full_blocks` / `publish_full` | NOTE #1 duplicates | no |
-| 3 | `LogicalTable` in `KVCacheManager`; `fork_alias` skips hash; table-level ref (drop extra-pin list) | \(O(1)\) fork metadata; no double pin | no |
-| 4 | Freeze-tail + fork-aware slot map (Tier B) or copy-rows fallback (Tier A) | \((k-1)r\) tokens | yes for Tier B |
+| 3 | `LogicalTable` in `KVCacheManager`; `fork_alias` skips hash; table-level ref (drop extra-pin list) | $O(1)$ fork metadata; no double pin | no |
+| 4 | Freeze-tail + fork-aware slot map (Tier B) or copy-rows fallback (Tier A) | $(k-1)r$ tokens | yes for Tier B |
 | 5 | SPEC kind + leaf-first free-queue class | speculative HBM ≤ `M_free` | no |
 | 6 | Two-class `AsyncScheduler` default-on when mixed batches exist | not storage; TBT isolation | no |
 

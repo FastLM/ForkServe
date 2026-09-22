@@ -4,8 +4,8 @@ Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). vLLM mapping: 
 
 ## Why combine them
 
-| | vLLM Automatic Prefix Caching | ForkServe |
-|---|---|---|
+| &nbsp; | vLLM Automatic Prefix Caching | ForkServe |
+| --- | --- | --- |
 | When sharing appears | After tokens exist | At harness `fork` (tokens may not exist yet) |
 | What is shared | Full blocks with identical content | Trunk pages by refcount (CoW) |
 | Best at | Cross-session / opportunistic reuse | Same-session fan-out + speculative prefill |
