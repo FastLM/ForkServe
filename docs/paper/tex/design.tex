@@ -51,7 +51,7 @@ A tree-sticky router keeps a session's trunk on one worker; residual-only steals
 
 \begin{figure*}[t]
 \centering
-\input{tex/fig_pipeline}
+\resizebox{\textwidth}{!}{\input{tex/fig_pipeline}}
 \caption{\textbf{Per-branch prefill pruning.}
 Hash lookup, draft score, and an early prefix check run before GPU prefill.
 The disaggregated connector inserts only a retained residual.

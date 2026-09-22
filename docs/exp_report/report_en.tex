@@ -39,7 +39,7 @@
   linkcolor=Ink,
   citecolor=Ink,
   urlcolor=APC,
-  pdftitle={ForkServe: Branch-Aware KV Sharing for Storage-Efficient vLLM Serving},
+  pdftitle={ForkServe: Branch-Aware Prefill Pruning for Efficient Agentic LLM Serving},
 }
 
 \pagestyle{fancy}
@@ -57,8 +57,8 @@
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.25em}
 \setstretch{1.15}
 
-\title{\textbf{ForkServe: Branch-Aware KV\\[-0.12em]
-Sharing for Storage-Efficient vLLM Serving}}
+\title{\textbf{ForkServe: Branch-Aware Prefill Pruning\\[-0.12em]
+for Efficient Agentic LLM Serving}}
 \author{%
 \begin{tabular}[t]{c}
 Dong Liu \hspace{1.4em} Hao Wu \hspace{1.4em} Chuan Wu \\[0.55em]
@@ -141,7 +141,8 @@ They differ by dataset, problem count, batching, and tensor-parallel width.
 Parameter & Specification \\
 \midrule
 Node & four NVIDIA A100-SXM4 40GB \\
-Model & Qwen3-14B (A--C, G, H), Qwen3-8B (E, F), DeepSeek-R1-Distill-Llama-8B (I, J), \texttt{bfloat16} \\
+Model & Qwen3-14B (A--C, G, H), Qwen3-8B (E, F), \\
+      & DeepSeek-R1-Distill-Llama-8B (I, J), \texttt{bfloat16} \\
 Max sequence length & $4096$ (A--H); $8192$ (I, J) \\
 Prefill & chunked; at most $2048$ batched tokens \\
 Systems & vLLM recompute, vLLM APC, ForkServe \\

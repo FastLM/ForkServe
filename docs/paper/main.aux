@@ -84,7 +84,6 @@
 \citation{hive}
 \citation{continuum,mori,sutradhara}
 \citation{sutradhara}
-\citation{sglang}
 \newlabel{fig:system}{{1}{3}{\textbf {\sys {} architecture.} The harness exposes branch events. The context tree aliases trunk pages at \texttt {fork}. Advanced prefill pruning filters each residual before GPU prefill: hash skip, draft prune, early abort, then a disaggregated-prefill gate that inserts only retained KV. Decode attends to the committed spine. Freed KV raises the number of concurrent sessions under the same HBM budget}{figure.1}{}}
 \newlabel{fig:system@cref}{{[figure][1][]1}{[1][2][]3}{}{}{}}
 \newlabel{sec:prior}{{2.3}{3}{}{subsection.2.3}{}}
@@ -93,13 +92,14 @@
 \newlabel{sec:insights@cref}{{[subsection][4][2]2.4}{[1][3][]3}{}{}{}}
 \newlabel{ins:known}{{1}{3}{Known-suffix dominance}{insight.1}{}}
 \newlabel{ins:known@cref}{{[insight][1][]1}{[1][3][]3}{}{}{}}
-\newlabel{ins:fork}{{2}{3}{Fork, don't clone}{insight.2}{}}
-\newlabel{ins:fork@cref}{{[insight][2][]2}{[1][3][]3}{}{}{}}
+\citation{sglang}
 \citation{continuum,mori}
 \citation{sarathi,jitserve}
 \citation{ayo,parrot,murakkab}
 \newlabel{tab:landscape}{{1}{4}{Comparison of agentic serving systems. \cmark {}~full support; \pmark {}~partial / single-path; \xmark {}~absent. \sys {} is the first to combine forkable branch state, multi-child speculative prefill, and idle-aware admission}{table.1}{}}
 \newlabel{tab:landscape@cref}{{[table][1][]1}{[1][3][]4}{}{}{}}
+\newlabel{ins:fork}{{2}{4}{Fork, don't clone}{insight.2}{}}
+\newlabel{ins:fork@cref}{{[insight][2][]2}{[1][4][]4}{}{}{}}
 \newlabel{ins:idle}{{3}{4}{Idle is compute}{insight.3}{}}
 \newlabel{ins:idle@cref}{{[insight][3][]3}{[1][4][]4}{}{}{}}
 \newlabel{ins:budget}{{4}{4}{Speculate with a budget, miss with a residual}{insight.4}{}}
@@ -127,21 +127,21 @@
 \citation{speculative,medusa,eagledraft}
 \citation{sarathi}
 \citation{jitserve}
-\citation{sarathisplit}
 \newlabel{fig:app}{{2}{6}{\textbf {Per-branch prefill pruning.} Hash lookup, draft score, and an early prefix check run before GPU prefill. The disaggregated connector inserts only a retained residual. A loop is dropped before prefill; an illegal prefix aborts early; a replayed full block is a local hash hit and is not transferred. The winner is always retained, and decode sees only the committed spine}{figure.2}{}}
 \newlabel{fig:app@cref}{{[figure][2][]2}{[1][5][]6}{}{}{}}
 \newlabel{eq:mem}{{1}{6}{}{equation.1}{}}
-\newlabel{eq:mem@cref}{{[equation][1][]1}{[1][5][]6}{}{}{}}
+\newlabel{eq:mem@cref}{{[equation][1][]1}{[1][6][]6}{}{}{}}
 \newlabel{sec:speculate}{{3.3}{6}{}{subsection.3.3}{}}
 \newlabel{sec:speculate@cref}{{[subsection][3][3]3.3}{[1][6][]6}{}{}{}}
 \newlabel{eq:gain}{{2}{6}{}{equation.2}{}}
 \newlabel{eq:gain@cref}{{[equation][2][]2}{[1][6][]6}{}{}{}}
 \newlabel{eq:cost}{{3}{6}{}{equation.3}{}}
 \newlabel{eq:cost@cref}{{[equation][3][]3}{[1][6][]6}{}{}{}}
+\citation{sarathisplit}
 \newlabel{fig:tree}{{3}{7}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.3}{}}
 \newlabel{fig:tree@cref}{{[figure][3][]3}{[1][6][]7}{}{}{}}
 \newlabel{alg:budget}{{1}{7}{}{algorithm.1}{}}
-\newlabel{alg:budget@cref}{{[algorithm][1][]1}{[1][6][]7}{}{}{}}
+\newlabel{alg:budget@cref}{{[algorithm][1][]1}{[1][7][]7}{}{}{}}
 \newlabel{thm:correct}{{2}{7}{Output identity}{theorem.2}{}}
 \newlabel{thm:correct@cref}{{[theorem][2][]2}{[1][7][]7}{}{}{}}
 \citation{vllm}
@@ -152,10 +152,6 @@
 \citation{autellix}
 \citation{saga}
 \citation{thunderagent}
-\citation{distserve,splitwise}
-\citation{sutradhara}
-\citation{continuum}
-\citation{mori}
 \newlabel{sec:app}{{3.4}{8}{}{subsection.3.4}{}}
 \newlabel{sec:app@cref}{{[subsection][4][3]3.4}{[1][8][]8}{}{}{}}
 \newlabel{sec:schedule}{{3.5}{8}{}{subsection.3.5}{}}
@@ -164,12 +160,16 @@
 \newlabel{eq:bc@cref}{{[equation][4][]4}{[1][8][]8}{}{}{}}
 \newlabel{eq:bs}{{5}{8}{}{equation.5}{}}
 \newlabel{eq:bs@cref}{{[equation][5][]5}{[1][8][]8}{}{}{}}
-\newlabel{tab:gsm}{{3}{9}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Accuracy is the official score on the full file}{table.3}{}}
-\newlabel{tab:gsm@cref}{{[table][3][]3}{[1][9][]9}{}{}{}}
+\citation{distserve,splitwise}
+\citation{sutradhara}
+\citation{continuum}
+\citation{mori}
 \newlabel{sec:eval}{{4}{9}{}{section.4}{}}
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][9][]9}{}{}{}}
 \newlabel{sec:eval-gpu}{{4.1}{9}{}{subsection.4.1}{}}
 \newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][9][]9}{}{}{}}
+\newlabel{tab:gsm}{{3}{9}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Accuracy is the official score on the full file}{table.3}{}}
+\newlabel{tab:gsm@cref}{{[table][3][]3}{[1][9][]9}{}{}{}}
 \newlabel{tab:app}{{4}{9}{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Not GPU wall-clock. \app is the only column that both shares the trunk and drops low-score residuals before prefill}{table.4}{}}
 \newlabel{tab:app@cref}{{[table][4][]4}{[1][9][]9}{}{}{}}
 \newlabel{sec:eval-app}{{4.2}{9}{}{subsection.4.2}{}}
@@ -203,14 +203,14 @@
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
-\bibcite{claude_code}{{4}{}{{}}{{}}}
-\bibcite{spork}{{5}{}{{}}{{}}}
-\bibcite{sutradhara}{{6}{}{{}}{{}}}
-\bibcite{medusa}{{7}{}{{}}{{}}}
 \newlabel{sec:related}{{5}{10}{}{section.5}{}}
 \newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
 \newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
 \newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
+\bibcite{claude_code}{{4}{}{{}}{{}}}
+\bibcite{spork}{{5}{}{{}}{{}}}
+\bibcite{sutradhara}{{6}{}{{}}{{}}}
+\bibcite{medusa}{{7}{}{{}}{{}}}
 \bibcite{murakkab}{{8}{}{{}}{{}}}
 \bibcite{idlespec}{{9}{}{{}}{{}}}
 \bibcite{contextrot}{{10}{}{{}}{{}}}
