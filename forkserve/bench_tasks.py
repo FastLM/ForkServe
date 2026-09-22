@@ -194,14 +194,23 @@ def chat_style() -> str:
     model = (os.environ.get("FORKSERVE_MODEL") or "").lower()
     if "deepseek" in model or "r1-distill" in model:
         return "deepseek_r1"
+    if "mistral" in model:
+        return "mistral"
+    if "llama" in model:
+        return "llama"
     return "qwen"
 
 
 def _think_tail() -> str:
     # Qwen3 honors /no_think. R1-distill always opens <think> in the template.
-    if chat_style() == "deepseek_r1":
+    # Llama / Mistral treat that token as user text and should not see it.
+    if chat_style() in ("deepseek_r1", "mistral", "llama"):
         return ""
     return "\n/no_think"
+
+
+def _wrappers() -> ToolWrappers:
+    return ToolWrappers(style=chat_style())
 
 
 def _chat(system: str, user: str) -> str:
@@ -222,7 +231,7 @@ def gsm8k_trunk(item: MathItem) -> str:
 
 
 def gsm8k_thoughts(branching: int) -> list[str]:
-    w = ToolWrappers()
+    w = _wrappers()
     out: list[str] = []
     for i in range(branching):
         out.append(w.thought_prefix(i) + GSM8K_STRATEGIES[i % len(GSM8K_STRATEGIES)])
@@ -238,7 +247,7 @@ def game24_trunk(item: MathItem) -> str:
 
 
 def game24_thoughts(branching: int) -> list[str]:
-    w = ToolWrappers()
+    w = _wrappers()
     out: list[str] = []
     for i in range(branching):
         out.append(w.thought_prefix(i) + GAME24_STRATEGIES[i % len(GAME24_STRATEGIES)])
@@ -258,7 +267,7 @@ def humaneval_trunk(item: CodeItem) -> str:
 
 
 def humaneval_sketches(branching: int) -> list[str]:
-    w = ToolWrappers()
+    w = _wrappers()
     out: list[str] = []
     for i in range(branching):
         out.append(w.thought_prefix(i) + HUMANEVAL_SKETCHES[i % len(HUMANEVAL_SKETCHES)])
@@ -266,7 +275,7 @@ def humaneval_sketches(branching: int) -> list[str]:
 
 
 def humaneval_react_strings(item: CodeItem) -> tuple[str, str, str]:
-    w = ToolWrappers()
+    w = _wrappers()
     wrap = w.observation("bash")
     recov = w.recovery("bash")
     obs = (
@@ -433,7 +442,7 @@ def contest_math_trunk(item: MathItem) -> str:
 
 
 def contest_thoughts(branching: int) -> list[str]:
-    w = ToolWrappers()
+    w = _wrappers()
     out: list[str] = []
     for i in range(branching):
         out.append(w.thought_prefix(i) + CONTEST_STRATEGIES[i % len(CONTEST_STRATEGIES)])

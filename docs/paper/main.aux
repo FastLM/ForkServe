@@ -28,9 +28,9 @@
 \citation{smoothagent}
 \citation{idlespec}
 \citation{pie}
-\citation{continuum,mori}
 \newlabel{sec:intro}{{1}{1}{}{section.1}{}}
 \newlabel{sec:intro@cref}{{[section][1][]1}{[1][1][]1}{}{}{}}
+\citation{continuum,mori}
 \citation{osfork,tanenbaumos}
 \citation{continuum}
 \citation{mori}
@@ -48,11 +48,11 @@
 \citation{react,toolformer,gorilla}
 \citation{autogen,metagpt,pythia}
 \citation{selfconsistency}
+\newlabel{sec:problem}{{2}{2}{}{section.2}{}}
+\newlabel{sec:problem@cref}{{[section][2][]2}{[1][2][]2}{}{}{}}
 \citation{tot,mctsllm,hive}
 \citation{hive}
 \citation{smoothagent,memgpt,contextrot}
-\newlabel{sec:problem}{{2}{2}{}{section.2}{}}
-\newlabel{sec:problem@cref}{{[section][2][]2}{[1][2][]2}{}{}{}}
 \citation{autellix,jitserve,hermes,saga,pythia,thunderagent,ayo,parrot,murakkab}
 \citation{continuum,infercept}
 \citation{mori}
@@ -63,6 +63,10 @@
 \citation{idlespec}
 \citation{speculative,medusa,eagledraft}
 \citation{forkkv}
+\newlabel{fig:system}{{1}{3}{\textbf {\sys {} architecture.} The harness exposes branch events. The context tree aliases trunk pages at \texttt {fork} by pointer swap (refcount $=k$, no memcpy). Advanced prefill pruning then decides, per residual, whether GPU prefill runs at all: hash skip, draft prune, early abort, then a disaggregated-prefill gate that inserts only retained KV. Decode attends to the committed spine. Freed KV raises the number of concurrent sessions under the same HBM budget}{figure.1}{}}
+\newlabel{fig:system@cref}{{[figure][1][]1}{[1][2][]3}{}{}{}}
+\newlabel{sec:prior}{{2.3}{3}{}{subsection.2.3}{}}
+\newlabel{sec:prior@cref}{{[subsection][3][2]2.3}{[1][3][]3}{}{}{}}
 \citation{vllm}
 \citation{sglang}
 \citation{autellix}
@@ -84,20 +88,14 @@
 \citation{hive}
 \citation{continuum,mori,sutradhara}
 \citation{sutradhara}
-\newlabel{fig:system}{{1}{3}{\textbf {\sys {} architecture.} The harness exposes branch events. The context tree aliases trunk pages at \texttt {fork}. Advanced prefill pruning filters each residual before GPU prefill: hash skip, draft prune, early abort, then a disaggregated-prefill gate that inserts only retained KV. Decode attends to the committed spine. Freed KV raises the number of concurrent sessions under the same HBM budget}{figure.1}{}}
-\newlabel{fig:system@cref}{{[figure][1][]1}{[1][2][]3}{}{}{}}
-\newlabel{sec:prior}{{2.3}{3}{}{subsection.2.3}{}}
-\newlabel{sec:prior@cref}{{[subsection][3][2]2.3}{[1][3][]3}{}{}{}}
-\newlabel{sec:insights}{{2.4}{3}{}{subsection.2.4}{}}
-\newlabel{sec:insights@cref}{{[subsection][4][2]2.4}{[1][3][]3}{}{}{}}
-\newlabel{ins:known}{{1}{3}{Known-suffix dominance}{insight.1}{}}
-\newlabel{ins:known@cref}{{[insight][1][]1}{[1][3][]3}{}{}{}}
 \citation{sglang}
 \citation{continuum,mori}
 \citation{sarathi,jitserve}
 \citation{ayo,parrot,murakkab}
-\newlabel{tab:landscape}{{1}{4}{Comparison of agentic serving systems. \cmark {}~full support; \pmark {}~partial / single-path; \xmark {}~absent. \sys {} is the first to combine forkable branch state, multi-child speculative prefill, and idle-aware admission}{table.1}{}}
-\newlabel{tab:landscape@cref}{{[table][1][]1}{[1][3][]4}{}{}{}}
+\newlabel{sec:insights}{{2.4}{4}{}{subsection.2.4}{}}
+\newlabel{sec:insights@cref}{{[subsection][4][2]2.4}{[1][4][]4}{}{}{}}
+\newlabel{ins:known}{{1}{4}{Known-suffix dominance}{insight.1}{}}
+\newlabel{ins:known@cref}{{[insight][1][]1}{[1][4][]4}{}{}{}}
 \newlabel{ins:fork}{{2}{4}{Fork, don't clone}{insight.2}{}}
 \newlabel{ins:fork@cref}{{[insight][2][]2}{[1][4][]4}{}{}{}}
 \newlabel{ins:idle}{{3}{4}{Idle is compute}{insight.3}{}}
@@ -115,70 +113,90 @@
 \citation{osfork,tanenbaumos}
 \citation{sglang}
 \citation{forkkv}
+\newlabel{tab:landscape}{{1}{5}{Comparison of agentic serving systems. \cmark {}~full support; \pmark {}~partial / single-path; \xmark {}~absent. \sys {} is the first to combine forkable branch state, multi-child speculative prefill, and idle-aware admission}{table.1}{}}
+\newlabel{tab:landscape@cref}{{[table][1][]1}{[1][4][]5}{}{}{}}
+\newlabel{sec:state}{{3.2}{5}{}{subsection.3.2}{}}
+\newlabel{sec:state@cref}{{[subsection][2][3]3.2}{[1][5][]5}{}{}{}}
 \citation{smoothagent}
 \citation{continuum}
 \citation{mori}
 \citation{kairospower}
-\newlabel{sec:state}{{3.2}{5}{}{subsection.3.2}{}}
-\newlabel{sec:state@cref}{{[subsection][2][3]3.2}{[1][5][]5}{}{}{}}
-\newlabel{tab:os}{{2}{5}{OS \texttt {fork}/\cow {} mapped onto agent KV and speculative prefill}{table.2}{}}
-\newlabel{tab:os@cref}{{[table][2][]2}{[1][5][]5}{}{}{}}
 \citation{sglang,spork}
 \citation{speculative,medusa,eagledraft}
-\citation{sarathi}
-\citation{jitserve}
 \newlabel{fig:app}{{2}{6}{\textbf {Per-branch prefill pruning.} Hash lookup, draft score, and an early prefix check run before GPU prefill. The disaggregated connector inserts only a retained residual. A loop is dropped before prefill; an illegal prefix aborts early; a replayed full block is a local hash hit and is not transferred. The winner is always retained, and decode sees only the committed spine}{figure.2}{}}
 \newlabel{fig:app@cref}{{[figure][2][]2}{[1][5][]6}{}{}{}}
+\newlabel{tab:os}{{2}{6}{OS \texttt {fork}/\cow {} mapped onto agent KV and speculative prefill}{table.2}{}}
+\newlabel{tab:os@cref}{{[table][2][]2}{[1][5][]6}{}{}{}}
 \newlabel{eq:mem}{{1}{6}{}{equation.1}{}}
 \newlabel{eq:mem@cref}{{[equation][1][]1}{[1][6][]6}{}{}{}}
 \newlabel{sec:speculate}{{3.3}{6}{}{subsection.3.3}{}}
 \newlabel{sec:speculate@cref}{{[subsection][3][3]3.3}{[1][6][]6}{}{}{}}
-\newlabel{eq:gain}{{2}{6}{}{equation.2}{}}
-\newlabel{eq:gain@cref}{{[equation][2][]2}{[1][6][]6}{}{}{}}
-\newlabel{eq:cost}{{3}{6}{}{equation.3}{}}
-\newlabel{eq:cost@cref}{{[equation][3][]3}{[1][6][]6}{}{}{}}
+\citation{sarathi}
+\citation{jitserve}
 \citation{sarathisplit}
 \newlabel{fig:tree}{{3}{7}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.3}{}}
 \newlabel{fig:tree@cref}{{[figure][3][]3}{[1][6][]7}{}{}{}}
+\newlabel{eq:gain}{{2}{7}{}{equation.2}{}}
+\newlabel{eq:gain@cref}{{[equation][2][]2}{[1][7][]7}{}{}{}}
+\newlabel{eq:cost}{{3}{7}{}{equation.3}{}}
+\newlabel{eq:cost@cref}{{[equation][3][]3}{[1][7][]7}{}{}{}}
 \newlabel{alg:budget}{{1}{7}{}{algorithm.1}{}}
 \newlabel{alg:budget@cref}{{[algorithm][1][]1}{[1][7][]7}{}{}{}}
-\newlabel{thm:correct}{{2}{7}{Output identity}{theorem.2}{}}
-\newlabel{thm:correct@cref}{{[theorem][2][]2}{[1][7][]7}{}{}{}}
 \citation{vllm}
 \citation{distserve,splitwise}
 \citation{sarathi}
 \citation{jitserve}
+\newlabel{thm:correct}{{2}{8}{Output identity}{theorem.2}{}}
+\newlabel{thm:correct@cref}{{[theorem][2][]2}{[1][8][]8}{}{}{}}
+\newlabel{sec:app}{{3.4}{8}{}{subsection.3.4}{}}
+\newlabel{sec:app@cref}{{[subsection][4][3]3.4}{[1][8][]8}{}{}{}}
 \citation{autellix,continuum}
 \citation{autellix}
 \citation{saga}
 \citation{thunderagent}
-\newlabel{sec:app}{{3.4}{8}{}{subsection.3.4}{}}
-\newlabel{sec:app@cref}{{[subsection][4][3]3.4}{[1][8][]8}{}{}{}}
-\newlabel{sec:schedule}{{3.5}{8}{}{subsection.3.5}{}}
-\newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][8][]8}{}{}{}}
-\newlabel{eq:bc}{{4}{8}{}{equation.4}{}}
-\newlabel{eq:bc@cref}{{[equation][4][]4}{[1][8][]8}{}{}{}}
-\newlabel{eq:bs}{{5}{8}{}{equation.5}{}}
-\newlabel{eq:bs@cref}{{[equation][5][]5}{[1][8][]8}{}{}{}}
 \citation{distserve,splitwise}
 \citation{sutradhara}
 \citation{continuum}
 \citation{mori}
+\newlabel{sec:schedule}{{3.5}{9}{}{subsection.3.5}{}}
+\newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][8][]9}{}{}{}}
+\newlabel{eq:bc}{{4}{9}{}{equation.4}{}}
+\newlabel{eq:bc@cref}{{[equation][4][]4}{[1][9][]9}{}{}{}}
+\newlabel{eq:bs}{{5}{9}{}{equation.5}{}}
+\newlabel{eq:bs@cref}{{[equation][5][]5}{[1][9][]9}{}{}{}}
+\newlabel{tab:gsm}{{3}{9}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Accuracy is the official score on the full file}{table.3}{}}
+\newlabel{tab:gsm@cref}{{[table][3][]3}{[1][9][]9}{}{}{}}
 \newlabel{sec:eval}{{4}{9}{}{section.4}{}}
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][9][]9}{}{}{}}
 \newlabel{sec:eval-gpu}{{4.1}{9}{}{subsection.4.1}{}}
 \newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][9][]9}{}{}{}}
-\newlabel{tab:gsm}{{3}{9}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Accuracy is the official score on the full file}{table.3}{}}
-\newlabel{tab:gsm@cref}{{[table][3][]3}{[1][9][]9}{}{}{}}
-\newlabel{tab:app}{{4}{9}{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Not GPU wall-clock. \app is the only column that both shares the trunk and drops low-score residuals before prefill}{table.4}{}}
-\newlabel{tab:app@cref}{{[table][4][]4}{[1][9][]9}{}{}{}}
-\newlabel{sec:eval-app}{{4.2}{9}{}{subsection.4.2}{}}
-\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][9][]9}{}{}{}}
+\newlabel{tab:app}{{4}{10}{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Not GPU wall-clock. \app is the only column that both shares the trunk and drops low-score residuals before prefill}{table.4}{}}
+\newlabel{tab:app@cref}{{[table][4][]4}{[1][10][]10}{}{}{}}
+\newlabel{sec:eval-app}{{4.2}{10}{}{subsection.4.2}{}}
+\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][10][]10}{}{}{}}
+\newlabel{fig:eval-app}{{4}{10}{\textbf {Control-plane fan-out} of the five prefill methods in \Cref {tab:app}. Hash prefill matches APC; stock disagg is slower; \app is the lowest bar}{figure.4}{}}
+\newlabel{fig:eval-app@cref}{{[figure][4][]4}{[1][10][]10}{}{}{}}
+\newlabel{tab:plus}{{5}{10}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. Decode tokens and e2e are GSM8K; Game24/HumanEval e2e stay with APC (no stop marker)}{table.5}{}}
+\newlabel{tab:plus@cref}{{[table][5][]5}{[1][10][]10}{}{}{}}
+\newlabel{sec:eval-plus}{{4.3}{10}{}{subsection.4.3}{}}
+\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][10][]10}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
 \citation{sarathi,sarathisplit}
 \citation{distserve,splitwise}
+\newlabel{fig:eval-plus}{{5}{11}{\textbf {Qwen3-8B GPU ForkServe+} ($n{=}80$, $\mathrm {tp}{=}4$). Left: emitted decode tokens; APC spends $nD$, \sys stops on EOS, ForkServe+ stops at the answer marker. Middle: wall-clock follows $D^{+}$. Right: peak KV is the committed spine for both \sys and ForkServe+ ($0.75\times $ APC)}{figure.5}{}}
+\newlabel{fig:eval-plus@cref}{{[figure][5][]5}{[1][10][]11}{}{}{}}
+\newlabel{tab:multi}{{6}{11}{GSM8K $n{=}40$, $\mathrm {tp}{=}2$. Peak KV is unchanged at $\mathrm {tp}{=}4$. $D^{+}$ is emitted decode tokens; APC is always $nD{=}20480$}{table.6}{}}
+\newlabel{tab:multi@cref}{{[table][6][]6}{[1][11][]11}{}{}{}}
+\newlabel{fig:eval-multi}{{6}{11}{\textbf {Peak KV / APC} on six models ($n{=}40$). GSM8K (left bar) is $0.72$--$0.75$; Game24 (right) is $0.57$--$0.62$. Labels: Qwen3-4B, Math-1.5B, Qwen3-14B, Llama-3-8B, Mistral-7B, DeepSeek-R1}{figure.6}{}}
+\newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][11][]11}{}{}{}}
+\newlabel{sec:eval-multi}{{4.4}{11}{}{subsection.4.4}{}}
+\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][11][]11}{}{}{}}
+\newlabel{tab:multi-he}{{7}{11}{HumanEval pass@1, $n{=}40$, $\mathrm {tp}{=}2$ (Mistral unchanged at $\mathrm {tp}{=}4$)}{table.7}{}}
+\newlabel{tab:multi-he@cref}{{[table][7][]7}{[1][11][]11}{}{}{}}
+\newlabel{sec:related}{{5}{11}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][11][]11}{}{}{}}
 \citation{autellix}
 \citation{jitserve}
 \citation{hermes}
@@ -203,10 +221,6 @@
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
-\newlabel{sec:related}{{5}{10}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
-\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
 \bibcite{spork}{{5}{}{{}}{{}}}
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
@@ -217,6 +231,8 @@
 \bibcite{conserve}{{11}{}{{}}{{}}}
 \bibcite{pie}{{12}{}{{}}{{}}}
 \bibcite{saga}{{13}{}{{}}{{}}}
+\newlabel{sec:conclusion}{{6}{12}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][12][]12}{}{}{}}
 \bibcite{metagpt}{{14}{}{{}}{{}}}
 \bibcite{swebench}{{15}{}{{}}{{}}}
 \bibcite{thunderagent}{{16}{}{{}}{{}}}
@@ -257,4 +273,4 @@
 \bibcite{distserve}{{51}{}{{}}{{}}}
 \bibcite{webarena}{{52}{}{{}}{{}}}
 \providecommand\NAT@force@numbers{}\NAT@force@numbers
-\gdef \@abspage@last{12}
+\gdef \@abspage@last{14}

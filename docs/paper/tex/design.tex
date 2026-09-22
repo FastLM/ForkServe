@@ -62,11 +62,12 @@ The winner is always retained, and decode sees only the committed spine.
 \end{figure*}
 
 \paragraph{Design principles.}
-(1)~\textbf{Input-side speculation.} Speculative KV caches future prompt prefixes. Committed decode attends only to KV of the committed sequence; speculative tokens stay off the output path.
-(2)~\textbf{Known before guessed.} The allocator prefills deterministic ($p{=}1$) suffixes first; uncertain observation residuals use remaining budget.
-(3)~\textbf{Residual-bounded misses.} Copy-on-write bounds a miss to the child's residual, which makes multi-child speculation practical.
-(4)~\textbf{Idle-budget speculation.} Speculative prefill uses remaining token budget. Under saturation the system falls back to trunk retention~\cite{continuum} with CoW fan-out, and speculative work is suppressed.
-(5)~\textbf{Event-driven branches.} Branch identifiers and known suffixes come from runtime execution events as they occur, the same signals used to overlap tool-independent prefill~\cite{sutradhara}.
+(1)~\textbf{Prune before prefill.} APC reuses a trunk only after a hash hit; disaggregated prefill ships whatever the prefiller computed. \app sits between them and decides, per residual, whether a GPU kernel (and later a connector \texttt{insert}) should run at all.
+(2)~\textbf{Pointer-swap fork.} \texttt{fork} increfs trunk pages. The child's address space is a page-table alias, not a KV memcpy; a miss is bounded to the residual.
+(3)~\textbf{Input-side speculation.} Speculative KV caches future prompt prefixes. Committed decode attends only to KV of the committed sequence; speculative tokens stay off the output path.
+(4)~\textbf{Known before guessed.} The allocator prefills deterministic ($p{=}1$) suffixes first; uncertain observation residuals use remaining budget.
+(5)~\textbf{Idle-budget speculation.} Speculative prefill uses remaining token budget. Under saturation the system falls back to trunk retention~\cite{continuum} with CoW fan-out, and speculative work is suppressed.
+(6)~\textbf{Event-driven branches.} Branch identifiers and known suffixes come from runtime execution events as they occur, the same signals used to overlap tool-independent prefill~\cite{sutradhara}.
 
 \subsection{Forkable Branch State}
 \label{sec:state}
@@ -132,7 +133,7 @@ ForkKV~\cite{forkkv} CoW-splits a base cache from a LoRA residual; we CoW-split 
 \texttt{join} constructs a new committed node from a completed fan-out, and \texttt{abort} discards an unselected subtree (\S\ref{sec:overview}).
 \sys forks a SmoothAgent transformation~\cite{smoothagent} as an additional child of the session root, leaving the unsummarized spine live and abortable.
 When speculation misses, the engine aborts the unused child and frees only its residual pages.
-The shared trunk remains in place, so the planner can keep several speculative children live without duplicating parent KV (principle~3).
+The shared trunk remains in place, so the planner can keep several speculative children live without duplicating parent KV (principle~2).
 
 \paragraph{Branch-aware retention.}
 Continuum's TTL~\cite{continuum} and MORI's relative idleness~\cite{mori} are session-granular; we lift both to nodes.
@@ -309,6 +310,13 @@ Pruned branches and hash-local hits never enter the buffer, so the decode instan
 \texttt{abort} can mark a node dead and defer the residual decref until after winner decode, so reclamation is not on \ttft.
 The HBM released by abort is the capacity term in \S\ref{sec:eval}: fewer bytes per session admit more concurrent sessions on the same GPU.
 
+\paragraph{Decoding acceleration.}
+Prefill pruning changes work $W$ and occupancy $M$; end-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}(D)$.
+ForkServe+ therefore also stops committed decode at an answer marker (\texttt{\#\#\#\#}, \texttt{\textbackslash boxed}, \texttt{</think>}) via vLLM \texttt{stop}, and keeps committed jobs first in the two-class scheduler of \S\ref{sec:schedule}.
+This is not speculative decoding of output tokens: the engine does not draft-and-verify.
+It ends a finished answer instead of padding to the requested budget $D$.
+If item $j$ hits a marker at $t_j$, emitted tokens are $D^{+}=\sum_j\min(t_j,D)\le nD$, and $T_{\mathrm{dec}}$ scales with $D^{+}$ when decode is memory-bandwidth bound.
+
 \subsection{Branch-Aware Scheduling}
 \label{sec:schedule}
 
@@ -320,7 +328,7 @@ We allocate
 B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t} \max(\underline{s}_r\Delta,\; 1)\Bigr), \label{eq:bc}\\
 B^{\mathrm{s}}_t &= B_t - B^{\mathrm{c}}_t. \label{eq:bs}
 \end{align}
-If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted this tick---principle~4.
+If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted this tick---principle~5.
 Unbudgeted speculate-all reduces \ttft{} under light load and increases committed \tbt{} under saturation; the two-class split is what keeps speculation from becoming load.
 The three modules are mutually dependent: without CoW, a miss costs a trunk; without the allocator, CoW still lets speculation contend for SMs; without idle-budget scheduling, the allocator's $\gamma$ is unconstrained.
 Speculative work is admitted one chunk at a time, so one long sibling suffix cannot occupy remaining budget that could have covered several known wrappers.

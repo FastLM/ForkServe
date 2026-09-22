@@ -16,6 +16,9 @@
 \usepackage{amsmath,amssymb}
 \usepackage{fancyhdr}
 \usepackage{titlesec}
+\usepackage{xspace}
+
+\newcommand{\app}{\textsf{APP}\xspace}
 
 \setmainfont{DejaVu Serif}
 \setmonofont{DejaVu Sans Mono}
@@ -39,13 +42,13 @@
   linkcolor=Ink,
   citecolor=Ink,
   urlcolor=APC,
-  pdftitle={ForkServe: Branch-Aware Prefill Pruning for Efficient Agentic LLM Serving},
+  pdftitle={ForkServe: Branch-Aware Prefill Pruning for Efficient vLLM Serving},
 }
 
 \pagestyle{fancy}
 \fancyhf{}
 \setlength{\headheight}{22pt}
-\fancyhead[L]{\small\color{Mute}ForkServe}
+\fancyhead[L]{\small\color{Mute}Branch-aware prefill pruning on vLLM}
 \fancyhead[R]{\small\color{Mute}Qwen3-14B / Qwen3-8B / DeepSeek-R1 8B}
 \fancyfoot[C]{\small\color{Mute}\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
@@ -57,8 +60,8 @@
 \setlist[itemize]{leftmargin=1.4em,itemsep=0.25em}
 \setstretch{1.15}
 
-\title{\textbf{ForkServe: Branch-Aware Prefill Pruning\\[-0.12em]
-for Efficient Agentic LLM Serving}}
+\title{\textbf{ForkServe: Branch-Aware Prefill Pruning}\\[0.35em]
+{\large Efficient vLLM serving of Tree-of-Thoughts and ReAct}}
 \author{%
 \begin{tabular}[t]{c}
 Dong Liu \hspace{1.4em} Hao Wu \hspace{1.4em} Chuan Wu \\[0.55em]
@@ -73,22 +76,83 @@ The University of Hong Kong
 
 \begin{abstract}
 \noindent
-We evaluate ForkServe, branch-aware KV sharing for storage-efficient vLLM serving, against two vLLM baselines on Qwen3-14B:
-\emph{recompute}, which turns prefix caching off, and \emph{APC} (automatic prefix caching), which hashes and reuses matching prefixes.
-ForkServe forks a shared trunk by copy-on-write, prefills each residual, aborts unused branches, and keeps only the committed path.
+We treat ForkServe as \emph{efficient vLLM serving} of branched Tree-of-Thoughts and ReAct.
+The serving object is the branch, not the request.
+\texttt{fork} is a pointer swap: trunk pages stay read-only, the child's page table aliases them ($\mathrm{refcount}{=}k$), and no KV is memcpy'd.
+That already matches APC's prefill work $W{=}L{+}k\bar\ell$ without cloning the trunk.
+The remaining expand cost is residual prefill that APC and stock disaggregated prefill still pay for every sibling.
 
-On the GSM8K test set ($n{=}1319$, tensor parallel $2$), peak resident KV is below APC on every batch of eight problems (median $1030$ vs.\ $1430$ tokens, ratio $0.72$).
-Official accuracy is $0.845$ vs.\ $0.844$, and generation takes $18.9$ vs.\ $18.6$ minutes: less cache at APC-level latency.
-The same storage ordering holds on four-problem slices of GSM8K, Game24, and HumanEval at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$, with end-to-end time within $2\%$ of APC.
+Advanced prefill pruning (\app) sits between those two mechanisms and decides, per residual, whether a GPU kernel---and later a connector \texttt{insert}---should run at all.
+Four skip layers run cheapest first: a hash index skips published full blocks; a draft score drops illegal or looping siblings before they start; an early-prefix check cancels in-flight chunks; the disaggregated gate inserts only survivors.
+The winner index is always retained, so the committed token sequence is unchanged.
+Decoding acceleration then stops winner generation at an answer marker (\texttt{\#\#\#\#}, \texttt{\textbackslash boxed}, \texttt{</think>}) instead of padding to $D$, and keeps committed decode ahead of speculative prefill in a two-class scheduler.
 
-A second run compares APC and ForkServe on seven Tree-of-Thoughts math files ($n{=}40$--$80$) for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B, at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
-Peak KV is $0.58$--$0.80\times$ APC on every file and does not change when the tensor width doubles: peak tracks the committed path, not the number of ranks.
-Generate time at $\mathrm{tp}{=}4$ is $0.56$--$0.66\times$ the two-GPU run and stays within a few percent of APC on Qwen; on DeepSeek-R1 with $D{=}2048$ it stays within $13\%$ and the $513$-item micro-average is $+2$\,pp over APC at both widths.
-An analytical concurrency sweep that plugs the measured DeepSeek GSM8K peaks into \eqref{eq:conc} raises the SLO-feasible QPS from $192$ (APC) to $256$ (ForkServe+) and peak decode throughput by $35\%$.
-Setting L compares five prefill methods on the same fan-out in the control plane: APC and hash prefill still clone the first fan-out, stock disaggregated prefill adds a full KV transfer, and advanced prefill pruning (APP) is the only method that both shares the trunk and drops low-score residuals before prefill (modeled fan-out $35.9$\,ms vs.\ $139$\,ms for APC).
+Baselines are \emph{recompute} (prefix cache off) and \emph{APC} (automatic prefix caching).
+
+On Qwen3-14B GSM8K ($n{=}1319$, $\mathrm{tp}{=}2$) peak resident KV is below APC on every batch (median $1030$ vs.\ $1430$, ratio $0.72$), accuracy is $0.845$ vs.\ $0.844$, and generation is $18.9$ vs.\ $18.6$ minutes.
+The same KV ordering holds on Qwen3-8B, Qwen3-14B, and DeepSeek-R1-Distill-Llama-8B math suites at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$ ($0.58$--$0.80\times$ APC).
+An analytical concurrency sweep from measured DeepSeek GSM8K peaks raises SLO-feasible QPS from $192$ to $256$ ($+35\%$ saturated decode tok/s).
+
+Control-plane APP (setting L) is the only method that both aliases the trunk and drops low-score residuals: modeled fan-out $35.9$\,ms vs.\ $139$\,ms for APC, peak KV $2880$ vs.\ $11520$.
+A GPU run of the same stack on Qwen3-8B (setting M: $80$ items, $D{=}512$) confirms the KV gap and the decode-stop gain.
+On GSM8K, ForkServe+ emits $13356$ decode tokens vs.\ $40960$ for APC at $\mathrm{tp}{=}2$ ($0.33\times$) and finishes in $28.2$\,s vs.\ $36.0$\,s; at $\mathrm{tp}{=}4$ it is $12826$ vs.\ $40960$ tokens and $16.9$\,s vs.\ $22.7$\,s, with accuracy $0.925$ vs.\ $0.938$.
+Peak KV stays $1182$ vs.\ $1582$ ($0.75\times$ APC) at both widths.
+Setting N repeats the same four-system forest on six models ($n{=}40$): GSM8K peak KV is $0.72$--$0.75\times$ APC on every family, and Game24 is $0.57$--$0.62\times$; answer-marker stop remains model-dependent.
 \end{abstract}
 
-\section{Baselines and method}
+\section{Design}
+\label{sec:design}
+
+vLLM already has two ways to avoid recomputing a shared trunk: automatic prefix caching reuses a block after it is published, and disaggregated prefill moves whatever KV the prefiller computed.
+Neither decides \emph{which} residuals of a Tree-of-Thoughts or ReAct fan-out are worth a GPU kernel.
+ForkServe makes that decision a serving primitive.
+
+\paragraph{Pointer-swap fork.}
+\texttt{open} materializes the trunk $L$ once as read-only copy-on-write pages.
+\texttt{fork} installs $k$ child page tables that alias those pages ($\mathrm{refcount}{=}k$); it is a pointer swap, not a KV memcpy.
+Writes allocate a private residual $\ell_i$.
+\texttt{abort} decrefs only that residual, so peak occupancy after a winner is chosen is the spine $M_{\mathrm{spine}}=b(L+\ell_{\star})$ rather than the hashed union $L+\sum_i\ell_i$.
+
+\paragraph{Prune before prefill.}
+Copy-on-write removes trunk clones but still prefills every residual.
+\app is a filter in front of that work, cheapest layer first, with the winner index always retained:
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  font=\sffamily,
+  >=Latex,
+  chip/.style={draw=Ink, rounded corners=1.2pt, inner sep=3.2pt, font=\scriptsize\sffamily, align=center, line width=0.45pt},
+  side/.style={draw=Mute, densely dashed, rounded corners=1pt, inner sep=2.2pt, font=\tiny\sffamily, text=Mute},
+  arr/.style={-{Latex[length=1.6mm,width=1.2mm]}, line width=0.55pt, draw=APC},
+  sarr/.style={-{Latex[length=1.4mm,width=1.1mm]}, line width=0.4pt, draw=Mute, densely dashed},
+]
+\node[chip, fill=white] (in) at (0,0) {$k$ residuals};
+\node[chip, fill=APCp!35] (h) at (2.55,0) {hash skip};
+\node[chip, fill=FSp!40] (d) at (5.15,0) {draft prune};
+\node[chip, fill=FSp!40] (e) at (7.85,0) {early abort};
+\node[chip, fill=FS!25] (g) at (10.65,0) {GPU miss tail};
+\node[chip, fill=white] (x) at (13.45,0) {\texttt{insert}};
+\draw[arr] (in) -- (h);
+\draw[arr] (h) -- (d);
+\draw[arr] (d) -- (e);
+\draw[arr] (e) -- (g);
+\draw[arr] (g) -- (x);
+\node[side] (s1) at (2.55,-1.05) {published block};
+\node[side] (s2) at (5.15,-1.05) {illegal / loop};
+\node[side] (s3) at (7.85,-1.05) {prefix fails};
+\draw[sarr] (h) -- (s1);
+\draw[sarr] (d) -- (s2);
+\draw[sarr] (e) -- (s3);
+\end{tikzpicture}
+\caption{Advanced prefill pruning.
+APC would wait for a hash hit after the request exists; stock disagg would \texttt{insert} all four residuals.
+\app decides per branch whether prefill and transfer happen at all.}
+\end{figure}
+
+\paragraph{Decode the committed spine.}
+Winner generation can stop at an answer marker instead of padding to $D$.
+Committed jobs take the scheduler token budget first; speculative residual prefill fills the remainder and is cancelled on commit conflict.
 
 \begin{table}[h]
 \centering
@@ -99,12 +163,12 @@ Name & Role & Behavior on a $k$-way Tree-of-Thoughts / ReAct prompt \\
 \midrule
 recompute & baseline & Prefix cache off. Each branch prefills the full shared trunk. \\
 APC & baseline & vLLM automatic prefix caching. Matching prefixes are hashed and reused after requests arrive. \\
-ForkServe & method & Branch-aware sharing: fork the trunk by reference, prefill residuals, abort unused branches, keep the committed path. \\
-APP & method & Advanced prefill pruning on that tree: hash-skip published blocks, drop low-score residuals before GPU prefill, and \texttt{insert} only retained KV into a disaggregated prefill connector. \\
+ForkServe & method & Pointer-swap fork, residual prefill, abort unused branches, decode the committed path. \\
+ForkServe+ / \app & method & The four skip layers on that tree, plus answer-marker stop and a two-class scheduler. \\
 \bottomrule
 \end{tabular}
-\caption{Serving stacks for branched decoding in vLLM.
-Storage efficiency is peak resident KV against APC; recompute is the uncached baseline.}
+\caption{Serving stacks.
+Efficiency is peak resident KV and emitted decode tokens against APC; recompute is the uncached baseline.}
 \end{table}
 
 Recompute, APC, and ForkServe use the same weights, prompts, and decode budget.
@@ -112,7 +176,7 @@ GSM8K and Game24 run Tree-of-Thoughts with $k{=}4$ candidate thoughts.
 HumanEval runs ReAct wrap and recovery ($k{=}2$) and is scored with the official function-body check (\texttt{prompt+body+check}).
 We report GSM8K accuracy, Game24 success, and HumanEval pass@1.
 
-ForkServe is storage-efficient when peak resident KV is strictly below APC and at least $20\%$ below recompute,
+ForkServe is efficient when peak resident KV is strictly below APC and at least $20\%$ below recompute,
 \begin{equation}
 \label{eq:goal}
 \mathrm{peak}^{\mathrm{FS}}
@@ -141,11 +205,12 @@ They differ by dataset, problem count, batching, and tensor-parallel width.
 Parameter & Specification \\
 \midrule
 Node & four NVIDIA A100-SXM4 40GB \\
-Model & Qwen3-14B (A--C, G, H), Qwen3-8B (E, F), \\
-      & DeepSeek-R1-Distill-Llama-8B (I, J), \texttt{bfloat16} \\
+Model & Qwen3-14B (A--C, G, H, N), Qwen3-8B (E, F, M), \\
+      & Qwen3-4B / Qwen2.5-Math-1.5B / Llama-3-8B / Mistral-7B / DeepSeek-R1 (N), \\
+      & DeepSeek-R1-Distill-Llama-8B (I, J, N), \texttt{bfloat16} \\
 Max sequence length & $4096$ (A--H); $8192$ (I, J) \\
 Prefill & chunked; at most $2048$ batched tokens \\
-Systems & vLLM recompute, vLLM APC, ForkServe \\
+Systems & vLLM recompute, vLLM APC, ForkServe, ForkServe+ \\
 \bottomrule
 \end{tabular}
 \caption{Hardware and engine.
@@ -207,11 +272,13 @@ I. DeepSeek-R1 8B math, two GPUs & $2$ & $0,1$ & $40$--$80$; batches of $8$; $D{
 J. DeepSeek-R1 8B math, four GPUs & $4$ & $0$--$3$ & same files as I & same as I \\
 K. ForkServe+ concurrency & --- & analytical & GSM8K peaks $1563$/$1163$ & QPS / P99 TTFT sweep \\
 L. Prefill methods & --- & control plane & $10{\times}4$ ToT, $L{=}256$ & APC, hash, disagg, ForkServe, APP \\
+M. GPU APP $+$ decode & $2$, $4$ & $0,1$ / $0$--$3$ & $80$; batches of $8$; $D{=}512$ & GSM8K, Game24, HumanEval (Qwen3-8B) \\
+N. Multi-model GPU & $2$, $4$ & $0,1$ / $0$--$3$ & $40$; batches of $8$; $D{=}512$ & six models, GSM8K/Game24 (/HumanEval) \\
 \bottomrule
 \end{tabular}
 \caption{Configurations and datasets.
-Later sections report A--C in full on Qwen3-14B, then G--H (14B), E--F (8B), and I--J (DeepSeek-R1 8B) on the seven-file math suite (APC vs.\ ForkServe only), then K (ForkServe+ concurrency from those peaks) and L (prefill-method comparison).
-On D, recompute and APC are complete; ForkServe on the full Game24 and HumanEval files is in progress.}
+Later sections report A--C in full on Qwen3-14B, then G--H (14B), E--F (8B), and I--J (DeepSeek-R1 8B) on the seven-file math suite (APC vs.\ ForkServe), then K--L, M (GPU ForkServe+ on Qwen3-8B), and N (six-model GPU forest).
+On D, recompute and APC are complete on the full Game24 and HumanEval files; setting M covers the first $80$ items of those files under APP.}
 \end{table}
 
 Recompute, APC, and ForkServe always share weights, prompts, and the decode budget of that setting.
@@ -275,6 +342,102 @@ M_{\mathrm{spine}}
 Fan-out is $T_{\mathrm{pre}}(L)+k\cdot T_{\mathrm{pre}}(\bar\ell)$ plus abort, so $T_{\mathrm{fan}}^{\mathrm{FS}}\approx T_{\mathrm{fan}}^{\mathrm{APC}}+T_{\mathrm{abort}}$.
 Sharing is a pointer at fork, before any second request has to hash: that is the branch-aware step.
 
+\section{Prefill pruning: method}
+\label{sec:app-theory}
+
+APC reuses a trunk only after a hash hit on an already-submitted request.
+Stock disaggregated prefill ships every token the prefiller computed.
+Copy-on-write ForkServe aliases the trunk at \texttt{fork}, but fan-out still prefills every residual and then aborts the losers---on the 14B GSM8K forest, $T_{\mathrm{fan}}^{\mathrm{FS}}{=}140$\,ms against $T_{\mathrm{fan}}^{\mathrm{APC}}{=}87$\,ms.
+\app is the missing decision: for each residual, whether a GPU kernel and a connector \texttt{insert} should run at all.
+It does not change the committed token sequence: the winner index is always retained.
+
+Let $\mathcal{K}\subseteq\{1,\ldots,k\}$ be the residuals that survive the filter, $\star\in\mathcal{K}$ the winner, $h_i$ the number of leading tokens of branch $i$ that already sit in the APC hash index, and $\phi\in(0,1]$ the early-abort fraction (we use $\phi{=}0.20$).
+Four layers run cheapest first. A published full block is a local skip ($h_i$ tokens, zero FLOPs). A draft score below $\tau$ never starts the sibling. A failing prefix of fraction $\phi$ cancels the remaining chunks. Only a retained miss tail is inserted into the disaggregated connector.
+
+\paragraph{Hash skip.}
+A published full block is $\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$.
+A hit sets the remaining prefill of that prefix to zero; a partial hit prefills only the miss tail $\max(\ell_i-h_i,0)$.
+Speculative pages are not inserted; LCP commit publishes the winner so a later session can hit it.
+On the \emph{first} fan-out $h_i{=}0$, so hash skip does not remove the clone---the same identity APC already has.
+
+\paragraph{Draft prune.}
+Each residual gets a score from illegal-token / repetition checks, token entropy, or an optional draft model.
+If $s_i<\tau$ and $i\neq\star$, the branch is never started:
+\begin{equation}
+\label{eq:app-w}
+W_{\mathrm{APP}}
+  = L + \sum_{i\in\mathcal{K}}\max(\ell_i-h_i,0),
+\qquad
+|\mathcal{K}|
+  = 1+(k{-}1)(1-p_{\mathrm{d}}),
+\end{equation}
+where $p_{\mathrm{d}}$ is the draft-skip rate among non-winners.
+Against ForkServe, $W_{\mathrm{FS}}=L+\sum_i\ell_i$, so the first-fan-out saving is the skipped residuals.
+
+\paragraph{Early abort.}
+If the first $\phi$ of a residual already fails, in-flight chunks cancel and the paid work is $\phi\ell_i$ rather than $\ell_i$.
+This is the chunked-prefill form of abort: the engine does not wait for all $k$ residuals to finish.
+
+\paragraph{Disaggregated-prefill gate.}
+Stock vLLM disaggregated prefill ships every token the prefill instance computed,
+$X_{\mathrm{disagg}}=W_{\mathrm{APC}}$.
+APP calls \texttt{insert} only for retained miss tails,
+\begin{equation}
+\label{eq:app-x}
+X_{\mathrm{APP}}
+  = \sum_{i\in\mathcal{K}}\mathbf{1}[h_i<\ell_i]\,\max(\ell_i-h_i,0).
+\end{equation}
+Pruned branches and full hash hits never enter the connector.
+\texttt{fork} is a pointer swap; \texttt{abort} can mark a node dead and defer residual decref until after winner decode, so reclamation is off TTFT.
+
+On the control-plane workload of setting L ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$, two illegal residuals, $p_{\mathrm{d}}{=}1/2$),
+$W_{\mathrm{APC}}{=}11520$, $W_{\mathrm{FS}}{=}3840$, $W_{\mathrm{APP}}{=}2912$ (twenty draft skips plus nine hash skips), $X_{\mathrm{APP}}{=}352$ vs.\ $X_{\mathrm{disagg}}{=}11520$, and peak KV is the winner spine $10(L+\ell){=}2880$.
+That is a $75\%$ cut in modeled prefill against APC, and a further $24\%$ against CoW-only ForkServe.
+
+\section{Decoding acceleration: method}
+\label{sec:dec-theory}
+
+Prefill pruning changes $W$ and $M$.
+End-to-end time on a finished Tree-of-Thoughts item is still dominated by winner decode,
+$T_{\mathrm{e2e}}\approx T_{\mathrm{fan}}+T_{\mathrm{dec}}(D)$ as in \eqref{eq:sys}.
+APC and recompute spend the requested budget $D$ on every item.
+ForkServe+ accelerates the decode half without changing the sampler on the committed path.
+
+\paragraph{Answer-marker stop.}
+\texttt{decode\_stop} is $(\texttt{\#\#\#\#},\;\texttt{\textbackslash boxed},\;\texttt{</think>})$.
+When the committed request is not speculative, vLLM \texttt{SamplingParams.stop} ends generation at the first marker.
+Let $t_j$ be the first stop (or EOS) index on item $j$ and $D_j=\min(t_j,D)$.
+Emitted tokens and decode time become
+\begin{equation}
+\label{eq:dec-stop}
+D^{+}
+  = \sum_{j=1}^{n} D_j
+  \le nD,
+\qquad
+\frac{T_{\mathrm{dec}}^{+}}{T_{\mathrm{dec}}^{\mathrm{APC}}}
+  \approx
+\frac{D^{+}}{nD}
+\end{equation}
+when decode is memory-bandwidth bound.
+This is \emph{not} speculative decoding of output tokens (Medusa / EAGLE): the engine does not draft-and-verify.
+It stops a finished answer instead of padding to $D$.
+A control-plane curve that ends a $256$-token budget at $60\%$ of the way through reaches the GSM8K score $0.845$ at $153$ tokens; setting M measures the same knob as GPU wall-clock.
+
+\paragraph{Two-class schedule.}
+Each scheduler tick has token budget $B_t$.
+Committed jobs (winner decode, commit-tail prefill, new-session root prefill) take $B^{\mathrm{c}}_t$ first; speculative residual prefill fills $B^{\mathrm{s}}_t=B_t-B^{\mathrm{c}}_t$.
+If $B^{\mathrm{s}}_t{=}0$, no speculative chunk is admitted.
+That keeps pruning and known-suffix prefill from stretching committed TBT.
+
+\paragraph{Natural EOS.}
+Even without \texttt{decode\_stop}, a ToT winner that emits EOS before $D$ already reduces $D^{+}$.
+Setting M separates the two: ForkServe without the stop list still emits $21235$ GSM8K tokens vs.\ APC's $40960$ ($0.52\times$), and ForkServe+ with the stop list goes to $13356$ ($0.33\times$).
+
+\paragraph{What it does not do.}
+HumanEval wrap+recovery rarely hits those markers, so $D^{+}$ stays near $nD$ and e2e matches APC.
+Game24 often fills the budget with search traces, so the stop gain is small ($34427$ vs.\ $40960$ at $\mathrm{tp}{=}2$).
+The GSM8K \texttt{\#\#\#\#} line is the workload where \eqref{eq:dec-stop} shows up in wall-clock.
+
 \section{Why branch-aware sharing uses less KV than APC}
 
 While branches are in flight, APC and ForkServe occupy the same union ($M_{\mathrm{APC}}=M_{\mathrm{CoW}}$).
@@ -312,7 +475,7 @@ $M_{\mathrm{spine}}/M_{\mathrm{APC}}=(1+\varepsilon)/(1+4\varepsilon)$,
 so abort saves a $3\varepsilon/(1+4\varepsilon)$ fraction of the union.
 On the $n{=}4$ GSM8K slice ($L{\approx}118$, $\sum\ell_i{=}66$, $\ell_{\star}{=}16$) this is $134/184\approx 0.73$, against the measured peak ratio $459/659\approx 0.70$.
 
-\section{Storage-efficient serving: what is optimized}
+\section{Efficient vLLM serving: what is optimized}
 
 Peak KV is the storage cost of vLLM serving; a single-batch wall-clock omits concurrency.
 Write one Tree-of-Thoughts item as prefill work $W$ (tokens that must be computed), resident KV after unused branches leave, and winner decode of $D$ tokens:
@@ -325,7 +488,10 @@ W_{\mathrm{APC}}=W_{\mathrm{FS}}=L+k\bar\ell,
 T_{\mathrm{e2e}}
   \approx T_{\mathrm{pre}}(W)+T_{\mathrm{dec}}(D).
 \end{equation}
-$D$ is shared. Branch-aware sharing changes $W$ relative to recompute and $M$ relative to both baselines. That is the storage-efficient serving effect.
+$D$ is shared. Branch-aware sharing changes $W$ relative to recompute and $M$ relative to both baselines.
+APP further cuts $W$ and $X$ on the expand path \eqref{eq:app-w}--\eqref{eq:app-x}.
+Decoding acceleration cuts $D$ on the winner path \eqref{eq:dec-stop}.
+Together that is efficient vLLM serving: less prefill than recompute, less HBM than APC, and fewer decode steps when the answer is already marked.
 
 \paragraph{Prefill.}
 Recompute issues $k$ independent prefills of length $L+\ell_i$, so the trunk is computed $k$ times:
@@ -367,7 +533,7 @@ End-to-end time stays within a couple of percent of APC because $T_{\mathrm{dec}
 
 \paragraph{Fan-out versus APC.}
 Both pay $W=L+k\bar\ell$; ForkServe's fan-out also includes abort.
-The storage-efficient serving claim is the product in \eqref{eq:conc}: less work than recompute, less HBM than APC, and decode in line with APC.
+The efficient-serving claim is the product in \eqref{eq:conc} with the decode identity \eqref{eq:dec-stop}: less work than recompute, less HBM than APC, and $D^{+}\le nD$ when an answer marker exists.
 
 \begin{table}[h]
 \centering
@@ -386,10 +552,11 @@ ForkServe & $L+\sum_i\ell_i$ & $b(L+\ell_{\star})$ & $k(1+\varepsilon)/(1+\varep
 \end{tabular}
 \caption{Closed forms from \eqref{eq:rec}--\eqref{eq:ratios}.
 Branch-aware sharing matches APC on prefill and is cheaper than recompute by $(1+k\varepsilon)/(k(1+\varepsilon))$.
-After abort, $M_{\mathrm{spine}}$ is the storage-efficient occupancy, below both, which raises $C\propto\mathrm{HBM}/M$.}
+After abort, $M_{\mathrm{spine}}$ is the occupancy used by efficient serving, below both, which raises $C\propto\mathrm{HBM}/M$.}
 \end{table}
 
-The GSM8K numbers below check storage-efficient serving: peak KV below APC on every batch, generation time within $2\%$ of APC, and far below recompute on both KV and fan-out.
+The GSM8K numbers below check efficient serving at full $n$: peak KV below APC on every batch, generation time within $2\%$ of APC without decode-stop, and far below recompute on both KV and fan-out.
+Settings L and M then add APP and answer-marker decode.
 
 \section{GSM8K test set (setting A)}
 
@@ -1714,6 +1881,15 @@ Control-plane cost model, not A100 wall-clock.
 APP prunes $20$ residuals across the ten sessions and ships $352$ tokens instead of the full clone.}
 \end{table}
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/app_prefill_methods.pdf}
+\caption{Setting L visualization.
+Hash prefill matches APC on the first expand.
+Stock disaggregated prefill is slower because it ships the clone.
+ForkServe aliases the trunk; APP also drops the two low-score residuals.}
+\end{figure}
+
 Hash prefill matches APC on this first fan-out: the blocks have not been published, so the hash does not remove the clone.
 Stock disaggregated prefill pays the same prefill and then ships all $11520$ tokens, which makes fan-out slower ($162$\,ms), consistent with disaggregated prefill not being a throughput feature.
 ForkServe removes the clone by aliasing the trunk ($47$\,ms, peak $3840$).
@@ -1722,38 +1898,257 @@ Replay of the committed winner is a full hash hit for APC, hash prefill, and APP
 
 The decode-token curve in this setting is a stop model, not a second GPU pass.
 On a trace whose accuracy is the GSM8K score $0.845$, ending the winner at an answer marker $60\%$ of the way through a $256$-token budget reaches that accuracy at $153$ decode tokens instead of $256$.
-We do not report that reduction as measured GPU latency.
-The concurrency numbers in setting K remain the system-level claim, because they plug measured peaks ($1563$ vs.\ $1163$) into \eqref{eq:conc}.
+Setting M measures that same stop list on A100s.
+The concurrency numbers in setting K remain the system-level capacity claim, because they plug measured peaks ($1563$ vs.\ $1163$) into \eqref{eq:conc}.
+
+\section{GPU APP and decoding acceleration (setting M)}
+
+Setting M is the GPU counterpart of settings K and L.
+Qwen3-8B, \texttt{bfloat16}, $80$ items per file, batches of eight, decode budget $D{=}512$, Tree-of-Thoughts $k{=}4$ on GSM8K and Game24, ReAct wrap+recovery $k{=}2$ on HumanEval.
+Systems: recompute, APC, ForkServe, ForkServe+ (\texttt{plus\_config}: lazy abort, pointer swap, prune, hash skip, disagg gate, \texttt{decode\_stop}).
+Tensor parallel $2$ (GPU $0,1$) and $4$ (GPU $0$--$3$) on the same four A100-SXM4 40GB node.
+Scores are official extractors on the stored traces: GSM8K accuracy, Game24 success, HumanEval pass@1.
+ForkServe+ on HumanEval uses the ReAct path without draft prune (\texttt{prefilled\_branches}${=}0$), so that column is CoW plus whatever stop markers appear in code.
+
+\subsection{GSM8K: decode stop moves wall-clock}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+$\mathrm{tp}$ & System & e2e (s) & fan-out (ms) & peak KV & decode tok & tok/item & acc. \\
+\midrule
+$2$ & recompute & $37.34$ & $2006$ & $4744$ & $40960$ & $512$ & $0.925$ \\
+$2$ & APC & $36.00$ & $558$ & $1582$ & $40960$ & $512$ & $0.900$ \\
+$2$ & ForkServe & $36.04$ & $1181$ & $1182$ & $21235$ & $265$ & $0.887$ \\
+$2$ & ForkServe+ & $28.22$ & $1261$ & $1182$ & $13356$ & $167$ & $0.863$ \\
+$4$ & recompute & $23.36$ & $1236$ & $4744$ & $40960$ & $512$ & $0.925$ \\
+$4$ & APC & $22.72$ & $438$ & $1582$ & $40960$ & $512$ & $0.938$ \\
+$4$ & ForkServe & $23.30$ & $994$ & $1182$ & $20997$ & $262$ & $0.925$ \\
+$4$ & ForkServe+ & $16.94$ & $1048$ & $1182$ & $12826$ & $160$ & $0.925$ \\
+\bottomrule
+\end{tabular}
+\caption{Setting M, GSM8K prefix $n{=}80$, $D{=}512$.
+Peak KV is identical at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$: occupancy tracks the committed spine, not the rank count.
+ForkServe+ / APC peak $=1182/1582{=}0.75$.
+Decode tokens follow \eqref{eq:dec-stop}: APC always spends $nD$; ForkServe already hits EOS ($0.52\times$); the stop list cuts that to $0.33\times$ and e2e to $0.78\times$ APC at $\mathrm{tp}{=}2$ and $0.75\times$ at $\mathrm{tp}{=}4$.
+Accuracy at four GPUs is $74/80$ vs.\ APC $75/80$.}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/plus_gsm8k_decode_e2e.pdf}
+\caption{Setting M, GSM8K.
+Hatched bars are $\mathrm{tp}{=}4$.
+APC spends the full $nD$ budget; ForkServe already stops on EOS; ForkServe+ stops at \texttt{\#\#\#\#}.
+End-to-end follows $D^{+}$, not fan-out.}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.49\textwidth}
+\includegraphics[width=\linewidth]{fig/plus_peak_kv.pdf}
+\end{minipage}\hfill
+\begin{minipage}{0.49\textwidth}
+\includegraphics[width=\linewidth]{fig/plus_e2e_tp4.pdf}
+\end{minipage}
+\caption{Setting M storage vs.\ latency.
+Left: peak KV is identical for ForkServe and ForkServe+, below APC on ToT ($0.75\times$, $0.62\times$) and close on ReAct ($0.96\times$).
+Right: at $\mathrm{tp}{=}4$, only GSM8K e2e drops, because Game24 and HumanEval do not hit the stop list.}
+\end{figure}
+
+$T_{\mathrm{dec}}$ is $26.9$\,s of $28.2$\,s at $\mathrm{tp}{=}2$ for ForkServe+ and $15.9$\,s of $16.9$\,s at $\mathrm{tp}{=}4$.
+The e2e gap versus APC is therefore the decode gap, not a faster fan-out: ForkServe+ fan-out is still $1261$\,ms vs.\ APC $558$\,ms at $\mathrm{tp}{=}2$, the same expand overhead the 14B forest showed.
+APP's control-plane prune ($p_{\mathrm{d}}{=}1/2$ on synthetic illegal thoughts) does not fire on these GSM8K thoughts---\texttt{pruned\_branches}${=}0$, \texttt{prefilled\_branches}${=}40$ (four thoughts per chunk $\times$ ten chunks)---so the GPU expand path is still CoW of every residual.
+What \emph{does} fire is the disagg gate (\texttt{transfer\_tokens}${=}960$ vs.\ a full clone of the live KV) and the stop list.
+That is the experimental split: setting L isolates prune on a workload designed to fail the draft score; setting M isolates decode acceleration on a workload that emits \texttt{\#\#\#\#}.
+
+\subsection{Game24 and HumanEval}
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrrrrrrr@{}}
+\toprule
+$\mathrm{tp}$ & System & Game24 e2e (s) & peak & decode tok & success & HE e2e (s) & HE peak & HE pass@1 \\
+\midrule
+$2$ & recompute & $43.97$ & $3068$ & $40960$ & $0.375$ & $45.90$ & $3796$ & $0.425$ \\
+$2$ & APC & $43.14$ & $1289$ & $40960$ & $0.463$ & $44.78$ & $1970$ & $0.438$ \\
+$2$ & ForkServe & $42.98$ & $793$ & $35419$ & $0.438$ & $44.64$ & $1882$ & $0.450$ \\
+$2$ & ForkServe+ & $43.05$ & $793$ & $34427$ & $0.350$ & $44.70$ & $1882$ & $0.450$ \\
+$4$ & recompute & $28.97$ & $3068$ & $40960$ & $0.487$ & $30.42$ & $3796$ & $0.450$ \\
+$4$ & APC & $28.51$ & $1289$ & $40960$ & $0.338$ & $29.85$ & $1970$ & $0.425$ \\
+$4$ & ForkServe & $28.36$ & $793$ & $35513$ & $0.463$ & $29.69$ & $1882$ & $0.450$ \\
+$4$ & ForkServe+ & $28.40$ & $793$ & $34055$ & $0.375$ & $29.77$ & $1882$ & $0.412$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Setting M, Game24 and HumanEval, $n{=}80$.
+Peak ratios vs.\ APC: Game24 $793/1289{=}0.62$, HumanEval $1882/1970{=}0.96$ (wrap-dominated, $k{=}2$), matching \eqref{eq:gap}.
+Decode tokens barely move, so e2e stays within $1\%$ of APC.
+Game24 success under ForkServe+ is lower than ForkServe at both widths; HumanEval pass@1 is matched at $\mathrm{tp}{=}2$ and $-3$ problems at $\mathrm{tp}{=}4$.}
+\end{table}
+
+Game24 traces often fill the $512$-token budget with arithmetic search; HumanEval almost never emits \texttt{\#\#\#\#} or \texttt{\textbackslash boxed}.
+\eqref{eq:dec-stop} then predicts $D^{+}\approx nD$ and $T_{\mathrm{e2e}}^{+}\approx T_{\mathrm{e2e}}^{\mathrm{APC}}$, which is what the table shows.
+The storage claim still holds: Game24 is the largest abort gap on this node ($0.62\times$ APC), HumanEval the smallest, independent of $\mathrm{tp}$.
+
+\subsection{What setting M adds to L and A}
+
+\begin{itemize}
+\item \textbf{Prefill pruning on GPU.} Real GSM8K/Game24 thoughts pass the draft heuristic, so $W_{\mathrm{APP}}\approx W_{\mathrm{FS}}$ on this forest.
+The modeled $74\%$ prefill cut in setting L is the illegal-residual case, not the default ToT case.
+The GPU still records a disagg transfer of $960$ GSM8K tokens and $1238$ Game24 tokens---survivors only---against a would-be clone of thousands of live tokens under stock disagg.
+\item \textbf{Decoding acceleration on GPU.} GSM8K is the positive case of \eqref{eq:dec-stop}: $0.33\times$ decode tokens, $0.75$--$0.78\times$ e2e, accuracy within one problem of APC at $\mathrm{tp}{=}4$.
+\item \textbf{KV vs.\ latency.} Peak KV is the same number as ForkServe ($1182$ / $793$ / $1882$) and still below APC at every width.
+Efficient serving here is $M_{\mathrm{spine}}$ plus $D^{+}$, not a faster expand.
+\end{itemize}
+
+\section{Six-model GPU forest (setting N)}
+
+Setting N is the cross-family check of settings M and \eqref{eq:gap}.
+The same four systems, $n{=}40$, batches of eight, $D{=}512$, $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$, on Qwen3-4B, Qwen2.5-Math-1.5B, Qwen3-14B, Llama-3-8B-Instruct, Mistral-7B-Instruct-v0.3, and DeepSeek-R1-Distill-Llama-8B.
+GSM8K and Game24 run on every model; HumanEval additionally on Llama-3-8B, Mistral-7B, and Qwen3-14B.
+Peak KV is identical at both tensor widths on every file.
+
+\subsection{Peak KV holds across families}
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+GSM8K, $\mathrm{tp}{=}2$ & Qwen3-4B & Math-1.5B & Qwen3-14B & Llama-3-8B & Mistral-7B & R1-8B \\
+\midrule
+APC peak & $1512$ & $1512$ & $1512$ & $1509$ & $1569$ & $1405$ \\
+FS / FS+ peak & $1112$ & $1112$ & $1112$ & $1109$ & $1169$ & $1005$ \\
+ratio vs.\ APC & $0.74$ & $0.74$ & $0.74$ & $0.73$ & $0.75$ & $0.72$ \\
+APC $D^{+}$ & $20480$ & $20480$ & $20480$ & $20480$ & $20480$ & $20480$ \\
+FS $D^{+}$ & $9860$ & $17070$ & $12087$ & $5560$ & $10013$ & $14974$ \\
+FS+ $D^{+}$ & $7206$ & $11704$ & $11162$ & $5262$ & $9660$ & $6422$ \\
+APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
+FS acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.000$ \\
+APC e2e (s) & $14.00$ & $8.31$ & $35.92$ & $11.44$ & $16.14$ & $21.43$ \\
+FS e2e (s) & $14.28$ & $8.63$ & $36.20$ & $11.67$ & $18.33$ & $21.74$ \\
+FS+ e2e (s) & $12.56$ & $8.63$ & $36.10$ & $11.07$ & $18.10$ & $14.70$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Setting N, GSM8K $n{=}40$, $\mathrm{tp}{=}2$.
+Peak KV is $0.72$--$0.75\times$ APC on every family and does not change at $\mathrm{tp}{=}4$.
+ForkServe accuracy stays with APC ($\pm 2$ problems except Math-1.5B, where both are weak).
+ForkServe+ stop is safe on Llama-3-8B, cuts tokens on Qwen without always matching accuracy, and zeros DeepSeek-R1 because \texttt{</think>} fires before the answer.}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/multi_peak_ratio.pdf}
+\caption{Setting N peak-KV ratio vs.\ APC.
+GSM8K sits in $[0.72,0.75]$; Game24 in $[0.57,0.62]$.
+The abort gap of \eqref{eq:gap} is a property of $k$ and residual length, not of the weight family.}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Game24 peak (any $\mathrm{tp}$) & APC & FS / FS+ & ratio \\
+\midrule
+Qwen3-4B / Math-1.5B / Qwen3-14B & $1287$ & $791$ & $0.61$ \\
+Llama-3-8B & $1248$ & $760$ & $0.61$ \\
+Mistral-7B & $1351$ & $783$ & $0.58$ \\
+DeepSeek-R1-8B & $1144$ & $656$ & $0.57$ \\
+\bottomrule
+\end{tabular}
+\caption{Game24 peak KV.
+Short trunks make unused residuals a larger fraction of $M_{\mathrm{APC}}$, so the ratio is below GSM8K, as \eqref{eq:gap} predicts.}
+\end{table}
+
+HumanEval wrap+recovery ($k{=}2$) on Llama-3-8B, Mistral-7B, and Qwen3-14B keeps peak $1624/1800{=}0.90$, $1828/2052{=}0.89$, and $1538/1626{=}0.95$ vs.\ APC: the wrap residual is long relative to $L$, so $\Delta$ shrinks.
+Official pass@1 on Mistral-7B is $0.350$ ($14/40$) for recompute, APC, ForkServe, and ForkServe+ at both tensor widths; Llama-3-8B and Qwen3-14B stay within two problems of APC.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+HumanEval pass@1, $n{=}40$, $\mathrm{tp}{=}2$ & Llama-3-8B & Mistral-7B & Qwen3-14B \\
+\midrule
+recompute & $0.550$ & $0.350$ & $0.525$ \\
+APC & $0.500$ & $0.350$ & $0.575$ \\
+FS / FS+ & $0.475$ & $0.350$ & $0.550$ \\
+peak FS / APC & $0.90$ & $0.89$ & $0.95$ \\
+APC e2e (s) & $12.75$ & $11.69$ & $37.71$ \\
+FS e2e (s) & $14.93$ & $13.77$ & $37.55$ \\
+\bottomrule
+\end{tabular}
+\caption{Setting N HumanEval.
+Mistral pass@1 is $0.350$ on every system (same at $\mathrm{tp}{=}4$).
+Peak ratios stay wrap-dominated ($k{=}2$).
+At $\mathrm{tp}{=}4$, Llama is $0.600$ / $0.600$ / $0.575$ and Qwen3-14B is $0.525$ / $0.575$ / $0.575$ (recompute / APC / FS).}
+\end{table}
+
+\subsection{Decode stop is not portable}
+
+\begin{figure}[h]
+\centering
+\begin{minipage}{0.49\textwidth}
+\includegraphics[width=\linewidth]{fig/multi_gsm8k_decode.pdf}
+\end{minipage}\hfill
+\begin{minipage}{0.49\textwidth}
+\includegraphics[width=\linewidth]{fig/multi_gsm8k_acc.pdf}
+\end{minipage}
+\caption{Setting N GSM8K, $\mathrm{tp}{=}2$.
+Left: APC always emits $nD$; ForkServe already stops on EOS; ForkServe+ stops earlier.
+Right: ForkServe tracks APC accuracy; ForkServe+ matches on Llama-3-8B, drops on Qwen3-4B / Mistral / Qwen3-14B, and fails on DeepSeek-R1 when \texttt{</think>} is a stop string.}
+\end{figure}
+
+The storage identity is the transferable result of setting N.
+Answer-marker stop transfers only when the model actually writes \texttt{\#\#\#\#} or \texttt{\textbackslash boxed} after a complete answer, as on Qwen3-8B in setting M.
+On DeepSeek-R1, \texttt{</think>} is part of the reasoning trace, so FS+ e2e falls ($14.7$\,s vs.\ $21.4$\,s) with accuracy $0$.
+On Llama-3-8B, FS+ keeps accuracy $0.675$ at $0.26\times$ APC decode tokens.
+Use ForkServe (no stop list) when comparing quality across families; use ForkServe+ only on chat templates that emit a dedicated answer marker.
+
+At $\mathrm{tp}{=}4$, peak KV is unchanged and wall-clock scales by $0.60$--$0.72$ vs.\ $\mathrm{tp}{=}2$ on GSM8K for APC and ForkServe, the same decode-bound scaling as settings E--J.
 
 \section{Discussion}
 
 Recompute copies the trunk on every branch; APC reuses it after a hash hit and already removes most of $M_{\mathrm{rec}}$.
 ForkServe is branch-aware KV sharing: it keeps that prefill saving, then drops unused branches so peak KV tracks $M_{\mathrm{spine}}$.
-On GSM8K that is $0.72\times$ APC and $0.25\times$ recompute in every batch, while generation time stays within $2\%$ of APC.
-Fan-out carries copy-on-write and abort; global latency follows $T_{\mathrm{dec}}$ and $C\propto\mathrm{HBM}/M$, so ForkServe is the storage-efficient serving optimum in \eqref{eq:conc}.
-Settings B and C check Game24, HumanEval, and $\mathrm{tp}{=}2$ versus $\mathrm{tp}{=}4$; GSM8K quality is setting A.
+On GSM8K that is $0.72\times$ APC and $0.25\times$ recompute in every batch, while generation time stays within $2\%$ of APC when the decode budget is spent in full.
+Fan-out carries copy-on-write and abort; global latency follows $T_{\mathrm{dec}}$ and $C\propto\mathrm{HBM}/M$, so the serving optimum in \eqref{eq:conc} is less HBM than APC at matched $T_{\mathrm{e2e}}$.
+APP and answer-marker stop are the two knobs that then cut $T_{\mathrm{fan}}$ and $D$.
+Settings B and C check Game24, HumanEval, and $\mathrm{tp}{=}2$ versus $\mathrm{tp}{=}4$; GSM8K quality at full $n$ is setting A.
 Settings G and H run the seven-file math suite on Qwen3-14B: the same peak ratios $0.62$--$0.80$, pool accuracy within $7$ problems of APC, and $T_{\mathrm{e2e}}$ within a few percent, with four-GPU wall-clock $0.61$--$0.64\times$ two GPUs.
 Settings E and F repeat that recipe on Qwen3-8B, where four-GPU time scales by $0.66$.
 Settings I and J repeat it on DeepSeek-R1-Distill-Llama-8B with $D{=}2048$: peak $0.58$--$0.77\times$ APC, pool accuracy $+10$ and $+11$ problems, and four-GPU time $0.56$--$0.64\times$ two GPUs.
 Setting K plugs those GSM8K peaks into \eqref{eq:conc}: $35\%$ more concurrent trees, $35\%$ more saturated tok/s, and SLO-feasible QPS $256$ vs.\ $192$.
-Setting L places APP against hash prefill and disaggregated prefill on the fan-out those GPU runs leave open: hash prefill does not help until blocks are published, disaggregated prefill adds a transfer, and APP is the method whose modeled fan-out is below APC.
+Setting L places APP against hash prefill and disaggregated prefill on a fan-out with illegal residuals: hash prefill does not help until blocks are published, disaggregated prefill adds a transfer, and APP is the method whose modeled fan-out is below APC.
+Setting M runs the same ForkServe+ stack on A100s for Qwen3-8B: KV still $0.62$--$0.75\times$ APC on ToT, GSM8K decode tokens $0.33\times$ APC, GSM8K e2e $0.75$--$0.78\times$ APC, and Game24/HumanEval e2e matched because those traces do not hit the stop list.
+Setting N repeats the forest on six models ($n{=}40$): GSM8K peak $0.72$--$0.75\times$ APC and Game24 $0.57$--$0.62\times$ on every family; ForkServe accuracy tracks APC; ForkServe+ stop is not portable (DeepSeek-R1 accuracy $0$ when \texttt{</think>} is a stop string).
+HumanEval pass@1 on Mistral-7B is $0.350$ for every system, with peak $0.89\times$ APC.
 
 \section{Conclusion}
 
-ForkServe is branch-aware KV sharing for storage-efficient vLLM serving of Tree-of-Thoughts and ReAct: the trunk is forked by copy-on-write, unused branches are aborted, and only the committed path remains.
+ForkServe is efficient vLLM serving of Tree-of-Thoughts and ReAct: the trunk is forked by copy-on-write, unused branches are aborted, residuals can be pruned before prefill, and winner decode can stop at an answer marker.
 Against recompute, the relevant quantities are prefill work
 $W_{\mathrm{rec}}=k(L+\bar\ell)$ versus $W_{\mathrm{FS}}=L+k\bar\ell$,
 and clone memory $M_{\mathrm{rec}}$ versus the committed path $M_{\mathrm{spine}}=b(L+\ell_{\star})$.
-Against APC, prefill matches, $W_{\mathrm{APC}}=W_{\mathrm{FS}}$, and the remaining storage gap is
+Against APC, prefill matches until APP drops losers \eqref{eq:app-w}, and the remaining storage gap is
 \begin{equation}
 \Delta = M_{\mathrm{APC}}-M_{\mathrm{spine}} = b\sum_{i\neq\star}\ell_i,
 \end{equation}
 the hashed union that remains under APC.
-A run is storage-efficient when \eqref{eq:goal} holds and official scores stay with APC.
+A run is efficient when \eqref{eq:goal} holds, official scores stay with APC, and---when a stop marker exists---$D^{+}<nD$ as in \eqref{eq:dec-stop}.
 The serving objective is system throughput $\Theta\propto C/T_{\mathrm{e2e}}$ with $C\propto\mathrm{HBM}/M$ (\eqref{eq:conc}).
 
 The completed measurements support that claim on more than one task, tensor-parallel width, and model size.
-The GSM8K test set ($n{=}1319$, $\mathrm{tp}{=}2$, Qwen3-14B) is the main Tree-of-Thoughts result: peak KV below APC on all $165$ batches (median ratio $0.72$), accuracy aligned with APC, and $T_{\mathrm{e2e}}$ within $2\%$.
+The GSM8K test set ($n{=}1319$, $\mathrm{tp}{=}2$, Qwen3-14B) is the main Tree-of-Thoughts result: peak KV below APC on all $165$ batches (median ratio $0.72$), accuracy aligned with APC, and $T_{\mathrm{e2e}}$ within $2\%$ without decode-stop.
 Four-problem slices reproduce the same storage ordering on Tree-of-Thoughts (GSM8K, Game24) and ReAct (HumanEval) at $\mathrm{tp}{=}2$, and on Game24 and HumanEval at $\mathrm{tp}{=}4$.
 On Qwen3-14B (settings G and H) and Qwen3-8B (settings E and F), seven math files give $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.62,0.80]$ at both $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 On DeepSeek-R1-Distill-Llama-8B (settings I and J) the same files with $D{=}2048$ give $\mathrm{peak}^{\mathrm{FS}}/\mathrm{peak}^{\mathrm{APC}}\in[0.58,0.77]$, micro-accuracy $+2.0$ and $+2.1$\,pp over APC, and $T_{\mathrm{e2e}}$ $-0.5\%$ / $+1.3\%$.
@@ -1761,14 +2156,17 @@ Generate time at four GPUs is $0.56$--$0.66\times$ the two-GPU run and stays wit
 Where $k{=}4$, $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ sits in $[0.58,0.80]$; where $k{=}2$, the ratio rises to $0.94$, as \eqref{eq:gap} predicts when residuals are large relative to $L$.
 Setting K turns that $M$ gap into concurrency: $C^{\mathrm{FS}}/C^{\mathrm{APC}}{=}50/37$ and $35\%$ more peak tok/s under a $1\,\mathrm{s}$ P99 TTFT SLO.
 
-The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.
-Those ForkServe jobs will resume when the four A100s are free.
-They test $\Delta>0$ at full $n$ on short trunks (Game24) and on wrap-dominated prompts (HumanEval).
-
 Setting L is the design response to the fan-out term that still limits $\Theta$.
 $T_{\mathrm{fan}}^{\mathrm{FS}}$ is above $T_{\mathrm{fan}}^{\mathrm{APC}}$ on the GPU forest; APP moves hash skip, draft prune, early abort, and the disagg \texttt{insert} gate in front of that expand.
 The control-plane ordering is APP, then ForkServe, then APC / hash prefill, then stock disaggregated prefill.
-Confirming that ordering as A100 wall-clock, on the same GSM8K forest, is the remaining measurement.
+Setting M confirms two GPU facts on Qwen3-8B ($n{=}80$).
+First, real ToT thoughts do not trip the draft heuristic, so expand is still CoW of every residual and still slower than APC.
+Second, GSM8K answer-marker stop is a real latency win: $0.33\times$ decode tokens and $0.75\times$ e2e at $\mathrm{tp}{=}4$ with accuracy $0.925$ vs.\ $0.938$.
+Game24 and HumanEval keep APC-level e2e because those traces do not hit the stop list, while peak KV remains below APC ($0.62\times$ and $0.96\times$).
+Setting N extends that storage claim to six families at $n{=}40$: GSM8K peak $0.72$--$0.75\times$ APC, Game24 $0.57$--$0.62\times$, ForkServe accuracy with APC, and ForkServe+ stop not portable (DeepSeek-R1 accuracy $0$).
+Mistral-7B HumanEval pass@1 is $0.350$ ($14/40$) on recompute, APC, and ForkServe.
+
+The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.
 A live-scheduler concurrent-load experiment should likewise confirm the analytical $C$ and $\Theta$ of setting K.
 
 \end{document}

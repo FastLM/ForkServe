@@ -3,6 +3,8 @@
 
 Agentic serving forks a shared trunk into short residuals and then keeps one of them.
 \sys represents that fork as a copy-on-write context tree and filters each residual with advanced prefill pruning: hash hits skip published blocks, low-score siblings are dropped before GPU prefill, and a disaggregated connector inserts only the retained KV.
-On Qwen3-14B GSM8K the tree matches APC accuracy at $0.72\times$ median peak KV; fan-out is still the slower step, and the control-plane comparison shows \app is what brings that prefill below APC, hash prefill, and stock disaggregated prefill.
-The same measured KV gap raises modeled SLO-feasible concurrency by $35\%$.
-The remaining experiment is to place this filter on the GPU expand path and confirm the fan-out ordering there.
+On Qwen3-14B GSM8K the tree matches APC accuracy at $0.72\times$ median peak KV; fan-out is still the slower step, and the control-plane comparison shows \app is what brings that prefill below APC, hash prefill, and stock disaggregated prefill when residuals fail the draft score.
+On Qwen3-8B the same KV gap holds, and answer-marker stop cuts GSM8K decode tokens to $0.31\times$ APC and e2e to $0.75\times$ at four GPUs, at accuracy $0.925$ vs.\ $0.938$.
+On six model families ($n{=}40$) GSM8K peak KV stays $0.72$--$0.75\times$ APC; the stop list is not portable to DeepSeek-R1.
+Mistral-7B HumanEval pass@1 is $0.350$ on every system.
+The measured KV gap raises modeled SLO-feasible concurrency by $35\%$.

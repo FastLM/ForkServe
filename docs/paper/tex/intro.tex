@@ -38,8 +38,8 @@ Without fork, every sibling is a full process image. Without speculation, the ch
 \resizebox{\textwidth}{!}{\input{tex/fig_arch}}
 \caption{\textbf{\sys{} architecture.}
 The harness exposes branch events.
-The context tree aliases trunk pages at \texttt{fork}.
-Advanced prefill pruning filters each residual before GPU prefill: hash skip, draft prune, early abort, then a disaggregated-prefill gate that inserts only retained KV.
+The context tree aliases trunk pages at \texttt{fork} by pointer swap (refcount $=k$, no memcpy).
+Advanced prefill pruning then decides, per residual, whether GPU prefill runs at all: hash skip, draft prune, early abort, then a disaggregated-prefill gate that inserts only retained KV.
 Decode attends to the committed spine.
 Freed KV raises the number of concurrent sessions under the same HBM budget.
 }
@@ -59,8 +59,7 @@ Retention~\cite{continuum}, relative-idleness offload~\cite{mori}, and prefix ca
 \smallskip\noindent\textbf{(2) Advanced prefill pruning (\S\ref{sec:app}).}
 On top of the tree, \app decides per residual whether GPU prefill runs and whether the KV is inserted into a disaggregated prefill/decode connector~\cite{distserve,splitwise}.
 A hash index skips published full blocks (automatic prefix caching).
-A draft score and an early prefix check drop low-score siblings before they are prefilled.
-The connector inserts only retained branches.
+A draft score and an early prefix check drop low-score siblings \emph{before} GPU prefill; the connector inserts only retained branches.
 Longest-common-prefix commit still binds the observed prompt; speculative tokens never enter the sampler.
 
 \smallskip\noindent\textbf{(3) A scheduler that does not degrade the committed path (\S\ref{sec:schedule}).}
@@ -68,6 +67,9 @@ Speculative prefills have lower priority in the continuous batch~\cite{orca,sara
 They run in leftover token budget after committed decode and prefill meet their \tbt{}/\ttft{} margins~\cite{jitserve}, are chunked~\cite{sarathisplit} to bound interference, and are cancelled when a commit needs the same SM.
 Across replicas, \sys pins a tree to the worker that holds its trunk and steals only residual work.
 
-\S\ref{sec:eval} reports two measurements that must not be conflated.
+\S\ref{sec:eval} reports four measurements that must not be conflated.
 On Qwen3-14B GSM8K, \sys matches APC accuracy at $0.72\times$ median peak KV, and its fan-out is still slower than APC.
-A control-plane study of \app then shows that hash skip, draft prune, and the disagg gate remove most of that prefill, and that the measured KV gap raises SLO-feasible concurrency by $35\%$.
+A control-plane study of \app then shows that hash skip, draft prune, and the disagg gate remove most of that prefill on illegal residuals, and that the measured KV gap raises SLO-feasible concurrency by $35\%$.
+A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering and a decode-stop gain on GSM8K ($0.31\times$ decode tokens, $0.75\times$ e2e at $\mathrm{tp}{=}4$).
+A six-model GPU forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC on Qwen, Llama, Mistral, and DeepSeek-R1; answer-marker stop is not portable.
+Mistral-7B HumanEval pass@1 is $0.350$ on every system.

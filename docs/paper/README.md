@@ -17,4 +17,5 @@ Produces `main.pdf`. The bibliography is the checked-in `main.bbl` (numeric cita
 4. Evaluation — Qwen3-14B GSM8K forest; control-plane APC / hash prefill / disagg prefill / ForkServe / APP
 5. Related work and conclusion
 
-GPU numbers are the A100 forest (peak KV, accuracy, fan-out). APP fan-out and transfer numbers are the control-plane cost model in setting L of `docs/exp_report/report_en.tex`, not a second GPU run.
+GPU numbers are the A100 forests: Qwen3-14B GSM8K (peak KV, accuracy, fan-out) and Qwen3-8B ForkServe+ (APP knobs plus decode-stop).
+Control-plane APP fan-out and transfer numbers are setting L of `docs/exp_report/report_en.tex`.

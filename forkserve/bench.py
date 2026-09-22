@@ -2049,6 +2049,10 @@ def _orchestrate(args: argparse.Namespace) -> int:
     model_l = str(args.model or "").lower()
     if "deepseek" in model_l or "r1-distill" in model_l:
         os.environ.setdefault("FORKSERVE_CHAT_STYLE", "deepseek_r1")
+    elif "mistral" in model_l:
+        os.environ.setdefault("FORKSERVE_CHAT_STYLE", "mistral")
+    elif "llama" in model_l:
+        os.environ.setdefault("FORKSERVE_CHAT_STYLE", "llama")
     progress(
         args,
         f"orchestrating systems={systems} tp={tps} gpus={devices} "

@@ -1,0 +1,28 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={draw=black, line width=0.25pt},
+]
+\definecolor{FS}{HTML}{EE7733}
+\definecolor{FSp}{HTML}{009988}
+\definecolor{APC}{HTML}{0077BB}
+\foreach \y in {0.0,0.25,0.50,0.75,1.00} {
+  \draw[black!12] (0,\y*2.2) -- (8.4,\y*2.2);
+  \node[font=\tiny, text=black!55, anchor=east] at (-0.08,\y*2.2) {\y};
+}
+% GSM8K ratios: 0.735,0.735,0.735,0.735,0.745,0.715
+\foreach \i/\r in {0/0.735,1/0.735,2/0.735,3/0.735,4/0.745,5/0.715} {
+  \fill[bar, FS] ({0.18+\i*1.38},0) rectangle ({0.78+\i*1.38},{\r*2.2});
+}
+% Game24: 0.615,0.615,0.615,0.609,0.580,0.573
+\foreach \i/\r in {0/0.615,1/0.615,2/0.615,3/0.609,4/0.580,5/0.573} {
+  \fill[bar, FSp] ({0.80+\i*1.38},0) rectangle ({1.40+\i*1.38},{\r*2.2});
+}
+\draw[APC, dashed, line width=0.5pt] (0,2.2) -- (8.4,2.2);
+\foreach \i/\lab in {0/4B,1/1.5B,2/14B,3/L8B,4/M7B,5/R1} {
+  \node[font=\tiny, rotate=30, anchor=east] at ({0.79+\i*1.38},-0.08) {\lab};
+}
+\fill[FS] (5.4,2.45) rectangle (5.65,2.58);
+\node[font=\tiny, anchor=west] at (5.70,2.515) {GSM8K};
+\fill[FSp] (6.7,2.45) rectangle (6.95,2.58);
+\node[font=\tiny, anchor=west] at (7.00,2.515) {Game24};
+\end{tikzpicture}

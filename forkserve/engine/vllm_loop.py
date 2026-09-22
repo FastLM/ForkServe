@@ -332,7 +332,7 @@ def _groups_from_live(coord: Any, parent_req: str) -> tuple[list[list[Any]], int
     return groups, n_est, block_size
 
 
-def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int, int] | None:
+def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int] | None:
     """O(1) fork: reuse the parent's snapshotted (or live) block table."""
     extra = extra_of(request)
     parent_node = extra.get("forkserve_parent_node")
@@ -376,8 +376,9 @@ def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int, int] | None:
     ids = [b.block_id for g in groups for b in g]
     table.pin_ro(ids)
     table.note_fork(len(ids))
-    # vLLM V1 scheduler unpacks (blocks, n_hit, shared_prefix_boundary).
-    return mgr.create_kv_cache_blocks(tuple(groups)), n_tokens, 0
+    # vLLM 0.18 scheduler unpacks (blocks, n_hit). Later trees added a third
+    # shared_prefix_boundary field; keep the 2-tuple that this engine expects.
+    return mgr.create_kv_cache_blocks(tuple(groups)), n_tokens
 
 
 def TwoClassVllmScheduler(*args: Any, **kwargs: Any):  # noqa: N802

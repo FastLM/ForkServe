@@ -9,7 +9,7 @@ from dataclasses import dataclass
 class ToolWrappers:
     # Default matches Qwen3-8B (the bench model). Llama3 tokens on Qwen
     # leaked <|eot_id|> and wasted the short decode budget.
-    style: str = "qwen"  # qwen | openai_xml | hermes | llama | bfcl | deepseek_r1
+    style: str = "qwen"  # qwen | openai_xml | hermes | llama | mistral | bfcl | deepseek_r1
 
     def chat(self, system: str, user: str) -> str:
         if self.style == "qwen":
@@ -24,6 +24,9 @@ class ToolWrappers:
                 f"<｜begin▁of▁sentence｜>{system}"
                 f"<｜User｜>{user}<｜Assistant｜><think>\n"
             )
+        if self.style == "mistral":
+            # Official Mistral-Instruct-v0.3: bos + [INST] system\\n\\nuser[/INST]
+            return f"<s>[INST] {system}\n\n{user}[/INST]"
         return (
             f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
             f"{system}<|eot_id|>"
@@ -43,6 +46,8 @@ class ToolWrappers:
             )
         if self.style == "qwen":
             return f"<|im_end|>\n<|im_start|>user\n<tool_response>\n"
+        if self.style == "mistral":
+            return f"</s>[INST] <tool_response>\n"
         return (
             f"<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
             f"<tool_response>\n"
@@ -53,6 +58,8 @@ class ToolWrappers:
             return (
                 f"<|im_end|>\n<|im_start|>user\n<tool_response>\nERROR {tool}: "
             )
+        if self.style == "mistral":
+            return f"</s>[INST] <tool_response>\nERROR {tool}: "
         return (
             f"<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
             f"<tool_response>\nERROR {tool}: "
@@ -64,6 +71,8 @@ class ToolWrappers:
                 f"<|im_start|>system\nYou are the {role}. {prompt}<|im_end|>\n"
                 f"<|im_start|>user\n"
             )
+        if self.style == "mistral":
+            return f"<s>[INST] You are the {role}. {prompt}\n\n"
         return (
             f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n"
             f"You are the {role}. {prompt}<|eot_id|>"
@@ -73,6 +82,8 @@ class ToolWrappers:
     def join_scaffold(self) -> str:
         if self.style == "qwen":
             return f"<|im_end|>\n<|im_start|>user\n<combined_results>\n"
+        if self.style == "mistral":
+            return f"</s>[INST] <combined_results>\n"
         return (
             f"<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n"
             f"<combined_results>\n"
@@ -84,4 +95,6 @@ class ToolWrappers:
     def close_observation(self) -> str:
         if self.style == "qwen":
             return "\n</tool_response><|im_end|>\n<|im_start|>assistant\n"
+        if self.style == "mistral":
+            return "\n</tool_response> [/INST]"
         return "\n</tool_response><|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"

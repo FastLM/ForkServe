@@ -19,14 +19,23 @@ from __future__ import annotations
 import ast
 import operator
 import re
+import textwrap
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 _NUM = re.compile(r"-?\d+(?:,\d{3})*(?:\.\d+)?")
 _CARD = re.compile(r"\d+(?:\.\d+)?")
 _FENCE = re.compile(r"```(?:python)?\n?(.*?)```", re.DOTALL | re.IGNORECASE)
-_CHAT_MARK = re.compile(r"<\|[^|]*\|>")
+_CHAT_MARK = re.compile(
+    r"<\|[^|]*\|>|"
+    r"</?s>|"
+    r"\[/?INST\]|"
+    r"\[/?AVAILABLE_TOOLS\]|"
+    r"\[/?TOOL_RESULTS\]|"
+    r"\[TOOL_CALLS\]"
+)
 _DEF = re.compile(r"def\s+(\w+)\s*\(")
+_TOPLEVEL_STOP = ("def ", "class ", "if __name__")
 
 
 def strip_think(text: str) -> str:
@@ -275,7 +284,7 @@ def quality_collapsed(workload: str, texts: Sequence[str], golds: Sequence[str])
     return False
 
 
-def extract_python(text: str) -> str:
+def extract_python(text: str, entry: str = "") -> str:
     """Pull a function body / fenced snippet out of chat or think residue."""
     raw = (text or "").replace("\\n", "\n")
     if "</think>" in raw:
@@ -284,7 +293,67 @@ def extract_python(text: str) -> str:
     fences = _FENCE.findall(raw)
     if fences:
         raw = fences[0]
-    return _trim_humaneval_body(raw)
+    named = _extract_named_def(raw, entry)
+    if named:
+        return named
+    return _trim_humaneval_body(_drop_leading_prose(raw))
+
+
+def _extract_named_def(raw: str, entry: str) -> str:
+    """If the model rewrote ``def <entry>``, keep that function and drop helpers."""
+    if not entry:
+        return ""
+    m = re.search(rf"(?m)^def\s+{re.escape(entry)}\s*\(", raw or "")
+    if not m:
+        return ""
+    lines = (raw[m.start():]).splitlines()
+    kept = [lines[0]]
+    for ln in lines[1:]:
+        s = ln.strip()
+        if s.startswith(_TOPLEVEL_STOP) and not ln[:1].isspace():
+            break
+        if s.startswith("print(") and not ln[:1].isspace():
+            break
+        kept.append(ln)
+    return "\n".join(kept).strip("\n")
+
+
+_CODE_HEAD = (
+    "def ",
+    "class ",
+    "return ",
+    "import ",
+    "from ",
+    "#",
+    "if ",
+    "for ",
+    "while ",
+    "try:",
+    "with ",
+    "elif ",
+    "else:",
+    "assert ",
+    "raise ",
+    "pass",
+    "@",
+)
+
+
+def _drop_leading_prose(body: str) -> str:
+    """Skip chat leftovers such as ``write code`` after ``[/INST]`` is stripped."""
+    lines = (body or "").splitlines()
+    start = 0
+    found = False
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if not s:
+            continue
+        indented = (len(ln) - len(ln.lstrip(" "))) >= 2
+        if indented or s.startswith(_CODE_HEAD):
+            start = i
+            found = True
+            break
+    return "\n".join(lines[start:] if found else lines)
 
 
 def _trim_humaneval_body(body: str) -> str:
@@ -296,16 +365,41 @@ def _trim_humaneval_body(body: str) -> str:
             break
         if lines and stripped.startswith("print(") and not line[:1].isspace():
             break
+        # Instruct models (especially Mistral) keep writing extra helpers
+        # after the first solution; those extra ``def``s used to be kept and
+        # then ``humaneval_pass`` concatenated them onto the official prompt.
+        if lines and stripped.startswith(_TOPLEVEL_STOP) and not line[:1].isspace():
+            break
         if (
             lines
             and stripped
             and not line[:1].isspace()
-            and not stripped.startswith(("#", "def ", "class ", "import ", "from ", "return "))
+            and not stripped.startswith(("#", "import ", "from ", "return "))
             and any(x.strip().startswith("return ") or x.strip().startswith("    return ") for x in lines)
         ):
             break
         lines.append(line)
-    return "\n".join(lines).strip("\n")
+    return _normalize_humaneval_indent("\n".join(lines).strip("\n"))
+
+
+def _normalize_humaneval_indent(body: str, indent: str = "    ") -> str:
+    """HumanEval prompts are 4-space; Mistral often emits 0- or 3-space bodies.
+
+    The tokenizer sets ``add_prefix_space``, so the first generated line
+    frequently loses one space and ``prompt + body`` becomes IndentationError.
+    """
+    if not body or _DEF.search(body):
+        return body
+    lines = body.splitlines()
+    nonempty = [(i, ln) for i, ln in enumerate(lines) if ln.strip()]
+    if len(nonempty) >= 2:
+        i0, ln0 = nonempty[0]
+        _i1, ln1 = nonempty[1]
+        ind0 = len(ln0) - len(ln0.lstrip(" "))
+        ind1 = len(ln1) - len(ln1.lstrip(" "))
+        if 0 <= ind0 < ind1 <= 8 and not ln0.lstrip().startswith(("def ", "class ")):
+            lines[i0] = (" " * (ind1 - ind0)) + ln0
+    return textwrap.indent(textwrap.dedent("\n".join(lines)), indent).strip("\n")
 
 
 def humaneval_entry(prompt: str) -> str:
@@ -315,8 +409,8 @@ def humaneval_entry(prompt: str) -> str:
 
 def humaneval_pass(completion: str, tests: str, prompt: str = "") -> bool:
     """pass@1: official HumanEval is prompt + body + tests + check(entry)."""
-    body = extract_python(completion)
     entry = humaneval_entry(prompt)
+    body = extract_python(completion, entry)
     defined = _DEF.search(body)
     if entry and defined and defined.group(1) == entry:
         src = f"{body}\n{tests}"
@@ -340,7 +434,7 @@ def pred_for(workload: str, text: str, gold: str = "", prompt: str = "") -> str:
     if workload == "game24":
         return extract_game24_expr(text)
     if workload == "humaneval":
-        body = extract_python(text)
+        body = extract_python(text, humaneval_entry(prompt))
         head = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
         return head[:96]
     return ""

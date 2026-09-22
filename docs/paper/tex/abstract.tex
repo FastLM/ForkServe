@@ -2,5 +2,9 @@ Agentic LLM serving forks a shared trunk into several short residuals, then keep
 Prefix caches reuse a trunk only after its tokens exist and after a hash hit; disaggregated prefill moves KV between a prefill instance and a decode instance without deciding which branches are worth computing.
 \sys makes the branch a serving object: a copy-on-write context tree shares the trunk at \texttt{fork}, and advanced prefill pruning (\app) decides, for each residual, whether to run GPU prefill and whether to insert the resulting KV into the disaggregated connector.
 Hash hits skip published full blocks; a draft score and an early-abort check drop low-score siblings before they consume prefill; the connector inserts only retained branches.
+Winner decode can stop at an answer marker (\texttt{\#\#\#\#}, \texttt{\textbackslash boxed}, \texttt{</think>}) rather than padding to the requested budget.
 On Qwen3-14B GSM8K ($n{=}1319$, two A100s) \sys matches APC accuracy ($0.845$ vs.\ $0.844$) at $0.72\times$ the median peak KV, while fan-out remains slower ($140$\,ms vs.\ $87$\,ms).
-A control-plane comparison of APC, hash prefill, disaggregated prefill, \sys, and \app shows \app cutting modeled fan-out prefill by $75\%$ relative to APC and raising the SLO-feasible concurrency implied by the measured KV gap by $35\%$.
+A control-plane comparison of APC, hash prefill, disaggregated prefill, \sys, and \app shows \app cutting modeled fan-out prefill by $75\%$ relative to APC.
+On Qwen3-8B ($n{=}80$, $\mathrm{tp}{=}4$) ForkServe+ keeps that KV gap ($1182$ vs.\ $1582$ tokens) and, with answer-marker stop, emits $0.31\times$ APC decode tokens and $0.75\times$ e2e ($16.9$\,s vs.\ $22.7$\,s) at accuracy $0.925$ vs.\ $0.938$.
+The same peak ratio, $0.72$--$0.75\times$ APC on GSM8K, holds on Qwen3-4B, Qwen2.5-Math-1.5B, Qwen3-14B, Llama-3-8B, Mistral-7B, and DeepSeek-R1-Distill-Llama-8B ($n{=}40$).
+The measured KV gap raises the SLO-feasible concurrency implied by an $8$\,GiB pool by $35\%$.

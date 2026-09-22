@@ -74,6 +74,27 @@ def test_humaneval_pass_at_1_runs_hidden_tests() -> None:
     )
     assert "print" not in extract_python(leaky)
     assert humaneval_pass(leaky, official, prompt)
+    # Mistral-Instruct: first line loses a space (add_prefix_space) and the
+    # model keeps writing extra helpers after the first solution.
+    mistral = (
+        "   return a + b\n\n\n"
+        "def add_extra(a, b):\n"
+        "    return a + b + 1\n"
+    )
+    assert "add_extra" not in extract_python(mistral)
+    assert extract_python(mistral).startswith("    return")
+    assert humaneval_pass(mistral, official, prompt)
+    chat_wrap = "<s>[INST] write code [/INST]\n    return a + b\n</s>"
+    assert humaneval_pass(chat_wrap, official, prompt)
+    rewritten = (
+        "    # try something\n"
+        "def add(a, b):\n"
+        "    return a + b\n\n"
+        "def add_extra(a, b):\n"
+        "    return a + b + 1\n"
+    )
+    assert "add_extra" not in extract_python(rewritten, "add")
+    assert humaneval_pass(rewritten, official, prompt)
 
 
 def test_annotate_scores_each_system_and_delta() -> None:

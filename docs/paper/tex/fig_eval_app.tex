@@ -1,0 +1,27 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={draw=black, line width=0.25pt},
+]
+\definecolor{APC}{HTML}{0077BB}
+\definecolor{Hash}{HTML}{88CCEE}
+\definecolor{Dis}{HTML}{AA3377}
+\definecolor{FS}{HTML}{EE7733}
+\definecolor{FSp}{HTML}{009988}
+\begin{scope}
+  \foreach \y in {0,40,80,120,160} {
+    \draw[black!12] (0,\y*0.014) -- (6.6,\y*0.014);
+    \node[font=\tiny, text=black!55, anchor=east] at (-0.08,\y*0.014) {\y};
+  }
+  \fill[bar, APC] (0.25,0) rectangle (1.25,139.0*0.014);
+  \fill[bar, Hash] (1.45,0) rectangle (2.45,139.0*0.014);
+  \fill[bar, Dis] (2.65,0) rectangle (3.65,162.1*0.014);
+  \fill[bar, FS] (3.85,0) rectangle (4.85,47.1*0.014);
+  \fill[bar, FSp] (5.05,0) rectangle (6.05,35.9*0.014);
+  \node[font=\tiny, rotate=30, anchor=east] at (0.75,-0.10) {APC};
+  \node[font=\tiny, rotate=30, anchor=east] at (1.95,-0.10) {hash};
+  \node[font=\tiny, rotate=30, anchor=east] at (3.15,-0.10) {disagg};
+  \node[font=\tiny, rotate=30, anchor=east] at (4.35,-0.10) {FS};
+  \node[font=\tiny, rotate=30, anchor=east] at (5.55,-0.10) {APP};
+  \node[font=\tiny, anchor=south] at (3.3,2.42) {Fan-out (ms)};
+\end{scope}
+\end{tikzpicture}
