@@ -1,0 +1,344 @@
+\section{Design}
+\label{sec:design}
+
+\sys sits between the agent runtime and the LLM serving engine (\Cref{fig:system}).
+Agent runtimes such as LangGraph, OpenHands, ReAct, and Tree-of-Thoughts naturally expose execution events---including tool invocation, agent fan-out, branch selection, and search expansion---that determine the evolution of agent contexts.
+\sys captures these events through a compact branch-lifecycle interface and translates them into KV-cache sharing, speculative prefill, and resource-reclamation decisions.
+Unlike workflow-oriented systems that rely on a statically declared DAG~\cite{ayo,parrot,murakkab}, \sys incrementally constructs and manages the execution tree as the agent workflow unfolds.
+
+\subsection{API and Architecture}
+\label{sec:overview}
+
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lp{0.62\columnwidth}@{}}
+\toprule
+\texttt{open(session)} & Create a root; prefill system+user. \\
+\texttt{fork(u, bid, tok?)} & Child of $u$ with id \texttt{bid}; optional known suffix. \\
+\texttt{speculate(v, pri)} & Mark $v$ eligible for speculative prefill. \\
+\texttt{commit(u, tokens)} & Bind the prompt to a child; start decode. \\
+\texttt{join(children, pol)} & Merge fan-out (\texttt{all}/\texttt{first}/\texttt{kofn}). \\
+\texttt{abort(v)} / \texttt{close} & Drop a subtree; end the session. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\texttt{commit} is the only operation on the critical path of user-visible tokens; all other interface calls are asynchronous.
+
+\paragraph{Fork, join, abort.}
+Fork, join, and abort are the process-tree operations of the session (\Cref{fig:tree}).
+\texttt{fork} creates a child that shares the parent's KV and holds a private residual.
+\texttt{join} waits for a fan-out and constructs a new committed node from the children's results, reusing the shared trunk and prefilling only the unshared tail.
+\texttt{abort} drops unused branches and reclaims their residual memory.
+\texttt{speculate} marks a child for idle-time speculative prefill; \texttt{commit} binds the prompt and starts decode.
+The interface lives inside the engine, so branch state, scheduling, and prefill share one address space, and sampling remains unchanged.
+
+Three modules implement this interface (\Cref{fig:system,fig:app}).
+
+\smallskip\noindent\textbf{Branch state manager (\S\ref{sec:state}).}
+A per-session tree of nodes $\set{(u, \pi(u), \sigma_u, \rho_u)}$ where $\pi(u)$ is the parent, $\sigma_u$ is a page-table spanning trunk pages (shared) and residual pages (private), and $\rho_u\in\{\textsc{Spec},\textsc{Commit},\textsc{Idle},\textsc{Dead}\}$.
+Pages are refcounted; eviction and offload walk the tree, not an LRU of requests.
+
+\smallskip\noindent\textbf{Prefill planner and \app{} (\S\ref{sec:speculate}, \S\ref{sec:app}).}
+The planner enumerates $\Br(u)$ and solves the budgeted allocation of \Cref{alg:budget}.
+\app then drops hash hits and low-score residuals before those jobs reach the GPU, and gates KV transfer to the decode instance.
+
+\smallskip\noindent\textbf{Branch-aware scheduler (\S\ref{sec:schedule}).}
+Extends the continuous batcher with two classes of work.
+Committed jobs consume token budget first until their JIT margin is met~\cite{jitserve}; speculative jobs fill the remainder, are preemptible at chunk boundaries, and are cancelled on commit conflict.
+A tree-sticky router keeps a session's trunk on one worker; residual-only steals are allowed.
+
+\begin{figure*}[t]
+\centering
+\input{tex/fig_pipeline}
+\caption{\textbf{Per-branch prefill pruning.}
+Hash lookup, draft score, and an early prefix check run before GPU prefill.
+The disaggregated connector inserts only a retained residual.
+A loop is dropped before prefill; an illegal prefix aborts early; a replayed full block is a local hash hit and is not transferred.
+The winner is always retained, and decode sees only the committed spine.
+}
+\label{fig:app}
+\end{figure*}
+
+\paragraph{Design principles.}
+(1)~\textbf{Input-side speculation.} Speculative KV caches future prompt prefixes. Committed decode attends only to KV of the committed sequence; speculative tokens stay off the output path.
+(2)~\textbf{Known before guessed.} The allocator prefills deterministic ($p{=}1$) suffixes first; uncertain observation residuals use remaining budget.
+(3)~\textbf{Residual-bounded misses.} Copy-on-write bounds a miss to the child's residual, which makes multi-child speculation practical.
+(4)~\textbf{Idle-budget speculation.} Speculative prefill uses remaining token budget. Under saturation the system falls back to trunk retention~\cite{continuum} with CoW fan-out, and speculative work is suppressed.
+(5)~\textbf{Event-driven branches.} Branch identifiers and known suffixes come from runtime execution events as they occur, the same signals used to overlap tool-independent prefill~\cite{sutradhara}.
+
+\subsection{Forkable Branch State}
+\label{sec:state}
+
+\begin{definition}[Context tree]
+A session is a rooted tree $T=(V,E)$.
+Each node $u$ stores a token sequence $x_u$ such that if $\pi(u)$ is the parent then $x_{\pi(u)}$ is a prefix of $x_u$.
+The \emph{residual} of $u$ is $\delta_u = x_u[|x_{\pi(u)}|{:}]$; the \emph{trunk} is $x_{\pi(u)}$.
+A node has a mode $\rho_u\in\{\textsc{Spec},\textsc{Commit},\textsc{Idle},\textsc{Dead}\}$ and a generation $g_u$ used by commit to ignore stale children.
+\end{definition}
+
+Invariants: (i)~prefix: $x_{\pi(u)}\preceq x_u$; (ii)~at most one committed child per node, except during an in-flight join; (iii)~speculative nodes are invisible to sampling; (iv)~a page's refcount equals the number of non-dead nodes that map it.
+\texttt{fork}$(u,\mathit{bid},x^{\mathrm{k}})$ allocates a child that aliases $u$'s pages and holds a private residual list. It is $O(1)$ in the trunk.
+
+\paragraph{Copy-on-write pages.}
+vLLM pages are already the right granularity~\cite{vllm}.
+\sys adds a CoW bit and a refcount---the same move UNIX made for \texttt{fork}~\cite{osfork,tanenbaumos}.
+\Cref{tab:os} is the map.
+A branch is a process; the session is a process tree; the trunk KV is the shared text segment; the residual is the private data segment.
+\texttt{fork} has constant-time overhead because the child inherits the parent's pages by reference.
+A write (decode or residual prefill) that hits a read-only or $\mathit{ref}>1$ tail page allocates a fresh page, copies only the valid tail rows, and installs it in the child's table.
+Speculative prefilling is the eager faulting of pages the child is likely to touch---the analogue of prefetching, not of rewriting the parent's address space.
+\texttt{abort} is \texttt{exit}: drop the private pages; the shared text stays as long as siblings live.
+\texttt{join} is a waitpid-plus-new-process: a new committed node, not an in-place splice of two address spaces.
+
+% Attention over a node walks that node's page-table; shared trunk pages are read concurrently and pinned read-only.
+% Because residuals are short, almost all subsequent writes hit private pages.
+% A five-level fan-out (\Cref{fig:tree}) is a \emph{sequence} of CoWs, one per fork, not one copy of the tree.
+% Two live leaves that share an ancestor share every page on that prefix: A1b1x and A3a2x both point at trunk${+}$r$_A$; they do not each clone it.
+% A third path B2a1y shares only the trunk.
+% Abort is thresholded: a child with ToT/allocator score $s{<}\tau$ is dropped at that stage (A2/B1 at CoW-2, A1a at CoW-3, A1b1y/B2a1x at CoW-5).
+% Only that node's residual is freed; the shared prefix stays because other live children still reference it.
+% A separate depth-2 fork C shows cascade: at CoW-3 its four leaves C1a/C1b/C2a/C2b all die, so C1 and C2 have no live child and abort, then C aborts and $+$r$_C$ is freed; the walk stops at Root because A and B are still live.
+
+\begin{table}[t]
+\centering
+\caption{OS \texttt{fork}/\cow{} mapped onto agent KV and speculative prefill.}
+\label{tab:os}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Operating system} & \textbf{\sys} \\
+\midrule
+process / process tree & branch / context tree \\
+address space & token sequence $+$ KV pages \\
+shared text pages & shared trunk KV \\
+private data pages & residual KV \\
+\texttt{fork()} & \texttt{fork} (alias parent pages) \\
+CoW page fault & allocate residual page on write \\
+eager page-in / prefetch & speculative prefill of $x^{\mathrm{k}}$ (and $\hat{x}^{\mathrm{o}}$) \\
+\texttt{execve} args complete & \texttt{commit} of the prompt \\
+\texttt{exit} / \texttt{waitpid} & \texttt{abort} / \texttt{join} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+RadixAttention~\cite{sglang} indexes pages by token identity and merges after the fact; \sys indexes by \emph{node identity} and shares \emph{before} tokens exist.
+The two compose: a known suffix that matches an existing radix node is installed as a pointer, not as a new residual prefill.
+ForkKV~\cite{forkkv} CoW-splits a base cache from a LoRA residual; we CoW-split a \emph{temporal} trunk from a \emph{control-flow} residual. The mechanisms are compatible.
+
+\paragraph{Join, abort, and context engineering.}
+\texttt{join} constructs a new committed node from a completed fan-out, and \texttt{abort} discards an unselected subtree (\S\ref{sec:overview}).
+\sys forks a SmoothAgent transformation~\cite{smoothagent} as an additional child of the session root, leaving the unsummarized spine live and abortable.
+When speculation misses, the engine aborts the unused child and frees only its residual pages.
+The shared trunk remains in place, so the planner can keep several speculative children live without duplicating parent KV (principle~3).
+
+\paragraph{Branch-aware retention.}
+Continuum's TTL~\cite{continuum} and MORI's relative idleness~\cite{mori} are session-granular; we lift both to nodes.
+An idle node's TTL uses Continuum's estimator on the \emph{residual} size, not the full context: trunk pages do not expire while any child is live.
+Offload ranks \emph{leaves}: speculative leaves before committed idle leaves before the committed spine.
+When HBM is tight or frequency drops~\cite{kairospower}, we abort speculative leaves first---the lowest-cost way to restore headroom.
+
+\paragraph{Memory accounting.}
+Let $b$ be bytes per KV token. For a trunk of $L$ tokens and $k$ children with residuals $\ell_i$,
+\begin{equation}
+\label{eq:mem}
+M_{\mathrm{CoW}} = b\bigl(L + \textstyle\sum_i \ell_i\bigr),
+\quad
+M_{\mathrm{clone}} = b\bigl(kL + \textstyle\sum_i \ell_i\bigr).
+\end{equation}
+The ratio is $\approx k$ when $\ell_i \ll L$. Aborting child $i$ frees $b\ell_i$ bytes, not $b(L+\ell_i)$.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex/fig_tree}}
+\caption{\textbf{Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.}
+(a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r).
+Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$.
+Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B.
+(b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies.
+Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$.
+}
+\label{fig:tree}
+\end{figure*}
+
+\subsection{Branch-Aware Speculative Prefilling}
+\label{sec:speculate}
+
+The planner runs at three events: a tool call is parsed, a fan-out/join is declared, or a decode batch has remaining token budget.
+
+\paragraph{Candidates.}
+$\Br(u)$ comes from three sources that follow branches declared by the harness.
+
+\smallskip\noindent\textit{Harness-provided branches.}
+\sys obtains branch prefixes directly from execution events exposed by the agent framework, without requiring an additional prediction model.
+
+\smallskip\noindent\textit{Logprob-derived.}
+If the parent is still decoding under a tool grammar~\cite{sglang,spork}, the engine maintains probability mass over the next tool name.
+We fork the top-$m$ wrappers with $\pb_b$ equal to the normalized grammar mass, and collapse the tail into a generic wrapper.
+
+\smallskip\noindent\textit{Empirical prior.}
+A session-local sketch of $(\mathit{parent\_role},\mathit{bid})$ ranks declared children when the grammar is unconstrained.
+Priors do not create a new \texttt{bid}.
+
+Each candidate $b$ is a pair $(x^{\mathrm{k}}_b, \hat{x}^{\mathrm{o}}_b)$ where $x^{\mathrm{k}}_b$ is exact.
+This is \emph{input-side} speculation: we cache KV of a future prompt, not draft tokens of the current decode~\cite{speculative,medusa,eagledraft}.
+We do not fabricate $\hat{x}^{\mathrm{o}}_b$ from an LLM draft.
+Observation residuals are admitted for schema-stable tools, using a deterministic template plus, optionally, the first $n$ tokens of a small $n$-gram of that tool's past outputs.
+If the schema is free-form, $\hat{x}^{\mathrm{o}}_b=\varepsilon$ and we only prefill $x^{\mathrm{k}}_b$.
+
+\paragraph{Value.}
+Let $\Idle(u)$ be remaining expected pause, $\Pref(\ell)$ the chunked-prefill time of $\ell$ new tokens~\cite{sarathi}, and $\gamma$ the committed \tbt{} headroom.
+Prefilling $x^{\mathrm{k}}_b$ has success probability $1$ if $b$ is declared; prefilling $\hat{x}^{\mathrm{o}}_b$ has success probability $q_b=\Prob(\hat{x}^{\mathrm{o}}_b \preceq x^{\mathrm{o}}_b)$.
+The expected \ttft{} reduction of a work item $w$ is
+\begin{equation}
+\label{eq:gain}
+G(w) = \pb(w)\cdot \min\bigl(\Pref(|w|),\; \Idle(u)\bigr)\cdot \eta(w),
+\end{equation}
+where $\eta(w)\in(0,1]$ down-weights residuals by $q_b$ and work that would finish after the pause (partial chunks still help under chunked prefill).
+The cost is
+\begin{equation}
+\label{eq:cost}
+C(w) = b\cdot |w| + \lambda\cdot \max\bigl(0,\; \Pref(|w|)-\gamma\bigr).
+\end{equation}
+$\lambda$ converts committed-path interference into the same units as $G$; we set it to match interactive \tbt{}/\ttft{} SLOs~\cite{jitserve}.
+
+\begin{proposition}[Known-suffix first]
+If two items $w,w'$ have equal $\Pref$ and $w$ is a known suffix ($\pb{=}1,q{=}1$) while $w'$ is an observation residual ($q<1$), then $G(w)/C(w) \ge G(w')/C(w')$.
+\end{proposition}
+The allocator therefore covers all children's known suffixes $x^{\mathrm{k}}$ first (shallow, certain), then spends remaining budget deepening the most likely child's observation residual $\hat{x}^{\mathrm{o}}$.
+Recovery and sibling roles enter this allocation as first-class $p{=}1$ work.
+
+\begin{algorithm}[t]
+\caption{SpeculateBudget($u$, $\Idle$, $\gamma$, $M_{\mathrm{free}}$)}
+\label{alg:budget}
+\small
+\begin{algorithmic}[1]
+\REQUIRE parent $u$, idle horizon, TBT slack $\gamma$, free residual HBM
+\ENSURE preemptible chunked jobs tagged \textsc{Spec}
+\STATE $\mathit{items} \gets \emptyset$
+\FOR{$b \in \Br(u)$}
+  \STATE append $x^{\mathrm{k}}_b$ \COMMENT{$p{=}1$ harness suffix}
+  \IF{$q_b \ge q_{\min}$ and schema-stable$(b)$}
+    \STATE append $\hat{x}^{\mathrm{o}}_b$
+  \ENDIF
+\ENDFOR
+\STATE sort $\mathit{items}$ by $G(w)/C(w)$, known suffixes first
+\STATE $S \gets \emptyset$; $t \gets 0$; $m \gets 0$
+\FOR{$w \in \mathit{items}$}
+  \IF{$t+\Pref(|w|) \le \Idle+\gamma$ and $m+b|w| \le M_{\mathrm{free}}$ and not $(\Pref(|w|) > \gamma$ and parent is \textsc{Commit}$)$}
+    \STATE $S \gets S \cup \set{w}$; $t \gets t+\Pref(|w|)$; $m \gets m+b|w|$
+  \ENDIF
+\ENDFOR
+\RETURN chunked jobs for $S$
+\end{algorithmic}
+\end{algorithm}
+
+\Cref{alg:budget} is a greedy fractional knapsack with three hard filters: idle horizon, residual HBM, and committed \tbt{} margin.
+Chunked prefill~\cite{sarathisplit} makes these filters practical: a long sibling system prompt is split into short chunks, so a \texttt{commit} that arrives mid-prefill discards at most one in-flight chunk rather than the entire suffix.
+
+\paragraph{Commit by longest common prefix.}
+When the harness presents prompt $x$ of parent $u$, commit is a \emph{token} procedure, not a branch-id lookup---the harness may have rewritten the wrapper.
+Suppose a speculative child holds
+\texttt{\{"status":"success","value":123\}}
+and the tool returns
+\texttt{\{"status":"success","value":456\}}.
+The LCP is the shared prefix through \texttt{"value":}; that KV is committed, the guessed \texttt{123} residual is dropped, and only \texttt{456\}} is prefilled as committed work.
+Formally:
+(1)~among live children of $u$, pick $v^\star = \arg\max_v \mathrm{LCP}(x, x_v)$;
+(2)~pages of $v^\star$ covering the LCP become committed; the unmatched residual is dropped;
+(3)~prefill the unmatched tail as a committed, high-priority chunked prefill;
+(4)~abort the remaining speculative children of $u$;
+(5)~advance $v^\star$ to \textsc{Commit} and release decode.
+If the LCP lands mid-page, we CoW-split that page.
+Because attention is deterministic given $(x, \mathrm{KV}(x))$, the committed KV matches a cold prefill of $x$ from the trunk.
+Speculative KV is a cache of input, not a prediction shown to the user.
+
+\begin{theorem}[Output identity]
+\label{thm:correct}
+For any session, the sequence of committed decode tokens produced by \sys is identical to that of a baseline engine that prefills each committed prompt from scratch (or from a prefix cache of committed tokens only), assuming equal sampling seeds and equal model weights.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Decode at a committed node $u$ attends only to $\mathrm{KV}(x_u)$ where $x_u$ is the committed token sequence.
+$\mathrm{KV}(x_u)$ is produced either by a committed prefill of $x_u$ from the parent's committed KV, or by a speculative prefill of a prefix of $x_u$ followed by a committed prefill of the tail.
+The second case agrees with the first because the speculative prefix was verified token-for-token by LCP, and Transformer KV of a prefix depends only on that prefix.
+Speculative nodes do not enter the sampler.
+\end{proof}
+
+\sys identifies the longest matching prefix between the runtime observation and the speculative branch, then reuses the associated KV states.
+
+\paragraph{Worked turn.}
+Consider a parent node with a long committed trunk that emits a tool call.
+As soon as the call is parsed, \sys{} forks children---typically a known-suffix continuation and a recovery path, both with $p{=}1$---and the planner prefills those suffixes during the tool pause.
+If remaining budget allows and the schema is regular, it also prefills a short residual guess.
+When the observation arrives, longest-common-prefix commit selects the matching child, reuses its KV through the agreed prefix, and prefills only the unmatched tail as committed work.
+Unused siblings abort, freeing only their residual KV.
+Known-suffix prefill thus moves off the next-turn critical path and into the idle window.
+
+\subsection{Advanced Prefill Pruning}
+\label{sec:app}
+
+Copy-on-write removes trunk clones, but fan-out still pays residual prefill, copy-on-write, and abort on the critical path.
+On the GSM8K forest (\S\ref{sec:eval}) that shows up as a slower fan-out than automatic prefix caching ($140$\,ms vs.\ $87$\,ms) even though peak KV is lower.
+\app is the filter in front of that work (\Cref{fig:app}).
+It does not change the committed token sequence: the winner branch is always retained, and Theorem~\ref{thm:correct} still applies.
+
+\paragraph{Hash skip.}
+Automatic prefix caching indexes a full block by $\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ after the tokens exist~\cite{vllm}.
+\app consults the same key.
+A hit does not recompute those rows.
+A partial hit prefills only the miss tail.
+Speculative pages are not inserted into the index; LCP commit publishes full blocks of the winner, so a later session can hit them.
+\texttt{fork} itself does not walk hashes.
+
+\paragraph{Draft prune and early abort.}
+Each residual receives a score from illegal-token and repetition checks, token entropy, or an optional draft model.
+A score below threshold skips GPU prefill.
+If the first fraction of the residual (we use $20\%$) already fails, in-flight chunks of that branch are cancelled.
+This is the chunked-prefill form of abort: the engine does not wait for all $k$ residuals to finish.
+
+\paragraph{Disaggregated-prefill gate.}
+vLLM disaggregated prefill runs prefill and decode in separate instances and moves KV through a connector (\texttt{insert} is non-blocking; \texttt{drop\_select} blocks)~\cite{distserve,splitwise}.
+The stock connector ships every page the prefill instance computed, and the mechanism is not a throughput optimization.
+\app calls \texttt{insert} only for retained residuals.
+Pruned branches and hash-local hits never enter the buffer, so the decode instance does not receive them.
+
+\paragraph{Off the critical path.}
+\texttt{fork} installs page-table pointers (a pointer swap), not a KV memcpy.
+\texttt{abort} can mark a node dead and defer the residual decref until after winner decode, so reclamation is not on \ttft.
+The HBM released by abort is the capacity term in \S\ref{sec:eval}: fewer bytes per session admit more concurrent sessions on the same GPU.
+
+\subsection{Branch-Aware Scheduling}
+\label{sec:schedule}
+
+Each scheduler tick $t$ with duration $\Delta$ has a token budget $B_t$ from the current max batched tokens and the chunked-prefill cap~\cite{sarathi}.
+Let $R^{\mathrm{c}}_t$ be committed jobs (decode, commit-tail prefill, root prefill of new sessions) and $R^{\mathrm{s}}_t$ speculative jobs.
+JITServe's margin goodput~\cite{jitserve} gives each committed request $r$ a minimum token rate $\underline{s}_r$ that meets its \tbt{} or deadline SLO.
+We allocate
+\begin{align}
+B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t} \max(\underline{s}_r\Delta,\; 1)\Bigr), \label{eq:bc}\\
+B^{\mathrm{s}}_t &= B_t - B^{\mathrm{c}}_t. \label{eq:bs}
+\end{align}
+If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted this tick---principle~4.
+Unbudgeted speculate-all reduces \ttft{} under light load and increases committed \tbt{} under saturation; the two-class split is what keeps speculation from becoming load.
+The three modules are mutually dependent: without CoW, a miss costs a trunk; without the allocator, CoW still lets speculation contend for SMs; without idle-budget scheduling, the allocator's $\gamma$ is unconstrained.
+Speculative work is admitted one chunk at a time, so one long sibling suffix cannot occupy remaining budget that could have covered several known wrappers.
+A speculative chunk is preemptible at its chunk boundary, and is cancelled mid-kernel only if a newly arrived \texttt{commit} needs the same sequence's pages.
+Committed jobs use program-FCFS with a PLAS aging term~\cite{autellix,continuum}; speculative jobs are ordered by $G(w)/C(w)$.
+
+Autellix~\cite{autellix}, SAGA~\cite{saga}, and ThunderAgent~\cite{thunderagent} observe that pinning a program to the worker that holds its KV dominates load-oblivious routing, but strict pinning imbalances HBM as contexts grow.
+\sys pins the \emph{tree}: the worker that prefills the root owns the trunk; forks are scheduled there first.
+If that worker cannot hold the admitted residuals, \sys may steal a \emph{residual}: ship $x^{\mathrm{k}}_b$ to a less loaded worker without shipping the trunk, and prefill it as a standalone prefix-cached request.
+This is a degradation---the child will not share trunk pages---used for speculative children, not for the committed spine.
+Commit returns to the trunk owner.
+
+Under DistServe/Splitwise~\cite{distserve,splitwise}, speculative known suffixes are suitable prefiller work: compute-bound, latency-tolerant, and producing small residuals that transfer at low cost to the decoder that holds the trunk.
+We tag them with $\texttt{soft-deadline}=\Idle(u)$ so the prefiller can pack them into remaining batches without delaying committed turn-1 prefills.
+This is the one place \sys ships KV: prefiller $\to$ trunk-owner decoder, once, for residual pages only.
+
+Speculation of tenant $A$ does not consume committed bandwidth of tenant $B$; \Cref{eq:bc,eq:bs} enforce that at the engine.
+Speculative tokens are billed at a discount to the issuing session but at full cost to a victim of a measurable \tbt{} miss, after which $\lambda$ is raised for that session.
+If the planner crashes, CoW trees still serve committed requests.
+If CoW is disabled, fork degrades to radix prefix sharing and speculation degrades to Sutradhara-style linear split prefill~\cite{sutradhara}.
+If the harness does not call \texttt{fork}, \sys is Continuum~\cite{continuum} plus MORI ranking~\cite{mori} on a single-node tree.

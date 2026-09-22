@@ -1,0 +1,8 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+Agentic serving forks a shared trunk into short residuals and then keeps one of them.
+\sys represents that fork as a copy-on-write context tree and filters each residual with advanced prefill pruning: hash hits skip published blocks, low-score siblings are dropped before GPU prefill, and a disaggregated connector inserts only the retained KV.
+On Qwen3-14B GSM8K the tree matches APC accuracy at $0.72\times$ median peak KV; fan-out is still the slower step, and the control-plane comparison shows \app is what brings that prefill below APC, hash prefill, and stock disaggregated prefill.
+The same measured KV gap raises modeled SLO-feasible concurrency by $35\%$.
+The remaining experiment is to place this filter on the GPU expand path and confirm the fan-out ordering there.

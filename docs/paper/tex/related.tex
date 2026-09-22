@@ -1,0 +1,35 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Request-level serving.}
+Orca~\cite{orca} introduced iteration-level scheduling; vLLM~\cite{vllm} paged the KV cache and hashes full blocks for automatic prefix caching; SGLang~\cite{sglang} added radix prefix sharing; Sarathi~\cite{sarathi,sarathisplit} chunked prefills; DistServe and Splitwise~\cite{distserve,splitwise} disaggregated prefill from decode.
+Prefix caching discovers sharing after tokens exist.
+Disaggregated prefill isolates \ttft{} from inter-token latency; it does not choose which branch to compute, and it transfers every page the prefill instance produced.
+\app uses both mechanisms as filters: the hash as a skip, the connector as a gate.
+
+\paragraph{Program- and SLO-aware scheduling.}
+Autellix~\cite{autellix} schedules by program-level attained service; JITServe~\cite{jitserve} allocates just-enough bandwidth under heterogeneous SLOs.
+Hermes~\cite{hermes}, ThunderAgent~\cite{thunderagent}, and SAGA~\cite{saga} raise the atom to the program or workflow.
+These systems leave KV unforked and unissued children unprefilled.
+\sys{} inherits program-FCFS/PLAS for the committed class and reuses JITServe's margin to protect committed \tbt.
+
+\paragraph{Workflow orchestration.}
+Parrot~\cite{parrot}, Ayo~\cite{ayo}, Murakkab~\cite{murakkab}, and Pythia~\cite{pythia} expose graphs to drive cache, scheduling, and autoscaling.
+Static-DAG assumptions are a strict subset of harness-declared forks.
+\sys{} consumes the same branch points and turns them into CoW children and speculative prefills.
+
+\paragraph{KV retention and placement.}
+InferCept~\cite{infercept}, Continuum~\cite{continuum}, MORI~\cite{mori}, ConServe~\cite{conserve}, and KAIROS~\cite{kairospower} keep the \emph{current} context alive or placed.
+Continuum's TTL and MORI's relative idleness are session-granular.
+We attach both to tree nodes and evict residual leaves first, so a short-TTL child does not drop a sibling's shared trunk.
+
+\paragraph{Overlap, lookahead, and speculation.}
+Sutradhara~\cite{sutradhara} overlaps tool execution with prefill of a tool-independent prefix, then appends a tool-dependent suffix---one expected linear continuation.
+SmoothAgent~\cite{smoothagent} lookahead-transforms context.
+IdleSpec~\cite{idlespec} spends tool-idle cycles drafting future plans (progressive vs.\ recovery) and aggregates them with the observation to improve task accuracy, not KV.
+SPORK~\cite{spork} self-speculatively forks a probe during decode so the tool call can be issued before the thought finishes.
+Classical speculative decoding~\cite{speculative,medusa,eagledraft} drafts \emph{output} tokens of the current step.
+ForkKV~\cite{forkkv} CoW-splits LoRA residuals; Pie~\cite{pie} exposes a programmable inferlet interface.
+We represent the future as a \emph{set} of CoW children, share the trunk, speculate several known suffixes in the same idle window, commit by LCP, and abort the rest at residual cost. Transformed KV is hosted as children; the same API can be exposed as an inferlet.
+
+% The abstraction gap, in one sentence: prior work raised the unit from request to program, session, workflow, or conversation; \sys{} raises it to the \emph{branch} and spends idle compute on the branch's future prompt.

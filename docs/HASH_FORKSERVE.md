@@ -59,7 +59,7 @@ Hash skip is layer 1 of Advanced Prefill Pruning (`forkserve/prefill_prune.py`).
                  hash-local         not inserted ──► disagg connector ──► decode
 ```
 
-Compare APC / ForkServe / hash_prefill / disagg_prefill / APP: `experiments/prefill_prune_bench.py`.
+Compare APC / ForkServe / hash_prefill / disagg_prefill / APP: `experiments/prefill_prune_bench.py`. Full protocol (unit tests, control-plane suite, GPU): [`HASH_FORKSERVE_EXPERIMENT.md`](HASH_FORKSERVE_EXPERIMENT.md).
 
 ## Code
 

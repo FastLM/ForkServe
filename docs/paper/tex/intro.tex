@@ -1,0 +1,73 @@
+\section{Introduction}
+\label{sec:intro}
+
+LLM serving used to be a single-turn problem: a prompt arrives, the engine prefills, tokens stream out, and the request completes~\cite{orca,vllm,sglang}.
+That abstraction no longer matches production workloads.
+Production agents---coding assistants~\cite{sweagent,openhands,claude_code}, computer-use systems~\cite{webarena}, research copilots~\cite{gaia}, and multi-agent workflows~\cite{autogen,metagpt}---execute \emph{programs} of LLM calls interleaved with tools, humans, and other agents~\cite{react,compoundai}.
+A SWE-agent run issues tens to hundreds of model invocations~\cite{swebench,continuum}.
+In a multi-agent pipeline, a planner dispatches work to an implementer, a tester, and a reviewer~\cite{metagpt,pythia}.
+Tree-of-Thoughts and MCTS expand sibling thoughts that share a prefix and then diverge in a short residual~\cite{tot,autellix,hive}.
+The serving unit is a \emph{branching execution} rather than a request.
+
+Prior work has raised the serving abstraction incrementally.
+Autellix~\cite{autellix} and ThunderAgent~\cite{thunderagent} treat the agent as a program and schedule calls by attained service.
+Ayo~\cite{ayo} and Parrot~\cite{parrot} expose static dataflow; Murakkab~\cite{murakkab} and Hermes~\cite{hermes} add profile-guided and probabilistic demand models.
+Continuum~\cite{continuum}, InferCept~\cite{infercept}, Astraea~\cite{astraea}, and AugServe~\cite{augserve} retain or swap KV across tool pauses; MORI~\cite{mori} ranks programs by \emph{relative} idleness for GPU/CPU placement; SAGA~\cite{saga} and Pythia~\cite{pythia} surface workflow graphs to predict reuse and bursts.
+Sutradhara~\cite{sutradhara} overlaps tool-independent prefill with tool execution; SmoothAgent~\cite{smoothagent} hides context-engineering transformations behind lookahead KV; IdleSpec~\cite{idlespec} spends idle time drafting \emph{plans}.
+Pie~\cite{pie} lets applications program the generation loop.
+
+These systems share an implicit assumption: \emph{the next LLM call is a unique continuation of the current context}.
+That assumption does not hold for the workloads they target.
+After a tool call is emitted, the next prompt is a \emph{distribution} over branches, not a singleton, and the distribution has structure the engine can see \emph{before} the observation returns:
+\begin{itemize}
+\item \textbf{Known suffixes ($p{=}1$).} Chat templates, role headers, tool-result wrappers, and sibling system prompts are determined by the harness, not by the tool. They can be prefilled without changing model semantics.
+\item \textbf{Fan-out siblings.} Parallel tools, specialist agents, and ToT/MCTS expansions share the trunk and differ in short residuals. Serializing them recomputes the trunk; cloning the KV tensor wastes HBM.
+\item \textbf{Observation residuals ($p{<}1$).} The tool result is unknown, but its length class, schema, and often the first tokens are predictable; a miss incurs only residual cost if the trunk is copy-on-write.
+\end{itemize}
+Today's engines wait until the chosen branch is fully materialized, then run a cold or partially cached prefill on the critical path of the next turn.
+Once KV retention has eliminated trunk recompute~\cite{continuum,mori}, that residual-suffix prefill---not queuing, not decode---is the dominant remaining term in time-to-first-token (\ttft).
+
+We adopt an operating-system analogy~\cite{osfork,tanenbaumos}.
+\texttt{fork()} has low overhead because the child's address space is a copy-on-write view of the parent; the kernel does not clone every page in anticipation of a write.
+Agent serving needs the same primitive.
+A branch is a process; the trunk KV is the shared text segment; the residual is the private data segment; speculative prefilling is the eager faulting of pages the child is likely to touch.
+Without fork, every sibling is a full process image. Without speculation, the child starts only after \texttt{execve} arguments are complete. Neither matches agent execution.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex/fig_arch}}
+\caption{\textbf{\sys{} architecture.}
+The harness exposes branch events.
+The context tree aliases trunk pages at \texttt{fork}.
+Advanced prefill pruning filters each residual before GPU prefill: hash skip, draft prune, early abort, then a disaggregated-prefill gate that inserts only retained KV.
+Decode attends to the committed spine.
+Freed KV raises the number of concurrent sessions under the same HBM budget.
+}
+\label{fig:system}
+\end{figure*}
+
+\paragraph{This work.}
+We present \sys, a serving system whose first-class object is the \emph{branch}.
+Three mechanisms are coupled.
+
+\smallskip\noindent\textbf{(1) A forkable context tree with copy-on-write KV pages (\S\ref{sec:state}).}
+Each session is a tree of committed and speculative nodes.
+\texttt{fork} creates a child that inherits the parent's pages by reference; writes allocate residual blocks.
+\texttt{join} merges fan-out children; \texttt{abort} drops a subtree and decrements refcounts.
+Retention~\cite{continuum}, relative-idleness offload~\cite{mori}, and prefix caching~\cite{sglang,vllm} become branch-aware: a shared trunk is not evicted while any live child references it, and speculative leaves are evicted first.
+
+\smallskip\noindent\textbf{(2) Advanced prefill pruning (\S\ref{sec:app}).}
+On top of the tree, \app decides per residual whether GPU prefill runs and whether the KV is inserted into a disaggregated prefill/decode connector~\cite{distserve,splitwise}.
+A hash index skips published full blocks (automatic prefix caching).
+A draft score and an early prefix check drop low-score siblings before they are prefilled.
+The connector inserts only retained branches.
+Longest-common-prefix commit still binds the observed prompt; speculative tokens never enter the sampler.
+
+\smallskip\noindent\textbf{(3) A scheduler that does not degrade the committed path (\S\ref{sec:schedule}).}
+Speculative prefills have lower priority in the continuous batch~\cite{orca,sarathi}.
+They run in leftover token budget after committed decode and prefill meet their \tbt{}/\ttft{} margins~\cite{jitserve}, are chunked~\cite{sarathisplit} to bound interference, and are cancelled when a commit needs the same SM.
+Across replicas, \sys pins a tree to the worker that holds its trunk and steals only residual work.
+
+\S\ref{sec:eval} reports two measurements that must not be conflated.
+On Qwen3-14B GSM8K, \sys matches APC accuracy at $0.72\times$ median peak KV, and its fan-out is still slower than APC.
+A control-plane study of \app then shows that hash skip, draft prune, and the disagg gate remove most of that prefill, and that the measured KV gap raises SLO-feasible concurrency by $35\%$.

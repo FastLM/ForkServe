@@ -1,0 +1,53 @@
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >=Latex,
+  box/.style={draw, rounded corners=1.6pt, align=center, inner sep=2.4pt,
+              line width=0.5pt, font=\tiny},
+  keep/.style={box, draw=fsgreen!70!black, fill=fscommit},
+  drop/.style={box, draw=fsgray, fill=black!5, text=fsgray},
+  hot/.style={box, draw=fsorange!80!black, fill=fsspec},
+  pstep/.style={box, draw=fsblue!60, fill=fslight, minimum width=2.15cm, minimum height=0.55cm, font=\scriptsize},
+  arr/.style={-{Latex[length=1.8mm]}, line width=0.5pt, fsblue!75},
+]
+\node[pstep] (s1) at (-5.7,1.55) {hash lookup};
+\node[pstep] (s2) at (-3.35,1.55) {draft score};
+\node[pstep] (s3) at (-1.0,1.55) {early prefix};
+\node[pstep] (s4) at (1.45,1.55) {GPU prefill};
+\node[pstep] (s5) at (3.95,1.55) {\texttt{insert}};
+\node[keep, minimum width=1.7cm, minimum height=0.55cm, font=\scriptsize] (s6) at (6.35,1.55) {decode};
+\draw[arr] (s1) -- (s2);
+\draw[arr] (s2) -- (s3);
+\draw[arr] (s3) -- (s4);
+\draw[arr] (s4) -- (s5);
+\draw[arr] (s5) -- (s6);
+\node[font=\tiny, text=fsgray, anchor=north] at (s1.south) {published block};
+\node[font=\tiny, text=fsgray, anchor=north] at (s2.south) {winner kept};
+\node[font=\tiny, text=fsgray, anchor=north] at (s4.south) {miss tail};
+\node[font=\tiny, text=fsgray, anchor=north] at (s5.south) {else local};
+
+% trunk
+\node[box, draw=fsblue, fill=fslight, minimum width=14.6cm, anchor=west, font=\scriptsize]
+  (trunk) at (-7.55,0.15) {shared trunk $L$\quad pointer-swap alias, no KV memcpy\quad refcount $=k$ until abort};
+
+% four branches
+\node[font=\tiny\bfseries, anchor=west] at (-7.55,-0.55) {branch};
+\node[keep, anchor=west, minimum width=2.3cm] (b0) at (-6.15,-0.55) {$b_0$ winner};
+\node[keep, anchor=west, minimum width=2.5cm] (b0a) at (-3.7,-0.55) {prefill $\ell_0$};
+\node[keep, anchor=west, minimum width=2.3cm] (b0b) at (-1.05,-0.55) {insert};
+\node[keep, anchor=west, minimum width=3.4cm] (b0c) at (1.4,-0.55) {committed spine $L{+}\ell_\star$};
+
+\node[drop, anchor=west, minimum width=2.3cm] (b1) at (-6.15,-1.15) {$b_1$ loop};
+\node[drop, anchor=west, minimum width=5.15cm] (b1a) at (-3.7,-1.15) {draft skip \textemdash\ no prefill, no insert};
+
+\node[hot, anchor=west, minimum width=2.3cm] (b2) at (-6.15,-1.75) {$b_2$ illegal};
+\node[hot, anchor=west, minimum width=5.15cm] (b2a) at (-3.7,-1.75) {early abort at $20\%$ of the residual};
+
+\node[keep, anchor=west, minimum width=2.3cm] (b3) at (-6.15,-2.35) {$b_3$ replay};
+\node[keep, anchor=west, minimum width=5.15cm] (b3a) at (-3.7,-2.35) {hash hit \textemdash\ skip; decode APC-hits locally};
+
+\node[font=\tiny, text=fsgray, anchor=west, align=left] at (-7.55,-3.05)
+  {Speculative pages are not hashed until LCP commit.
+   Stock disaggregated prefill would \texttt{insert} every branch;
+   \app inserts $b_0$ only.
+   After abort, live KV is the spine, not the hashed union of residuals.};
+\end{tikzpicture}

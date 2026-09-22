@@ -1,0 +1,132 @@
+\section{Background and Opportunity}
+\label{sec:problem}
+
+\subsection{Prefill, Decode, and Idle}
+Autoregressive inference has two mechanically different phases~\cite{orca,distserve,splitwise}.
+\emph{Prefill} consumes the prompt in parallel and is compute-bound at moderate lengths; \emph{decode} emits one token (or a small chunk) per step and is memory-bandwidth bound.
+PagedAttention~\cite{vllm} stores KV in non-contiguous pages; SGLang's RadixAttention~\cite{sglang} indexes pages by token prefix so concurrent requests sharing a system prompt hit a common trunk.
+Two consequences matter for agents.
+First, next-turn \ttft{} is essentially the prefill of tokens that miss the cache, plus queuing.
+Second, a memory-bound decode batch rarely saturates the tensor cores that a concurrent chunked prefill could use~\cite{sarathi}.
+Agent serving adds a third fact: the prompt of turn $i{+}1$ is a \emph{delta} on turn $i$, applied after a tool pause of highly variable length~\cite{continuum,mori}.
+
+\subsection{Agents Are Branching Processes}
+We adopt Autellix's view of an agentic program as a dynamic DAG of LLM calls and interrupts~\cite{autellix}.
+In the serving plane we refine that DAG into a prefix-sharing execution tree: each interrupt forks children that inherit the parent's KV by copy-on-write.
+Known-suffix prefill and abort of unused paths then stay residual-only, even when several paths remain live.
+A small set of branch operators generate this tree at runtime.
+
+\smallskip\noindent\textbf{Tool intercept~\cite{react,toolformer,gorilla}.}
+After a model call issues an external action, the engine idles while the environment runs.
+The next prompt continues the current trunk: a known suffix is available immediately, and an observation residual arrives later.
+Success and recovery continuations are residual-only forks of the same trunk, so the engine can prefill the known suffix during the idle window.
+
+\smallskip\noindent\textbf{Fan-out / join~\cite{autogen,metagpt,pythia}.}
+A parent node launches $k$ children that share a long trunk and differ in short role-specific residuals, then joins them under a policy such as all, first-success, or majority~\cite{selfconsistency}.
+The trunk is a shared KV object; only the residuals need new prefill, and the joined node reuses that trunk.
+
+\smallskip\noindent\textbf{Search~\cite{tot,mctsllm,hive}.}
+A search node expands $b$ siblings, scores them, and recurses.
+Live paths overlap on long prefixes~\cite{hive}, so the engine keeps a shared copy-on-write spine and aborts low-score leaves at residual cost.
+
+\smallskip\noindent\textbf{Context transformation~\cite{smoothagent,memgpt,contextrot}.}
+Summarization, offload, and isolation produce a new context for the same session.
+The engine forks that context as an additional child, and the original spine stays resident and abortable.
+
+In all four cases the next LLM call is drawn from a discrete set $\Br(u)$ of children of the current node $u$.
+Existing engines observe only the child that is eventually issued as an independent completion request.
+
+\subsection{Comparison with Previous Work}
+\label{sec:prior}
+We compare prior agentic serving systems along the six axes of \Cref{tab:landscape}: the schedulable unit, KV persistence across tool intercepts, fork/CoW of context, next-turn prefill, multi-branch support, and the use of idle GPU cycles.
+The comparison is grouped by serving abstraction.
+Collectively these systems lift serving from the request to the program, session, or workflow, and leave forkable residuals and speculative prefill of unissued children unaddressed.
+
+\paragraph{Program- and workflow-level scheduling.}
+Autellix, JITServe, and related systems raise the unit of scheduling from the individual request to the program or workflow DAG~\cite{autellix,jitserve,hermes,saga,pythia,thunderagent,ayo,parrot,murakkab}.
+This improves head-of-line blocking and SLO attainment, yet each LLM call is still materialized as an independent prompt, without forking KV state or prefilling a child before the harness issues it.
+
+\paragraph{KV retention, offload, and conversation placement.}
+Continuum and InferCept retain or restore session KV across tool pauses, so the shared trunk remains in HBM, or is swapped back, when the next turn begins~\cite{continuum,infercept}.
+MORI ranks sessions by relative idleness for GPU/CPU placement~\cite{mori}; ConServe pins conversations on the decoder~\cite{conserve}; Kairos lowers GPU frequency when demand drops~\cite{kairospower}.
+These mechanisms keep the \emph{current} context resident and correctly placed.
+Once the trunk is retained, next-turn \ttft{} is no longer trunk recompute; the remaining critical-path term is the residual suffix.
+The engine still waits for the observation to return, then prefills wrapper and payload together.
+Idle GPU time during the pause is spent on retention or offload, so known-suffix tokens of the next branch remain on the critical path.
+
+\paragraph{Overlap, lookahead, and speculation.}
+Sutradhara~\cite{sutradhara} splits the next prompt into a tool-independent prefix, prefilled during the tool, and a tool-dependent suffix.
+That is a linear special case of our known-suffix path; it does not fan out, does not CoW a tree, and does not budget multiple children.
+SmoothAgent~\cite{smoothagent} lookahead-executes context transformations.
+IdleSpec~\cite{idlespec} speculates \emph{plans} to improve accuracy rather than KV.
+Classical speculative decoding~\cite{speculative,medusa,eagledraft} speculates \emph{output} tokens of the current decode, not \emph{input} tokens of the next branch.
+ForkKV~\cite{forkkv} CoW-splits LoRA residual caches---a related memory primitive for adapters, not for control-flow forks.
+
+\begin{table*}[t]
+\centering
+\caption{Comparison of agentic serving systems. \cmark{}~full support; \pmark{}~partial / single-path; \xmark{}~absent.
+\sys{} is the first to combine forkable branch state, multi-child speculative prefill, and idle-aware admission.}
+\label{tab:landscape}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{System} & \textbf{Unit} & \textbf{KV across tools} & \textbf{Fork/CoW} & \textbf{Next-turn prefill} & \textbf{Multi-branch} & \textbf{Idle use} \\
+\midrule
+vLLM~\cite{vllm}/SGLang~\cite{sglang} & request & prefix cache & radix share & on arrival & \xmark & \xmark \\
+Autellix~\cite{autellix}/JITServe~\cite{jitserve} & program & \xmark{} / optional & \xmark & on arrival & schedule DAG & \xmark \\
+Ayo~\cite{ayo}/Parrot~\cite{parrot}/Murakkab~\cite{murakkab} & workflow & \pmark & \xmark & graph opt. & static DAG & \xmark \\
+Continuum~\cite{continuum}/InferCept~\cite{infercept} & session & TTL / preserve & \xmark & on arrival & \xmark & retain \\
+MORI~\cite{mori} & session & relative offload & \xmark & on arrival & \xmark & offload \\
+ConServe~\cite{conserve} & conversation & pin decoder & \xmark & turn-1 PD & \xmark & \xmark \\
+SAGA~\cite{saga}/Pythia~\cite{pythia} & workflow & predicted reuse & \xmark & prefetch prefix & graph & scale/prefetch \\
+Sutradhara~\cite{sutradhara} & tool-call & semantic eviction & \xmark & split prefix & \pmark{} linear & overlap \\
+SmoothAgent~\cite{smoothagent} & context xform & lookahead KV & \xmark & transform & \xmark & lookahead \\
+IdleSpec~\cite{idlespec} & plan & n/a & \xmark & n/a & plan samples & plan \\
+Pie~\cite{pie} & inferlet & programmable & app-level & app-level & app-level & app-level \\
+ThunderAgent~\cite{thunderagent} & LLM program & hit-rate aware & \xmark & on arrival & \xmark & env. prep \\
+Hive~\cite{hive} & multi-agent & contribution & \xmark & on arrival & logits reuse & \xmark \\
+\midrule
+\textbf{\sys} & \textbf{branch} & \textbf{tree TTL} & \textbf{CoW pages} & \textbf{APP filter} & \textbf{prune, keep winner} & \textbf{disagg gate} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+\subsection{Four Design Constraints}
+\label{sec:insights}
+The remaining bottleneck is residual prefill of a \emph{known distribution over branches} whose shared trunk already resides in HBM.
+Four constraints follow from harness structure and from published idle/retention measurements~\cite{continuum,mori,sutradhara}.
+
+\begin{insight}[Known-suffix dominance]
+\label{ins:known}
+A large, deterministic ($p{=}1$) fraction of next-turn prefill is a function of the parent branch id and the harness---templates, wrappers, sibling system prompts---not of the observation.
+These suffixes can be prefilled before the observation returns.
+Sutradhara~\cite{sutradhara} exploits the special case of one linear continuation; most turns have several legal children, and the one that runs is often a sibling or a recovery.
+\end{insight}
+
+\begin{insight}[Fork, don't clone]
+\label{ins:fork}
+On fan-out, the trunk is typically several times the per-child residual.
+Materializing $k$ independent KV copies wastes $\Theta(k)$ HBM for tensors attention will read as identical.
+Radix prefix caching~\cite{sglang} \emph{discovers} sharing after the fact if two requests happen to start with the same tokens; it does not \emph{create} a child in $O(1)$ when the parent is paused, and it does not distinguish speculative pages from committed ones at eviction time.
+\end{insight}
+
+\begin{insight}[Idle is compute]
+\label{ins:idle}
+Tool pauses documented by Continuum and MORI~\cite{continuum,mori} range from hundreds of milliseconds (local tests) to tens of seconds (pytest, humans)---long enough to retain, offload, \emph{or prefill}.
+Decode slack is a second reservoir: a decode-only batch leaves tensor-core cycles that a chunked speculative prefill can use if the scheduler respects \tbt{}~\cite{sarathi,jitserve}.
+Prior systems spend this budget on offloading, retention, or planning. Allocating it to next-branch prefill reduces the remaining \ttft{} term.
+\end{insight}
+
+\begin{insight}[Speculate with a budget, miss with a residual]
+\label{ins:budget}
+Unbudgeted speculation that prefills all children, including guessed observation residuals, reduces \ttft{} under light load and degrades committed decode under high utilization: speculative chunks contend for SMs with committed decode, and missed residuals occupy HBM until a TTL expires.
+CoW changes the miss cost from $O(\text{trunk})$ to $O(\text{residual})$, which is what makes multi-child speculation rational---but it does not fix SM interference.
+Admission is therefore an expected-value decision under an interference constraint.
+\end{insight}
+
+These four constraints dictate the architecture in \S\ref{sec:design}: a branch tree, a planner that distinguishes $p{=}1$ suffixes from $p{<}1$ residuals, and a scheduler that treats speculative work as idle GPU cycles.
+Correctness is that a committed decode matches an engine without speculation.
+This rules out feeding speculative \emph{output} tokens into the user stream and motivates a verify-by-prefix protocol on \emph{input} tokens.

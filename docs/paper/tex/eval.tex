@@ -1,0 +1,108 @@
+\section{Evaluation}
+\label{sec:eval}
+
+We separate two measurements.
+\S\ref{sec:eval-gpu} is a GPU forest on Qwen3-14B: recompute, vLLM automatic prefix caching (APC), and \sys (copy-on-write fan-out, abort, committed spine).
+\S\ref{sec:eval-app} is a control-plane cost model of \app against APC, hash prefill, disaggregated prefill, and \sys.
+It uses the same prefill identity the GPU run exposes---tokens that miss the cache---and is not an A100 wall-clock.
+
+\subsection{GPU forest}
+\label{sec:eval-gpu}
+
+\paragraph{Setup.}
+Qwen3-14B, \texttt{bfloat16}, tensor parallel $2$ on two A100-SXM4 40GB GPUs.
+GSM8K test ($n{=}1319$) is Tree-of-Thoughts with $k{=}4$ thoughts and a $512$-token decode budget, scored by the official \texttt{\#\#\#\#} extractor.
+Requests run in batches of eight ($165$ batches).
+Recompute disables the prefix cache.
+APC hashes full blocks after tokens exist.
+\sys forks the trunk by reference, prefills residuals, aborts the non-winners, and decodes the committed path.
+Peak KV counts resident KV tokens of one batch.
+Fan-out time is the expand step before winner decode.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K test, Qwen3-14B, $\mathrm{tp}{=}2$, $n{=}1319$.
+Median over $165$ batches of eight.
+Accuracy is the official score on the full file.}
+\label{tab:gsm}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrr}
+\toprule
+ & recompute & APC & \sys \\
+\midrule
+Accuracy & $0.847$ & $0.844$ & $0.845$ \\
+Peak KV, median (tok) & $4136$ & $1430$ & $1030$ \\
+Peak KV, max (tok) & $4944$ & $1632$ & $1232$ \\
+Fan-out, median (ms) & $326$ & $87$ & $140$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{What the GPU run shows.}
+\Cref{tab:gsm} is the storage result and the latency gap \app is built to close.
+Median peak KV is $0.72\times$ APC and $0.25\times$ recompute, on every batch the median sits below APC, and accuracy stays within one point of both baselines.
+Fan-out does not follow the storage ordering: \sys is $140$\,ms against APC's $87$\,ms, because copy-on-write and abort are on the expand path while APC's hash hit is not.
+End-to-end generation on this file stays within $2\%$ of APC ($18.9$ vs.\ $18.6$ minutes): less KV, not a faster single-request decode.
+The same peak ordering, $0.58$--$0.80\times$ APC, holds on seven math sets for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$ (appendix in the experimental report).
+Peak does not change when the tensor width doubles; it tracks the committed path.
+
+\subsection{Prefill pruning}
+\label{sec:eval-app}
+
+\paragraph{Setup.}
+Control plane, no GPU.
+Ten sessions, $k{=}4$, trunk $L{=}256$, residual $\ell{=}32$.
+Two of the four residuals are illegal or repetitive and fail the draft score; the winner is forced to index $0$.
+Prefill time is $\ell \times 12\,\mu\mathrm{s}/\mathrm{token}$.
+Disaggregated transfer is $2\,\mu\mathrm{s}/\mathrm{token}$ on shipped tokens.
+APC and hash prefill publish blocks only after a request materializes them, so the first fan-out clones $k$ trunks.
+Disaggregated prefill uses that same prefill and then ships every live token.
+\sys shares the trunk by pointer swap and prefills every residual.
+\app adds hash skip, draft prune, early abort, lazy abort, and a connector that inserts only retained residuals.
+A replay phase reopens the committed winner.
+
+\begin{table}[t]
+\centering
+\caption{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$).
+Not GPU wall-clock.
+\app is the only column that both shares the trunk and drops low-score residuals before prefill.}
+\label{tab:app}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrr}
+\toprule
+ & prefill tok & fan-out ms & xfer tok & peak KV \\
+\midrule
+APC & $11520$ & $139.0$ & $0$ & $11520$ \\
+hash prefill & $11520$ & $139.0$ & $0$ & $11520$ \\
+disagg.\ prefill & $11520$ & $162.1$ & $11520$ & $11520$ \\
+\sys & $3840$ & $47.1$ & $0$ & $3840$ \\
+\app & $2912$ & $35.9$ & $352$ & $2880$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Fan-out.}
+\Cref{tab:app} is the comparison the GPU gap motivates.
+Hash prefill matches APC on the first fan-out: the blocks are not yet published, so the hash walk does not remove the clone.
+Stock disaggregated prefill is slower than APC ($162$\,ms vs.\ $139$\,ms) because it ships the full clone.
+\sys already drops the clone ($3840$ prefill tokens, $47$\,ms) by aliasing the trunk.
+\app goes further: $20$ low-score residuals are not prefilled, fan-out falls to $35.9$\,ms, and the connector ships $352$ tokens rather than $11520$.
+Replay of the published winner is a full hash hit for APC, hash prefill, and \app (zero additional prefill tokens).
+Hash prefill therefore matters on the second session; it does not fix the first fan-out.
+\app is the method that is ahead on both.
+
+\paragraph{Concurrency from measured KV.}
+System throughput is $\Theta \propto C / T_{\mathrm{e2e}}$ with $C \propto \mathrm{HBM}/M$.
+Substituting the measured DeepSeek-R1 GSM8K peaks ($1563$ APC tokens, $1163$ \sys tokens) into an $8$\,GiB KV pool gives $37$ concurrent trees for APC and $50$ for \sys.
+Under a $1$\,s P99 \ttft{} constraint the same model admits $192$ QPS for APC and $256$ for the pruned tree, and saturated decode throughput rises from $23680$ to $32000$ tokens/s ($+35\%$).
+This uses measured $M$, not the control-plane peak column of \Cref{tab:app}.
+An early-stop model that ends winner decode at an answer marker $60\%$ of the way through a $256$-token budget reaches the same $0.845$ accuracy at $153$ decode tokens on a trace with that accuracy.
+That token reduction is a model of \texttt{decode\_stop}; we have not remeasured it as GPU latency.
+
+\paragraph{Scope.}
+The GPU study does not yet include \app inside vLLM, and the full Game24 and HumanEval \sys runs are incomplete.
+\Cref{tab:gsm} is the claim about storage and accuracy.
+\Cref{tab:app} is the claim about which prefill method removes work.
+Closing the $140$\,ms vs.\ $87$\,ms GPU fan-out is the next measurement, on the same A100 setup, with \app on the expand path.

@@ -1,0 +1,6 @@
+Agentic LLM serving forks a shared trunk into several short residuals, then keeps one committed path.
+Prefix caches reuse a trunk only after its tokens exist and after a hash hit; disaggregated prefill moves KV between a prefill instance and a decode instance without deciding which branches are worth computing.
+\sys makes the branch a serving object: a copy-on-write context tree shares the trunk at \texttt{fork}, and advanced prefill pruning (\app) decides, for each residual, whether to run GPU prefill and whether to insert the resulting KV into the disaggregated connector.
+Hash hits skip published full blocks; a draft score and an early-abort check drop low-score siblings before they consume prefill; the connector inserts only retained branches.
+On Qwen3-14B GSM8K ($n{=}1319$, two A100s) \sys matches APC accuracy ($0.845$ vs.\ $0.844$) at $0.72\times$ the median peak KV, while fan-out remains slower ($140$\,ms vs.\ $87$\,ms).
+A control-plane comparison of APC, hash prefill, disaggregated prefill, \sys, and \app shows \app cutting modeled fan-out prefill by $75\%$ relative to APC and raising the SLO-feasible concurrency implied by the measured KV gap by $35\%$.

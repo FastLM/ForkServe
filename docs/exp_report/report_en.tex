@@ -85,6 +85,7 @@ A second run compares APC and ForkServe on seven Tree-of-Thoughts math files ($n
 Peak KV is $0.58$--$0.80\times$ APC on every file and does not change when the tensor width doubles: peak tracks the committed path, not the number of ranks.
 Generate time at $\mathrm{tp}{=}4$ is $0.56$--$0.66\times$ the two-GPU run and stays within a few percent of APC on Qwen; on DeepSeek-R1 with $D{=}2048$ it stays within $13\%$ and the $513$-item micro-average is $+2$\,pp over APC at both widths.
 An analytical concurrency sweep that plugs the measured DeepSeek GSM8K peaks into \eqref{eq:conc} raises the SLO-feasible QPS from $192$ (APC) to $256$ (ForkServe+) and peak decode throughput by $35\%$.
+Setting L compares five prefill methods on the same fan-out in the control plane: APC and hash prefill still clone the first fan-out, stock disaggregated prefill adds a full KV transfer, and advanced prefill pruning (APP) is the only method that both shares the trunk and drops low-score residuals before prefill (modeled fan-out $35.9$\,ms vs.\ $139$\,ms for APC).
 \end{abstract}
 
 \section{Baselines and method}
@@ -99,6 +100,7 @@ Name & Role & Behavior on a $k$-way Tree-of-Thoughts / ReAct prompt \\
 recompute & baseline & Prefix cache off. Each branch prefills the full shared trunk. \\
 APC & baseline & vLLM automatic prefix caching. Matching prefixes are hashed and reused after requests arrive. \\
 ForkServe & method & Branch-aware sharing: fork the trunk by reference, prefill residuals, abort unused branches, keep the committed path. \\
+APP & method & Advanced prefill pruning on that tree: hash-skip published blocks, drop low-score residuals before GPU prefill, and \texttt{insert} only retained KV into a disaggregated prefill connector. \\
 \bottomrule
 \end{tabular}
 \caption{Serving stacks for branched decoding in vLLM.
@@ -203,10 +205,11 @@ H. Qwen3-14B math, four GPUs & $4$ & $0$--$3$ & same files as E & same as E \\
 I. DeepSeek-R1 8B math, two GPUs & $2$ & $0,1$ & $40$--$80$; batches of $8$; $D{=}2048$ & same as E \\
 J. DeepSeek-R1 8B math, four GPUs & $4$ & $0$--$3$ & same files as I & same as I \\
 K. ForkServe+ concurrency & --- & analytical & GSM8K peaks $1563$/$1163$ & QPS / P99 TTFT sweep \\
+L. Prefill methods & --- & control plane & $10{\times}4$ ToT, $L{=}256$ & APC, hash, disagg, ForkServe, APP \\
 \bottomrule
 \end{tabular}
 \caption{Configurations and datasets.
-Later sections report A--C in full on Qwen3-14B, then G--H (14B), E--F (8B), and I--J (DeepSeek-R1 8B) on the seven-file math suite (APC vs.\ ForkServe only), then K (ForkServe+ concurrency from those peaks).
+Later sections report A--C in full on Qwen3-14B, then G--H (14B), E--F (8B), and I--J (DeepSeek-R1 8B) on the seven-file math suite (APC vs.\ ForkServe only), then K (ForkServe+ concurrency from those peaks) and L (prefill-method comparison).
 On D, recompute and APC are complete; ForkServe on the full Game24 and HumanEval files is in progress.}
 \end{table}
 
@@ -1675,6 +1678,52 @@ ForkServe+ continues to $50$ trees / $32000$ tok/s.}
 APC crosses the $1\,\mathrm{s}$ SLO between $192$ and $256$ QPS; ForkServe+ remains under the SLO at $256$.}
 \end{figure}
 
+\section{Prefill methods (setting L)}
+
+Setting L is the control-plane comparison that the GPU fan-out gap motivates.
+On GSM8K (\S setting A) ForkServe's median fan-out is $140$\,ms against APC's $87$\,ms, even though peak KV is lower.
+The question is which prefill method removes that work: automatic prefix caching (hash prefill), vLLM disaggregated prefill, ForkServe's copy-on-write fan-out, or advanced prefill pruning (APP) on top of the tree.
+
+APP decides, for each residual, whether GPU prefill runs and whether KV is inserted into a disaggregated connector.
+A published full block is a hash hit and is not recomputed.
+A low-score residual (illegal trace, repetition, or high entropy) is dropped before prefill; the winner is always kept.
+If the first $20\%$ of a residual already fails, the remaining chunks abort.
+The connector's \texttt{insert} receives only retained residuals.
+Speculative pages stay unpublished until commit.
+This run does not call the GPU.
+Prefill time is $12\,\mu\mathrm{s}$ per token and transfer time is $2\,\mu\mathrm{s}$ per shipped token.
+The workload is $10$ sessions, $k{=}4$, trunk $256$, residual $32$, with two of four residuals failing the draft score.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Method & prefill tok & prefill ms & xfer tok & fan-out ms & peak KV \\
+\midrule
+APC & $11520$ & $138.2$ & $0$ & $139.0$ & $11520$ \\
+ForkServe & $3840$ & $46.1$ & $0$ & $47.1$ & $3840$ \\
+hash prefill & $11520$ & $138.2$ & $0$ & $139.0$ & $11520$ \\
+disagg.\ prefill & $11520$ & $138.2$ & $11520$ & $162.1$ & $11520$ \\
+APP & $2912$ & $34.9$ & $352$ & $35.9$ & $2880$ \\
+\bottomrule
+\end{tabular}
+\caption{Setting L, first fan-out.
+Control-plane cost model, not A100 wall-clock.
+APP prunes $20$ residuals across the ten sessions and ships $352$ tokens instead of the full clone.}
+\end{table}
+
+Hash prefill matches APC on this first fan-out: the blocks have not been published, so the hash does not remove the clone.
+Stock disaggregated prefill pays the same prefill and then ships all $11520$ tokens, which makes fan-out slower ($162$\,ms), consistent with disaggregated prefill not being a throughput feature.
+ForkServe removes the clone by aliasing the trunk ($47$\,ms, peak $3840$).
+APP also drops the two low-score residuals, so prefill tokens fall to $2912$, fan-out to $35.9$\,ms, and peak KV to the winner spine ($2880$).
+Replay of the committed winner is a full hash hit for APC, hash prefill, and APP (zero extra prefill tokens): hash prefill pays off on the next session, not on the first expand.
+
+The decode-token curve in this setting is a stop model, not a second GPU pass.
+On a trace whose accuracy is the GSM8K score $0.845$, ending the winner at an answer marker $60\%$ of the way through a $256$-token budget reaches that accuracy at $153$ decode tokens instead of $256$.
+We do not report that reduction as measured GPU latency.
+The concurrency numbers in setting K remain the system-level claim, because they plug measured peaks ($1563$ vs.\ $1163$) into \eqref{eq:conc}.
+
 \section{Discussion}
 
 Recompute copies the trunk on every branch; APC reuses it after a hash hit and already removes most of $M_{\mathrm{rec}}$.
@@ -1686,6 +1735,7 @@ Settings G and H run the seven-file math suite on Qwen3-14B: the same peak ratio
 Settings E and F repeat that recipe on Qwen3-8B, where four-GPU time scales by $0.66$.
 Settings I and J repeat it on DeepSeek-R1-Distill-Llama-8B with $D{=}2048$: peak $0.58$--$0.77\times$ APC, pool accuracy $+10$ and $+11$ problems, and four-GPU time $0.56$--$0.64\times$ two GPUs.
 Setting K plugs those GSM8K peaks into \eqref{eq:conc}: $35\%$ more concurrent trees, $35\%$ more saturated tok/s, and SLO-feasible QPS $256$ vs.\ $192$.
+Setting L places APP against hash prefill and disaggregated prefill on the fan-out those GPU runs leave open: hash prefill does not help until blocks are published, disaggregated prefill adds a transfer, and APP is the method whose modeled fan-out is below APC.
 
 \section{Conclusion}
 
@@ -1714,9 +1764,10 @@ The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAc
 Those ForkServe jobs will resume when the four A100s are free.
 They test $\Delta>0$ at full $n$ on short trunks (Game24) and on wrap-dominated prompts (HumanEval).
 
-Further work targets the terms that still limit $\Theta$.
-Fan-out $T_{\mathrm{fan}}^{\mathrm{FS}}$ is above $T_{\mathrm{fan}}^{\mathrm{APC}}$ at matched $W$; reducing abort and copy-on-write overhead should close that micro-gap while keeping $M_{\mathrm{spine}}$.
-A live-scheduler concurrent-load experiment should confirm the analytical $C$ and $\Theta$ of setting K.
-We also plan a mix of committed thoughts with speculative branches, to test whether $M_{\mathrm{spine}}$ remains the right peak when some children are guessed.
+Setting L is the design response to the fan-out term that still limits $\Theta$.
+$T_{\mathrm{fan}}^{\mathrm{FS}}$ is above $T_{\mathrm{fan}}^{\mathrm{APC}}$ on the GPU forest; APP moves hash skip, draft prune, early abort, and the disagg \texttt{insert} gate in front of that expand.
+The control-plane ordering is APP, then ForkServe, then APC / hash prefill, then stock disaggregated prefill.
+Confirming that ordering as A100 wall-clock, on the same GSM8K forest, is the remaining measurement.
+A live-scheduler concurrent-load experiment should likewise confirm the analytical $C$ and $\Theta$ of setting K.
 
 \end{document}

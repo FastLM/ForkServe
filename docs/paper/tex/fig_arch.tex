@@ -1,0 +1,61 @@
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >=Latex,
+  every node/.style={inner sep=2.5pt},
+  box/.style={draw=fsblue!55, rounded corners=2pt, align=center, fill=white,
+              line width=0.55pt, minimum height=0.62cm},
+  arr/.style={-{Latex[length=2.2mm]}, line width=0.55pt, fsblue!80},
+  darr/.style={-{Latex[length=2.2mm]}, line width=0.55pt, densely dashed, fsgray},
+  lab/.style={font=\tiny, text=fsgray, align=center},
+]
+% --- harness ---
+\node[box, fill=black!4, minimum width=15.6cm] (h) at (0,0)
+  {\textbf{Agent harness}\enspace ReAct \textperiodcentered\ Tree-of-Thoughts \textperiodcentered\ LangGraph \textperiodcentered\ OpenHands
+   \enspace{\tiny\texttt{open}\;·\;\texttt{fork}\;·\;\texttt{commit}\;·\;\texttt{abort}}};
+
+% --- three planes ---
+\node[box, fill=fslight, minimum width=4.55cm, minimum height=3.15cm, anchor=north] (tree) at (-5.5,-0.85) {};
+\node[font=\scriptsize\bfseries, text=fsblue, anchor=north] at (tree.north) {\strut Context tree};
+\node[lab, anchor=north, align=center, text width=4.2cm] at ($(tree.north)+(0,-0.42)$)
+  {per-session page table\\[1pt]
+   trunk pages, refcounted, read-only\\[1pt]
+   residual pages, private\\[1pt]
+   \texttt{fork}: pointer swap, $O(1)$\\[1pt]
+   \texttt{abort}: decref residual only\\[1pt]
+   publish full blocks on commit};
+
+\node[box, fill=fsspec, minimum width=4.7cm, minimum height=3.15cm, anchor=north] (app) at (0,-0.85) {};
+\node[font=\scriptsize\bfseries, text=fsorange!80!black, anchor=north] at (app.north) {\strut Advanced prefill pruning};
+\node[box, fill=white, minimum width=4.15cm, anchor=north] (hsh) at ($(app.north)+(0,-0.48)$) {1.\ hash skip \quad full blocks};
+\node[box, fill=white, minimum width=4.15cm, anchor=north] (dr) at ($(hsh.south)+(0,-0.08)$) {2.\ draft prune \quad low score};
+\node[box, fill=white, minimum width=4.15cm, anchor=north] (ea) at ($(dr.south)+(0,-0.08)$) {3.\ early abort \quad prefix check};
+\node[box, fill=white, minimum width=4.15cm, anchor=north] (gate) at ($(ea.south)+(0,-0.08)$) {4.\ disagg gate \quad \texttt{insert}};
+
+\node[box, fill=fscommit, minimum width=4.55cm, minimum height=3.15cm, anchor=north] (pd) at (5.5,-0.85) {};
+\node[font=\scriptsize\bfseries, text=fsgreen!50!black, anchor=north] at (pd.north) {\strut Prefill / decode};
+\node[box, fill=white, minimum width=4.05cm, anchor=north] (pre) at ($(pd.north)+(0,-0.55)$)
+  {\textbf{Prefill instance}\\[-1pt]{\tiny miss tail only}};
+\node[box, fill=white, minimum width=4.05cm, anchor=north] (dec) at ($(pre.south)+(0,-0.16)$)
+  {\textbf{Decode instance}\\[-1pt]{\tiny committed spine}};
+\node[lab, anchor=north, text width=4.15cm] at ($(dec.south)+(0,-0.08)$)
+  {KV connector: \texttt{insert} / \texttt{drop\_select}\\
+   pruned and hash-local KV stay local\\
+   winner decode attends only to $x_\star$};
+
+\draw[arr] (h.south) -- (tree.north);
+\draw[arr] (h.south) -- (app.north);
+\draw[arr] (tree.east) -- (app.west);
+\draw[arr] (app.east) -- (pd.west);
+\draw[arr] (pre.south) -- (dec.north);
+\node[lab, anchor=south] at ($(pre.south)!0.5!(dec.north)+(1.15,0)$) {\tiny survivors};
+
+% --- bottom: memory dividend ---
+\node[box, fill=fslight, minimum width=15.6cm, anchor=north] (pool) at (0,-4.25)
+  {\textbf{Speculative pool.}\enspace
+   $M_{\mathrm{CoW}}=b(L+\sum_i\ell_i)$ in flight,\;
+   $M_{\mathrm{spine}}=b(L+\ell_\star)$ after abort.\;
+   $\Theta \propto C/T_{\mathrm{e2e}}$,\; $C \propto \mathrm{HBM}/M$.\;
+   Freed KV admits extra concurrent sessions.};
+\draw[darr] (tree.south) -- (tree.south |- pool.north);
+\draw[darr] (pd.south) -- (pd.south |- pool.north);
+\end{tikzpicture}
