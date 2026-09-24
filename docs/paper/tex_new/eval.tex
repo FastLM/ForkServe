@@ -71,7 +71,7 @@ Stock P/D uses that same prefill and then ships every live token.
 
 \begin{table}[t]
 \centering
-\caption{Control-plane fan-out and replay ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$).
+\caption{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$).
 Bottleneck in red; ForkServe+ in green.
 Not GPU wall-clock.}
 \label{tab:app}
@@ -93,15 +93,6 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
  & FS & $3840$ & $47.1$ & $0$ & $3840$ & $0$ & $0$ \\
  & ForkServe+ & \win{$2912$} & \win{$35.9$} & \win{$352$} & \win{$2880$} & $9$ & $20$ \\
 \midrule
-\multirow{5}{*}{replay}
- & APC & $0$ & $0$ & $0$ & $5760$ & $20$ & $0$ \\
-\rowcolor{tblalt}
- & hash & $0$ & $0$ & $0$ & $5760$ & $20$ & $0$ \\
- & stock P/D & $0$ & $0$ & $0$ & $5760$ & $20$ & $0$ \\
-\rowcolor{tblalt}
- & FS & $640$ & $7.7$ & $0$ & $5760$ & $20$ & $0$ \\
- & ForkServe+ & \win{$0$} & \win{$0$} & $0$ & $5760$ & $20$ & $0$ \\
-\midrule
  & ForkServe+ / APC & \win{$-75\%$} & \win{$-74\%$} & --- & \win{$-75\%$} & --- & --- \\
 \bottomrule
 \end{tabular}
@@ -114,7 +105,6 @@ Hash prefill matches APC on the first expand: blocks are unpublished, so the has
 Stock P/D is slower than APC ($162$ vs.\ $139$\,ms) because it ships the full clone.
 \sys already drops the clone ($3840$ prefill tokens, $47$\,ms) by aliasing the trunk.
 \app goes further: $20$ low-score residuals are not prefilled, $T_{\mathrm{fan}}$ falls to $35.9$\,ms, and the connector ships $352$ tokens rather than $11520$.
-Replay of the published winner is a full hash hit for APC, hash prefill, and \app (zero additional $\Work$).
 
 % Temporarily omitted from the paper (Figure 4, stacked KV occupancy).
 \iffalse
