@@ -393,7 +393,7 @@ A batch of $16$ keeps the ratio at $0.72$--$0.73$ ($2071/2871$ on Llama-3-8B, $2
 \caption{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$.
 MATH-500 is $n{=}200$; AIME is $n{=}73$.
 R1 is DeepSeek-R1; 4B is Qwen3-4B.
-Best storage in green.}
+Best storage and shortest end-to-end time in green.}
 \label{tab:longcot}
 \scriptsize
 \setlength{\tabcolsep}{2.4pt}
@@ -408,31 +408,31 @@ Model & Method & peak & / APC & acc. & e2e (s) \\
 \rowcolor{tblalt}
  & FS & \win{$1391$} & \win{$0.75$} & $0.510$ & $432$ \\
 \multirow{-3}{*}{R1 MATH}
- & FS+ & $1599$ & $0.86$ & $0.545$ & $247$ \\
+ & FS+ & $1599$ & $0.86$ & $0.545$ & \win{$247$} \\
 \midrule
  & APC & $2118$ & --- & $0.055$ & $178$ \\
 \rowcolor{tblalt}
  & FS & \win{$1646$} & \win{$0.78$} & $0.123$ & $178$ \\
 \multirow{-3}{*}{R1 AIME}
- & FS+ & $1662$ & $0.78$ & $0.096$ & $165$ \\
+ & FS+ & $1662$ & $0.78$ & $0.096$ & \win{$165$} \\
 \midrule
- & APC & $1937$ & --- & $0.595$ & $329$ \\
+ & APC & $1937$ & --- & $0.620$ & $329$ \\
 \rowcolor{tblalt}
- & FS & \win{$1770$} & \win{$0.91$} & $0.610$ & $246$ \\
+ & FS & \win{$1770$} & \win{$0.91$} & $0.625$ & $248$ \\
 \multirow{-3}{*}{4B MATH}
- & FS+ & \win{$1770$} & \win{$0.91$} & $0.630$ & $230$ \\
+ & FS+ & \win{$1770$} & \win{$0.91$} & $0.600$ & \win{$236$} \\
 \midrule
  & APC & $2150$ & --- & $0.027$ & $136$ \\
 \rowcolor{tblalt}
- & FS & \win{$1794$} & \win{$0.83$} & $0.041$ & $135$ \\
+ & FS & \win{$1794$} & \win{$0.83$} & $0.041$ & $136$ \\
 \multirow{-3}{*}{4B AIME}
- & FS+ & \win{$1794$} & \win{$0.83$} & $0.055$ & $133$ \\
+ & FS+ & \win{$1794$} & \win{$0.83$} & $0.041$ & \win{$131$} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 At $D{=}2048$ the ratio is $0.75$--$0.91$ (\Cref{tab:longcot}).
 On MATH-500, ForkServe matches APC ($432$\,s vs.\ $429$\,s on DeepSeek-R1).
-ForkServe+ cuts DeepSeek-R1 from $429$\,s to $247$\,s and Qwen3-4B from $329$\,s to $230$\,s; the Qwen3-4B $n{=}32$ slice is $38$\,s versus $53$\,s.
-ForkServe+ cuts MATH-500 fan-out from $2406$ to $1284$\,ms on DeepSeek-R1 and from $2747$ to $1140$\,ms on Qwen3-4B, against APC at $1593$ and $1188$\,ms.
-Qwen3-4B ForkServe+ scores $126/200$ on MATH-500 (APC $119/200$).
+ForkServe+ cuts DeepSeek-R1 from $429$\,s to $247$\,s and Qwen3-4B from $329$\,s to $236$\,s; the Qwen3-4B $n{=}32$ slice is $38$\,s versus $53$\,s.
+ForkServe+ cuts MATH-500 fan-out from $2406$ to $1284$\,ms on DeepSeek-R1 and from $2787$ to $1014$\,ms on Qwen3-4B, against APC at $1593$ and $1201$\,ms.
+Qwen3-4B ForkServe+ scores $120/200$ on MATH-500 (APC $124/200$).
