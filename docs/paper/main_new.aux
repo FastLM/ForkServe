@@ -23,8 +23,7 @@
 \citation{sglang}
 \citation{sarathi}
 \citation{continuum,mori}
-\citation{vllm}
-\newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~$\sigma _u$ holds one RO trunk; \texttt {fork} aliases it in $O(1)$; LCP binds the winner. (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt {insert}. (3)~The prefiller computes only retained miss tails; \texttt {insert} is gated, and the decoder \texttt {drop\_select}s the committed spine. After abort the live occupancy is the spine $M_{\mathrm {spine}}$; the same $8$\,GiB pool then admits $37{\to }50$ sessions ($+35\%$ tok/s)}{figure.1}{}}
+\newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~$\sigma _u$ holds one RO trunk; \texttt {fork} aliases it in $O(1)$; LCP binds the winner. (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt {insert}. (3)~A hash hit stays off the kernel ($\Xfer {=}0$); the GPU runs only the miss tail, and \texttt {insert} admits $i\in \Keep $. \texttt {drop\_select} keeps the spine $x_\star {=}L{+}\ell _\star $ for the sampler; \texttt {stop} ends decode at $D^{+}$. After abort the live occupancy is the spine $M_{\mathrm {spine}}$; the same $8$\,GiB pool then admits $37{\to }50$ sessions ($+35\%$ tok/s)}{figure.1}{}}
 \newlabel{fig:system@cref}{{[figure][1][]1}{[1][1][]2}{}{}{}}
 \newlabel{sec:problem}{{2}{2}{}{section.2}{}}
 \newlabel{sec:problem@cref}{{[section][2][]2}{[1][2][]2}{}{}{}}
@@ -32,6 +31,7 @@
 \newlabel{sec:model@cref}{{[subsection][2][2]2.2}{[1][2][]2}{}{}{}}
 \newlabel{eq:mem}{{1}{2}{}{equation.1}{}}
 \newlabel{eq:mem@cref}{{[equation][1][]1}{[1][2][]2}{}{}{}}
+\citation{vllm}
 \citation{distserve,splitwise}
 \citation{react,toolformer}
 \citation{autogen,metagpt}

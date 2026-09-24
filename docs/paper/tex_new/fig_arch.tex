@@ -34,7 +34,7 @@
 \fill[fsgreen!75!black] (11.28,6.92) rectangle (16.45,7.28);
 \node[head] at (0.14,7.10) {1\quad Context tree};
 \node[head] at (5.76,7.10) {2\quad Prefill pruning};
-\node[head] at (11.42,7.10) {3\quad Prefill / decode};
+\node[head] at (11.42,7.10) {3\quad P/D handoff};
 
 % ---------- 1. physical frames; k aliases point up; private ρ ----------
 \draw[fsblue!45, line width=0.5pt, rounded corners=1.2pt, fill=fslight]
@@ -59,14 +59,13 @@
 \node[chip, draw=fsblue!55, fill=white, inner sep=1.0pt, anchor=west] at (3.48,6.40)
   {$\mathrm{ref}{=}k$};
 
-% hourglass: k child maps fan in, then fan out onto the one trunk
-\coordinate (alias) at (2.52,5.48);
+% fork(): children gather into the call, then it fans out onto each trunk page.
+\node[chip, draw=fsblue!70, fill=white, inner sep=1.6pt] (forkfn) at (2.52,5.48)
+  {\texttt{fork()}};
 \foreach \i in {0,...,4} {
-  \draw[fsblue!70, line width=0.4pt] (alias) -- ({0.45+\i*0.52},6.18);
+  \draw[fsblue!70, line width=0.4pt] (forkfn.north) -- ({0.45+\i*0.52},6.18);
 }
-\draw[fsblue!70, line width=0.4pt] (alias) -- (3.09,6.18);
-\node[chip, draw=fsblue!70, fill=white, inner sep=1.2pt, anchor=west] at (3.48,5.48)
-  {\texttt{fork} $O(1)$};
+\draw[fsblue!70, line width=0.4pt] (forkfn.north) -- (3.09,6.18);
 
 % children: ↑ slots are PTEs (not copies); ρ is private
 \node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (bs) at (0.96,3.70) {};
@@ -88,7 +87,7 @@
       ({\x-0.64+\j*0.26},3.68) rectangle ({\x-0.42+\j*0.26},3.94);
     \node[font=\tiny\sffamily, text=fsblue] at ({\x-0.53+\j*0.26},3.81) {$\uparrow$};
   }
-  \draw[sarr] ({\x-0.27},3.94) -- (alias);
+  \draw[sarr] ({\x-0.27},3.94) -- (forkfn);
 }
 \fill[fsgreen!55] (1.16,3.68) rectangle (1.54,3.94);
 \fill[black!18] (2.72,3.68) rectangle (3.10,3.94);
@@ -140,73 +139,135 @@
 \node[font=\tiny\sffamily, text=fsblue, anchor=west] at (5.82,1.93)
   {$\Work{=}\sum_i \Work_i$ \quad $\Xfer{=}\sum_{i\in\Keep}\Work_i$ \quad winner always kept};
 
-% ---------- 3. prefill / decode (visual, not prose) ----------
-\draw[panel, rounded corners=1pt] (11.52,4.92) rectangle (16.25,6.80);
-\node[font=\scriptsize\bfseries\sffamily, text=fsblue, anchor=west] at (11.68,6.58) {Prefill};
-% hash-local stays; miss tail is the only kernel work
-\node[font=\tiny\sffamily, text=fsgray, anchor=east] at (11.78,6.20) {$\rho$};
-\foreach \i in {0,1} {
-  \fill[black!6] ({11.88+\i*0.40},6.04) rectangle ({12.22+\i*0.40},6.36);
+% ---------- 3. P/D handoff ----------
+% Prefill classifies ρ: a hash hit never enters the kernel (X=0);
+% the GPU runs only the miss tail. insert ships Keep.
+% Decode drop_selects the spine; the sampler attends x*=L+ℓ*;
+% stop cuts the emitted length at D+.
+\begin{scope}
+  \clip[rounded corners=1.6pt] (11.40,4.78) rectangle (16.34,6.86);
+  \fill[white] (11.40,4.78) rectangle (16.34,6.86);
+  \fill[fsblue!9] (11.40,6.54) rectangle (16.34,6.86);
+\end{scope}
+\draw[panel, rounded corners=1.6pt] (11.40,4.78) rectangle (16.34,6.86);
+\node[font=\scriptsize\bfseries\sffamily, text=fsblue, anchor=west] at (11.52,6.70) {Prefill};
+\node[font=\tiny\sffamily, text=fsblue!75!black, anchor=east] at (16.22,6.70)
+  {miss tail only};
+
+% ρ splits: hash hit terminates; miss tail is the only GPU path
+\node[chip, draw=fsblue!60, fill=white, inner sep=1.2pt, minimum width=0.46cm] (rho) at (11.72,5.95) {$\rho$};
+\coordinate (spl) at (12.10,5.95);
+\fill[fsblue!75] (spl) circle (0.040);
+\draw[fsgray!80, line width=0.40pt] (rho.east) -- (spl);
+\draw[fsgray!80, line width=0.40pt] (spl) |- (12.24,6.26);
+\draw[fsblue!75, line width=0.45pt] (spl) |- (12.24,5.62);
+
+% long pruned prefix 1..4: hash hit, never a kernel
+\foreach \i/\n in {0/1,1/2,2/3,3/4} {
+  \fill[black!4.5] ({12.26+\i*0.30},6.10) rectangle ({12.50+\i*0.30},6.42);
   \draw[fsgray, densely dashed, line width=0.35pt]
-    ({11.88+\i*0.40},6.04) rectangle ({12.22+\i*0.40},6.36);
-  \node[font=\tiny\sffamily, text=fsgray] at ({12.05+\i*0.40},6.20) {$h$};
+    ({12.26+\i*0.30},6.10) rectangle ({12.50+\i*0.30},6.42);
+  \node[font=\tiny\sffamily, text=fsgray] at ({12.38+\i*0.30},6.26) {\n};
 }
-\draw[fsgray!45, line width=0.4pt] (12.76,5.12) -- (12.76,6.48);
-\foreach \i in {0,1,2} {
-  \fill[fsblue!32] ({12.90+\i*0.40},6.04) rectangle ({13.24+\i*0.40},6.36);
-  \draw[fsblue, line width=0.35pt]
-    ({12.90+\i*0.40},6.04) rectangle ({13.24+\i*0.40},6.36);
-  \node[font=\tiny\sffamily, text=fsblue] at ({13.07+\i*0.40},6.20) {$m$};
-  \draw[arr] ({13.07+\i*0.40},6.04) -- ({13.07+\i*0.40},5.62);
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (13.52,6.26) {pruned};
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (14.55,6.26) {$\Xfer{=}0$};
+
+% miss tail 5..9 is the only GPU work; it does not drop into insert
+\foreach \i/\n in {0/5,1/6,2/7,3/8,4/9} {
+  \fill[fsblue!30] ({12.26+\i*0.30},5.46) rectangle ({12.50+\i*0.30},5.78);
+  \draw[fsblue, line width=0.40pt]
+    ({12.26+\i*0.30},5.46) rectangle ({12.50+\i*0.30},5.78);
+  \node[font=\tiny\sffamily, text=fsblue] at ({12.38+\i*0.30},5.62) {\n};
 }
-\node[font=\tiny\sffamily, text=fsgray] at (12.28,5.78) {stay};
-\node[chip, draw=fsgray, fill=black!4, text=fsgray, inner sep=1.0pt] at (12.28,5.28)
-  {$a{\neq}$PF};
-\node[chip, draw=fsblue!60, fill=fslight, inner sep=1.1pt] (gpu) at (13.70,5.32)
-  {GPU tail};
+\node[chip, draw=fsblue!65, fill=fslight, inner sep=1.05pt, anchor=west] (gpu) at (13.82,5.62) {GPU tail};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (15.05,5.62) {$\Work_i$};
 
-\node[chip, draw=fsblue!60, fill=white, inner sep=1.2pt] (ins) at (13.88,4.74)
-  {\texttt{insert} $K$};
-\draw[arr] (13.88,4.92) -- (ins.north);
-\draw[arr] (ins.south) -- (13.88,4.52);
+% gate: only a kept miss tail is inserted
+\fill[fscommit] (11.52,4.90) rectangle (16.22,5.26);
+\draw[fsgreen!50!black, line width=0.45pt] (11.52,4.90) rectangle (16.22,5.26);
+\node[font=\tiny\sffamily, anchor=west] at (11.62,5.08)
+  {\texttt{insert}\; only $i\in\Keep$};
+\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=east] at (16.12,5.08)
+  {$\Xfer{=}\!\sum_{i\in\Keep}\!\Work_i$};
+\draw[arr] (12.40,4.78) -- (12.40,4.42);
+\node[font=\tiny\sffamily, text=fsgreen!35!black, anchor=west] at (12.52,4.58) {$\Keep$};
 
-\draw[panel, rounded corners=1pt, fill=fscommit] (11.52,2.12) rectangle (16.25,4.52);
-\node[font=\scriptsize\bfseries\sffamily, text=fsgreen!40!black, anchor=west] at (11.68,4.30) {Decode};
-% inbound pages: L and winner kept; pruned / hash-local dropped
-\node[font=\tiny\sffamily, text=fsgray, anchor=east] at (11.78,3.92) {in};
-\fill[fsblue!28] (11.88,3.76) rectangle (12.28,4.08);
-\draw[fsblue, line width=0.35pt] (11.88,3.76) rectangle (12.28,4.08);
-\node[font=\tiny\sffamily, text=fsblue] at (12.08,3.92) {$L$};
-\fill[fsgreen!25] (12.34,3.76) rectangle (12.74,4.08);
-\draw[fsgreen!55!black, line width=0.35pt] (12.34,3.76) rectangle (12.74,4.08);
-\node[font=\tiny\sffamily] at (12.54,3.92) {$\star$};
-\fill[black!7] (12.80,3.76) rectangle (13.20,4.08);
-\draw[fsgray, densely dashed, line width=0.35pt] (12.80,3.76) rectangle (13.20,4.08);
-\node[font=\tiny\sffamily, text=fsgray] at (13.00,3.92) {$\times$};
-\fill[black!7] (13.26,3.76) rectangle (13.66,4.08);
-\draw[fsgray, densely dashed, line width=0.35pt] (13.26,3.76) rectangle (13.66,4.08);
-\node[font=\tiny\sffamily, text=fsgray] at (13.46,3.92) {$\times$};
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (13.78,3.92) {\texttt{drop\_select}};
-\draw[arr] (12.08,3.76) -- (12.08,3.42);
-\draw[arr] (12.54,3.76) -- (12.54,3.42);
-% sampler attends only the kept spine
-\fill[fsgreen!22] (11.88,2.95) rectangle (12.74,3.42);
-\draw[fsgreen!55!black, line width=0.4pt] (11.88,2.95) rectangle (12.74,3.42);
-\node[font=\tiny\sffamily] at (12.31,3.18) {$x_\star$};
-\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (12.86,3.18) {sampler};
-% stop truncates decode
-\fill[fsgreen!45] (11.88,2.38) rectangle (13.55,2.72);
-\fill[fsorange!70] (13.55,2.38) rectangle (13.78,2.72);
-\draw[fsgreen!50!black, line width=0.35pt] (11.88,2.38) rectangle (13.78,2.72);
-\node[font=\tiny\sffamily, text=white] at (12.72,2.55) {$D^{+}$};
-\node[chip, draw=fsorange!70, fill=fsspec, inner sep=1.0pt, anchor=west] at (13.92,2.55)
-  {stop};
+\begin{scope}
+  \clip[rounded corners=1.6pt] (11.40,1.64) rectangle (16.34,4.32);
+  \fill[fscommit] (11.40,1.64) rectangle (16.34,4.32);
+  \fill[fsgreen!16] (11.40,4.00) rectangle (16.34,4.32);
+\end{scope}
+\draw[panel, rounded corners=1.6pt] (11.40,1.64) rectangle (16.34,4.32);
+\node[font=\scriptsize\bfseries\sffamily, text=fsgreen!35!black, anchor=west] at (11.52,4.16) {Decode};
+\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=east] at (16.22,4.16)
+  {attends $x_\star$ only};
 
-% tree exports residuals into APP; survivors take a bus into prefill
+% one legend, then the pages it names; dashed pages have no downward arrow
+\node[font=\tiny\sffamily, anchor=west] at (11.52,3.78)
+  {\textcolor{fsblue}{1--3 trunk}\;\textcolor{fsgray}{$\cdot$}\;%
+   \textcolor{fsgreen!35!black}{4--5 keep}\;\textcolor{fsgray}{$\cdot$}\;%
+   \textcolor{fsgray}{6--9 drop}};
+
+\foreach \i/\n in {0/1,1/2,2/3} {
+  \fill[fsblue!26] ({11.52+\i*0.30},3.18) rectangle ({11.76+\i*0.30},3.52);
+  \draw[fsblue, line width=0.40pt] ({11.52+\i*0.30},3.18) rectangle ({11.76+\i*0.30},3.52);
+  \node[font=\tiny\sffamily, text=fsblue] at ({11.64+\i*0.30},3.35) {\n};
+}
+\foreach \i/\n in {0/4,1/5} {
+  \fill[fsgreen!34] ({12.48+\i*0.30},3.18) rectangle ({12.72+\i*0.30},3.52);
+  \draw[fsgreen!55!black, line width=0.40pt]
+    ({12.48+\i*0.30},3.18) rectangle ({12.72+\i*0.30},3.52);
+  \node[font=\tiny\sffamily] at ({12.60+\i*0.30},3.35) {\n};
+}
+\foreach \i/\n in {0/6,1/7,2/8,3/9} {
+  \fill[black!5] ({13.14+\i*0.30},3.18) rectangle ({13.38+\i*0.30},3.52);
+  \draw[fsgray, densely dashed, line width=0.35pt]
+    ({13.14+\i*0.30},3.18) rectangle ({13.38+\i*0.30},3.52);
+  \node[font=\tiny\sffamily, text=fsgray] at ({13.26+\i*0.30},3.35) {\n};
+}
+\node[chip, draw=fsgreen!55!black, fill=white, inner sep=0.9pt, anchor=west] at (14.40,3.35)
+  {\texttt{drop\_select}};
+
+\draw[arr] (11.94,3.18) -- (11.94,2.86);
+\draw[arr] (12.75,3.18) -- (12.75,2.86);
+\foreach \i/\n in {0/1,1/2,2/3} {
+  \fill[fsblue!20] ({11.52+\i*0.30},2.46) rectangle ({11.76+\i*0.30},2.80);
+  \draw[fsblue!70, line width=0.35pt] ({11.52+\i*0.30},2.46) rectangle ({11.76+\i*0.30},2.80);
+  \node[font=\tiny\sffamily, text=fsblue] at ({11.64+\i*0.30},2.63) {\n};
+}
+\foreach \i/\n in {0/4,1/5} {
+  \fill[fsgreen!30] ({12.48+\i*0.30},2.46) rectangle ({12.72+\i*0.30},2.80);
+  \draw[fsgreen!55!black, line width=0.35pt]
+    ({12.48+\i*0.30},2.46) rectangle ({12.72+\i*0.30},2.80);
+  \node[font=\tiny\sffamily] at ({12.60+\i*0.30},2.63) {\n};
+}
+\node[font=\tiny\sffamily, anchor=west] at (13.16,2.63) {$x_\star$};
+\node[chip, draw=fsgreen!55!black, fill=white, inner sep=0.9pt, anchor=west] (samp) at (13.70,2.63)
+  {sampler};
+
+% emitted 1..6, then stop; 7..12 are the decode tail that is not run
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (11.52,2.02) {emit};
+\foreach \i/\n in {0/1,1/2,2/3,3/4,4/5,5/6} {
+  \fill[fsgreen!58!black] ({12.08+\i*0.28},1.84) rectangle ({12.32+\i*0.28},2.16);
+  \draw[fsgreen!40!black, line width=0.30pt]
+    ({12.08+\i*0.28},1.84) rectangle ({12.32+\i*0.28},2.16);
+  \node[font=\tiny\sffamily, text=white] at ({12.20+\i*0.28},2.00) {\n};
+}
+\fill[fsorange!78] (13.78,1.84) rectangle (13.96,2.16);
+\draw[fsorange!75!black, line width=0.30pt] (13.78,1.84) rectangle (13.96,2.16);
+\foreach \i/\n in {0/7,1/8,2/9} {
+  \fill[black!4] ({14.04+\i*0.28},1.84) rectangle ({14.28+\i*0.28},2.16);
+  \draw[fsgray, densely dashed, line width=0.30pt]
+    ({14.04+\i*0.28},1.84) rectangle ({14.28+\i*0.28},2.16);
+  \node[font=\tiny\sffamily, text=fsgray] at ({14.16+\i*0.28},2.00) {\n};
+}
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (14.92,2.00) {$D^{+}{\le}D$};
+
+% tree exports residuals into APP; kept miss tails enter prefill
 \draw[arr] (b2.east) -- ++(0.22,0) |- (5.38,6.58) -- (inr.west);
 \node[font=\tiny\sffamily, text=fsblue, anchor=south] at (4.92,3.80) {$\rho$};
-\draw[arr] (mt.east) -- (10.62,2.58) -- (10.62,5.82) -- (11.52,5.82);
-\node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south west] at (8.70,2.22) {kept};
+\draw[arr] (mt.east) -- (11.02,2.58) -- (11.02,5.95) -- (rho.west);
+\node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south] at (9.70,2.66) {kept};
 
 % ---------- HBM (occupancy vs slots) ----------
 \draw[panel] (0,0) rectangle (16.45,1.50);
