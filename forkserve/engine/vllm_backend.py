@@ -118,6 +118,9 @@ class VllmBackend:
     enforce_eager: bool = False
     two_class: bool = False
     cow_blocks: bool = True
+    # Cap running sequences. Extra prompts stay queued and are admitted when
+    # one hits answer-stop, so a short request frees a decode slot immediately.
+    max_num_seqs: int | None = None
     _llm: Any = field(init=False, default=None)
     _SamplingParams: Any = field(init=False, default=None)
     _TokensPrompt: Any = field(init=False, default=None)
@@ -144,6 +147,8 @@ class VllmBackend:
             enforce_eager=self.enforce_eager,
             disable_log_stats=True,
         )
+        if self.max_num_seqs is not None and self.max_num_seqs > 0:
+            llm_kwargs["max_num_seqs"] = int(self.max_num_seqs)
         if self.two_class:
             # Pass the AsyncScheduler subclass, not the factory — vLLM's
             # issubclass check otherwise falls back to sync Scheduler.

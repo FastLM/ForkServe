@@ -312,6 +312,7 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
         enforce_eager=args.enforce_eager,
         two_class=False,
         cow_blocks=True,
+        max_num_seqs=_chunk_size(args),
     )
     return Engine(backend, cfg), backend, cfg
 
@@ -1095,6 +1096,14 @@ def _merge_metrics(parts: list[RunMetrics], workload: str) -> RunMetrics:
     )
 
 
+def _inflight_peak(per_item: Sequence[int], inflight: int) -> int:
+    """GPU holds at most ``inflight`` spines; the queue has no KV yet."""
+    width = max(1, inflight)
+    if len(per_item) <= width:
+        return int(sum(per_item))
+    return max(sum(per_item[i : i + width]) for i in range(0, len(per_item) - width + 1))
+
+
 def run_tot_forest_forkserve(
     eng: Any,
     cfg: Any,
@@ -1104,6 +1113,7 @@ def run_tot_forest_forkserve(
     decode_n: int,
     idle_ms: float,
     workload: str,
+    inflight: int | None = None,
 ) -> RunMetrics:
     """One open / fan-out / decode ``LLM.generate`` for the whole slice."""
     # Match the vLLM baseline: tokenize off the timed path.
@@ -1142,7 +1152,11 @@ def run_tot_forest_forkserve(
     for h, kids in zip(handles, all_kids, strict=True):
         _select_winner(eng, h.id, kids, winner=0)
     t_ab1 = _now()
-    peak = _resident_kv(eng, handles)
+    per_item = [int(eng.tree(h.id).live_kv_tokens()) for h in handles]
+    if inflight is not None and inflight < len(handles):
+        peak = _inflight_peak(per_item, inflight)
+    else:
+        peak = sum(per_item)
     from forkserve.answer_stop import stop_mode_for
 
     prev_mode = str(getattr(eng.config, "answer_stop", "") or "")
@@ -1183,6 +1197,11 @@ def run_tot_forest_forkserve(
         notes=(
             f"{len(handles)} items; CoW fan-out then "
             f"{'lazy' if plus else 'sync'} abort losers; peak is winner spine"
+            + (
+                f"; slot refill inflight={inflight}"
+                if inflight is not None and inflight < len(handles)
+                else ""
+            )
         ),
         cow_ms=(t_cow - t_cow0) * 1000.0,
         prefill_ms=(t_fan - t_cow) * 1000.0,
@@ -1623,19 +1642,20 @@ def run_named_math_forkserve(eng: Any, cfg: Any, args: argparse.Namespace, workl
             decode_n=n_dec,
         )
     thoughts = thoughts_fn(args.branching)
-    parts: list[RunMetrics] = []
-    for start, batch in _iter_chunks(problems, args):
-        trunks = [trunk_fn(item) for item in batch]
-        row = run_tot_forest_forkserve(
-            eng, cfg, trunks, thoughts,
-            decode_n=n_dec, idle_ms=0.0, workload=workload,
-        )
-        _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
-        row.item_ids = [p.item_id for p in batch]
-        parts.append(row)
-        _log_forest_chunk(args, "forkserve", workload, start, batch, len(problems), row, parts)
-        _close_all(eng)
-    return merge_metrics(parts)
+    width = _chunk_size(args)
+    trunks = [trunk_fn(item) for item in problems]
+    # One generate for the whole file. max_num_seqs stays at ``width``, so a
+    # request that answer-stops frees a slot for the next queued item instead
+    # of leaving the batch on the longest trace until the chunk barrier.
+    row = run_tot_forest_forkserve(
+        eng, cfg, trunks, thoughts,
+        decode_n=n_dec, idle_ms=0.0, workload=workload, inflight=width,
+    )
+    _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
+    row.item_ids = [p.item_id for p in problems]
+    _log_forest_chunk(args, "forkserve", workload, 0, problems, len(problems), row, [row])
+    _close_all(eng)
+    return row
 
 
 def run_named_math_vllm(
