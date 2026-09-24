@@ -370,49 +370,8 @@ With prune off, fan-out returns to $247$\,ms and $248$\,ms.
 With the last-line stop off, decode stays near $2500$--$3800$ tokens rather than APC's $8192$: only the winner is decoded, and it already ends inside $D$.
 A batch of $16$ keeps the ratio ($0.72$ and $0.73$).
 
-\begin{table}[t]
-\centering
-\caption{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$.
-MATH-500 is $n{=}200$; AIME is $n{=}73$.
-Qwen3-4B ForkServe+ is still running and is omitted.
-Best storage in green.}
-\label{tab:longcot}
-\scriptsize
-\setlength{\tabcolsep}{2.6pt}
-\setlength{\aboverulesep}{0.35pt}
-\setlength{\belowrulesep}{0.35pt}
-\begin{tabular}{llrrrr}
-\rowcolor{tblhead}
-\toprule
- & & peak & / APC & acc. & e2e (s) \\
-\midrule
-\multirow{3}{*}{R1 MATH}
- & APC & $1863$ & --- & $0.555$ & $433$ \\
-\rowcolor{tblalt}
- & FS & \win{$1391$} & \win{$0.75$} & $0.505$ & $431$ \\
- & FS+ & \win{$1391$} & \win{$0.75$} & $0.505$ & $433$ \\
-\midrule
-\multirow{3}{*}{R1 AIME}
- & APC & $2118$ & --- & $0.068$ & $178$ \\
-\rowcolor{tblalt}
- & FS & \win{$1646$} & \win{$0.78$} & $0.096$ & $178$ \\
- & FS+ & \win{$1646$} & \win{$0.78$} & $0.055$ & $200$ \\
-\midrule
-\multirow{2}{*}{Q4 MATH}
- & APC & $1937$ & --- & $0.635$ & $328$ \\
-\rowcolor{tblalt}
- & FS & \win{$1521$} & \win{$0.79$} & $0.615$ & $326$ \\
-\midrule
-\multirow{2}{*}{Q4 AIME}
- & APC & $2150$ & --- & $0.014$ & $135$ \\
-\rowcolor{tblalt}
- & FS & \win{$1734$} & \win{$0.81$} & $0.068$ & $135$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \paragraph{A long budget does not erase the spine.}
-\Cref{tab:longcot} keeps $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ in $0.75$--$0.81$ at $D{=}2048$.
-DeepSeek-R1 MATH-500 is $101/200$ against APC $111/200$, and end-to-end stays at $431$--$433$\,s because the trace spends the budget.
-ForkServe+ still prunes $75$ MATH residuals, so its fan-out is $1553$\,ms against $2375$\,ms for \sys.
-Qwen3-4B matches the ratio ($0.79$, $0.81$) with end-to-end within $1\%$ of APC.
+MATH-500 ($n{=}200$) and AIME ($n{=}73$) at $D{=}2048$ keep the same ratio: DeepSeek-R1 is $1391/1863{=}0.75$ and $1646/2118{=}0.78$; Qwen3-4B is $1521/1937{=}0.79$ and $1734/2150{=}0.81$.
+End-to-end stays with APC ($433$\,s vs.\ $433$\,s on DeepSeek MATH-500; $326$\,s vs.\ $328$\,s on Qwen3-4B) because the trace spends the budget.
+DeepSeek MATH-500 is $101/200$ against APC $111/200$.
+ForkServe+ does not move that peak; it prunes $75$ MATH residuals and cuts fan-out from $2375$\,ms to $1553$\,ms.
