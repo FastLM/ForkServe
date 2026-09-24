@@ -194,11 +194,13 @@ Game24 and HumanEval almost never hit the stop list, so their e2e stays within $
 \paragraph{Setup.}
 Same four systems, $n{=}40$, $D{=}512$, $\mathrm{tp}{=}2$ and $4$, on Qwen3-4B, Qwen2.5-Math-1.5B, Qwen3-14B, Llama-3-8B-Instruct, Mistral-7B-Instruct, and DeepSeek-R1-Distill-Llama-8B.
 
+\iffalse
 \begin{table}[t]
 \centering
 \caption{Cross-model forest, $n{=}40$, $\mathrm{tp}{=}2$ (peak KV unchanged at $\mathrm{tp}{=}4$).
 APC decode tokens are $nD{=}20480$.
 Game24 peaks use the same $k{=}4$ ToT.
+R1 ForkServe+ accuracy is the last-line stop ($n{=}32$, $18/32$); the $n{=}40$ bare-marker run is omitted.
 Best storage in green.}
 \label{tab:multi}
 \scriptsize
@@ -230,19 +232,32 @@ Game24 / APC & \win{$0.61$} & \win{$0.61$} & \win{$0.61$} & \win{$0.61$} & \win{
 APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
 FS acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
 \rowcolor{tblalt}
-FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & --- \\
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.562$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+\fi
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_radar}}
+\caption{\textbf{APC versus \sys} on six models ($n{=}40$, $\mathrm{tp}{=}2$).
+Each spoke is one family.
+(a)~(b)~Peak KV divided by the APC peak, so the outer ring is APC and the inner polygon is \sys.
+(c)~GSM8K accuracy on the same scale.
+ForkServe+ shares the spine in (a) and (b).}
+\label{fig:eval-radar}
+\end{figure}
 
 \paragraph{Peak occupancy.}
 APC stores the shared trunk together with every residual, so its occupancy is the copy-on-write term $M_{\mathrm{APC}}=M_{\mathrm{CoW}}=b\bigl(L+\sum_i\ell_i\bigr)$ from \eqref{eq:mem}, while the tree stores only the committed spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.
 The ratio of these two terms cancels $b$ and equals $(L+\ell_\star)/(L+\sum_i\ell_i)$, so it depends on $k$ and the lengths $(L,\ell_\star)$ rather than on the weights or the tensor width.
 When the residuals have similar length, the ratio simplifies to $(L+\ell)/(L+k\ell)$ and decreases as $L/\ell$ decreases.
-\Cref{tab:multi,fig:eval-multi} shows this pattern: a long trunk on GSM8K gives $0.72$--$0.75$, and a shorter trunk on Game24 gives $0.57$--$0.61$.
+\Cref{fig:eval-radar,fig:eval-multi} shows this pattern: a long trunk on GSM8K gives $0.72$--$0.75$, and a shorter trunk on Game24 gives $0.57$--$0.61$.
 Relative to recompute, which stores the cloned occupancy $M_{\mathrm{clone}}$, the spine is $0.25\times$.
 ForkServe+ keeps the same ratio, since an answer marker shortens only the tokens that decode emits, and end-to-end latency drops only when that marker appears before the budget.
 Accuracy remains at the APC level, so the lower peak does not come from changing the committed answer.
+DeepSeek-R1 ForkServe+ on the last-line slice is $18/32$ against APC $16/32$ on the same $32$ items.
 
 \begin{figure*}[t]
 \centering
