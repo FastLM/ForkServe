@@ -1,147 +1,165 @@
-\begin{tikzpicture}[
-  x=1cm, y=1cm,
-  font=\sffamily,
-  >=Latex,
-  line cap=round, line join=round,
-  card/.style={draw, rounded corners=1.2pt, align=left, font=\tiny\sffamily,
-               inner sep=2.2pt, line width=0.4pt, text width=3.15cm, minimum height=1.05cm},
-  page/.style={draw, rounded corners=1pt, align=center, font=\tiny\sffamily,
-               inner sep=1.4pt, line width=0.4pt, text width=1.42cm, minimum height=1.22cm},
-  freep/.style={draw=fsgray, fill=black!4, rounded corners=1pt, align=center,
-                font=\tiny\sffamily, inner sep=1.2pt, line width=0.35pt,
-                text width=1.15cm, minimum height=0.78cm, text=fsgray},
-  hrow/.style={font=\tiny\sffamily, anchor=west},
-  lab/.style={font=\tiny\sffamily\bfseries, anchor=west},
-  note/.style={font=\tiny\sffamily, text=fsgray, align=left, anchor=west},
-  arr/.style={-{Latex[length=1.4mm,width=1.05mm]}, line width=0.4pt, draw=fsblue!70},
+% Context-tree page pool as an architecture, not a worked example.
+\tikzset{
+  fmbadge/.style={circle,draw=#1!70!black,fill=#1,text=white,
+    font=\tiny\sffamily\bfseries,inner sep=0pt,minimum size=0.34cm},
+  fmcard/.style={draw=#1!65,fill=#1!8,rounded corners=1.6pt,align=center,
+    inner sep=2.2pt,font=\tiny\sffamily,line width=0.45pt},
+  pg/.style 2 args={draw=#1,fill=#2,rounded corners=1.4pt,align=center,
+    font=\tiny\sffamily,inner sep=1.2pt,minimum width=1.18cm,
+    minimum height=0.78cm,line width=0.45pt},
+  fp/.style={draw=fsgray,fill=black!5,rounded corners=1.2pt,align=center,
+    font=\tiny\sffamily,inner sep=1pt,minimum width=0.78cm,
+    minimum height=0.42cm,line width=0.35pt,text=black!70},
+  note/.style={font=\tiny\sffamily,text=black!58},
+  hdr/.style={font=\scriptsize\sffamily\bfseries},
+  fmdata/.style={-{Latex[length=1.45mm]},line width=0.5pt,draw=fsblue!75},
+  fmfeed/.style={densely dashed,-{Latex[length=1.45mm]},line width=0.52pt},
   flink/.style={{Latex[length=1.15mm,width=0.85mm]}-{Latex[length=1.15mm,width=0.85mm]},
-                line width=0.35pt, draw=fsgray},
-  alias/.style={densely dashed, line width=0.4pt, draw=fsblue!55},
-]
-\path (0,0) rectangle (16.55,11.55);
-
-% ===================== (a) after fork =====================
-\node[font=\scriptsize\bfseries, anchor=west] at (0.05,11.32)
-  {(a) After \texttt{fork}$(u)$: three children alias one trunk};
-
-% node cards
-\node[card, draw=fsblue, fill=fslight] (nu) at (1.72,10.15)
-  {\textbf{node $u$}\quad Commit\quad $g{=}1$\\
-   $\pi{=}\bot$\quad $\mathrm{alias\_len}{=}0$\\
-   maps pages $0,1$};
-\node[card, draw=fsorange!80!black, fill=fsspec] (nv1) at (5.15,10.15)
-  {\textbf{node $v_1$}\quad Spec\quad $g{=}1$\\
-   $\pi{=}u$\quad $\mathrm{alias\_len}{=}8$\\
-   $\uparrow\{0,1\}$ $+$ page $5$};
-\node[card, draw=fsorange!80!black, fill=fsspec] (nv2) at (8.58,10.15)
-  {\textbf{node $v_2$}\quad Spec\quad $g{=}1$\\
-   $\pi{=}u$\quad $\mathrm{alias\_len}{=}8$\\
-   $\uparrow\{0,1\}$ $+$ page $6$};
-\node[card, draw=fsgreen!55!black, fill=fscommit] (nvs) at (12.02,10.15)
-  {\textbf{node $v^\star$}\quad Spec\quad $g{=}1$\\
-   $\pi{=}u$\quad $\mathrm{alias\_len}{=}8$\\
-   $\uparrow\{0,1\}$ $+$ pages $8,9$};
-\node[note] at (14.05,10.35) {\texttt{fork} writes\\two words and\\increfs. No new\\trunk id.};
-
-% publish index
-\node[lab, text=fsblue] at (0.08,8.72) {Publish index $H$};
-\draw[fsblue!35, fill=fslight, rounded corners=1pt] (0.08,7.05) rectangle (5.35,8.48);
-\node[hrow, font=\tiny\sffamily\bfseries, text=fsblue] at (0.18,8.28) {hash key \hfill page};
-\draw[fsblue!30] (0.18,8.12) -- (5.22,8.12);
-\node[hrow] at (0.18,7.90) {$h(\bot,\texttt{ABCD})$ \hfill $0$ \quad pub};
-\node[hrow] at (0.18,7.62) {$h(0,\texttt{EFGH})$ \hfill $1$ \quad pub};
-\node[hrow, text=fsorange!80!black] at (0.18,7.30) {spec pages $5,6,8,9$ \hfill $\notin H$};
-
-% spine pages
-\node[lab, text=fsblue] at (5.55,8.72) {Page pool};
-\node[note] at (7.35,8.72) {live spine, $\mathrm{ref}{=}4$, not on the free list};
-
-\node[page, draw=fsblue, fill=fsblue!12] (p0) at (6.45,7.72)
-  {\textbf{ID 0}\\ \texttt{ABCD}\\ $\mathrm{ref}{=}4$\\ RO $\cdot$ pub};
-\node[page, draw=fsblue, fill=fsblue!12] (p1) at (8.05,7.72)
-  {\textbf{ID 1}\\ \texttt{EFGH}\\ $\mathrm{ref}{=}4$\\ RO $\cdot$ pub};
-\draw[alias] (5.15,9.52) -- (p0.north);
-\draw[alias] (8.58,9.52) -- (p1.north);
-\draw[alias] (11.20,9.52) -- (p1.north east);
-
-% private residuals
-\node[note, text=fsorange!80!black] at (5.55,6.85) {private residuals, $\mathrm{ref}{=}1$, hash $=\emptyset$};
-\node[page, draw=fsorange!80!black, fill=fsspec] (p5) at (6.45,6.05)
-  {\textbf{ID 5}\\ \texttt{IJkl}\\ $\mathrm{ref}{=}1$\\ $v_1$ $\cdot$ spec};
-\node[page, draw=fsorange!80!black, fill=fsspec] (p6) at (8.05,6.05)
-  {\textbf{ID 6}\\ \texttt{MNOP}\\ $\mathrm{ref}{=}1$\\ $v_2$ $\cdot$ spec};
-\node[page, draw=fsgreen!55!black, fill=fscommit] (p8) at (9.65,6.05)
-  {\textbf{ID 8}\\ \texttt{QRST}\\ $\mathrm{ref}{=}1$\\ $v^\star$ full};
-\node[page, draw=fsorange!80!black, fill=fsspec] (p9) at (11.25,6.05)
-  {\textbf{ID 9}\\ \texttt{UV}$\cdot\cdot$\\ $\mathrm{ref}{=}1$\\ partial tail};
-
-% free list
-\node[lab, text=fsgray] at (5.55,5.28) {Free list};
-\node[note] at (7.20,5.28) {$\mathrm{num\_free}{=}4$\quad doubly linked, $\mathrm{ref}{=}0$ only};
-\node[freep] (f7) at (6.30,4.48) {\textbf{ID 7}\\ Head};
-\node[freep] (f4) at (7.70,4.48) {\textbf{ID 4}\\ free};
-\node[freep] (f3) at (9.10,4.48) {\textbf{ID 3}\\ free};
-\node[freep] (f2) at (10.50,4.48) {\textbf{ID 2}\\ Tail};
-\draw[flink] (f7) -- (f4);
-\draw[flink] (f4) -- (f3);
-\draw[flink] (f3) -- (f2);
-
-\node[note, text width=4.6cm] at (12.15,6.55)
-  {A write with $\mathrm{ref}{>}1$ CoW-copies\\
-   only the valid rows of that page.\\
-   \texttt{fork} does not probe $H$.\\
-   Spec frames stay unpublished.};
-
-% ===================== (b) after LCP =====================
-\draw[fsblue!20] (0.05,3.95) -- (16.45,3.95);
-\node[font=\scriptsize\bfseries, anchor=west] at (0.05,3.72)
-  {(b) After LCP commit of $v^\star$ and abort of $v_1,v_2$};
-
-\node[card, draw=fsblue, fill=fslight, text width=2.85cm] at (1.58,2.78)
-  {\textbf{$u$}\quad Commit\quad $g{=}2$\\
-   maps $0,1$ \quad gen bump};
-\node[card, draw=fsgray, fill=black!5, text=fsgray, densely dashed, text width=2.85cm] at (4.62,2.78)
-  {\textbf{$v_1$}\quad Dead\\
-   page $5$ off the refcount};
-\node[card, draw=fsgray, fill=black!5, text=fsgray, densely dashed, text width=2.85cm] at (7.66,2.78)
-  {\textbf{$v_2$}\quad Dead\\
-   page $6$ off the refcount};
-\node[card, draw=fsgreen!60!black, fill=fscommit, text width=2.85cm] at (10.70,2.78)
-  {\textbf{$v^\star$}\quad Commit\quad $g{=}2$\\
-   $\uparrow\{0,1\}{+}8,9$ kept};
-
-\node[lab, text=fsblue] at (0.08,1.72) {$H$ after publish};
-\draw[fsblue!35, fill=fslight, rounded corners=1pt] (0.08,0.08) rectangle (4.55,1.58);
-\node[hrow] at (0.18,1.38) {$h(\bot,\texttt{ABCD})$ \hfill $0$};
-\node[hrow] at (0.18,1.10) {$h(0,\texttt{EFGH})$ \hfill $1$};
-\node[hrow, text=fsgreen!40!black] at (0.18,0.82) {$h(1,\texttt{QRST})$ \hfill $8$ \quad new};
-\node[hrow, text=fsorange!80!black] at (0.18,0.52) {page $9$ partial \hfill $\notin H$};
-\node[hrow, text=fsgray] at (0.18,0.26) {pages $5,6$ never inserted};
-
-\node[page, draw=fsblue, fill=fsblue!12] (q0) at (5.55,0.85)
-  {\textbf{ID 0}\\ \texttt{ABCD}\\ $\mathrm{ref}{=}2$\\ stays live};
-\node[page, draw=fsblue, fill=fsblue!12] (q1) at (7.10,0.85)
-  {\textbf{ID 1}\\ \texttt{EFGH}\\ $\mathrm{ref}{=}2$\\ stays live};
-\node[page, draw=fsgreen!60!black, fill=fscommit] (q8) at (8.65,0.85)
-  {\textbf{ID 8}\\ \texttt{QRST}\\ $\mathrm{ref}{=}1$\\ now in $H$};
-\node[page, draw=fsorange!75!black, fill=fsspec] (q9) at (10.20,0.85)
-  {\textbf{ID 9}\\ \texttt{UV}$\cdot\cdot$\\ $\mathrm{ref}{=}1$\\ still out};
-
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (11.15,1.72)
-  {free list \quad $\mathrm{num\_free}{=}6$};
-\node[freep, text width=0.72cm, minimum height=0.62cm] (g7) at (11.55,0.95) {\textbf{7}};
-\node[freep, text width=0.72cm, minimum height=0.62cm] (g4) at (12.45,0.95) {\textbf{4}};
-\node[freep, text width=0.72cm, minimum height=0.62cm] (g3) at (13.35,0.95) {\textbf{3}};
-\node[freep, text width=0.72cm, minimum height=0.62cm] (g2) at (14.25,0.95) {\textbf{2}};
-\node[freep, draw=fsorange!60, fill=fsspec, text width=0.72cm, minimum height=0.62cm] (g5) at (15.15,0.95) {\textbf{5}};
-\node[freep, draw=fsorange!60, fill=fsspec, text width=0.72cm, minimum height=0.62cm] (g6) at (16.05,0.95) {\textbf{6}};
-\draw[flink] (g7) -- (g4);
-\draw[flink] (g4) -- (g3);
-\draw[flink] (g3) -- (g2);
-\draw[flink] (g2) -- (g5);
-\draw[flink] (g5) -- (g6);
-\node[font=\tiny\sffamily, text=fsgray] at (11.55,0.42) {Head};
-\node[font=\tiny\sffamily, text=fsgray] at (16.05,0.42) {Tail};
-\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=west] at (11.15,1.48)
-  {tail gains aborted residuals $5,6$ only};
+    line width=0.38pt,draw=fsgray},
+  tbox/.style={draw=#1!70!black,fill=#1!10,rounded corners=1.2pt,align=center,
+    font=\tiny\sffamily,inner sep=1.4pt,line width=0.4pt},
+}
+\begin{tikzpicture}[x=1cm,y=1cm,font=\sffamily,
+  >=Latex,line cap=round,line join=round]
+\path (-0.02,-0.40) rectangle (18.30,6.95);
+% ========================== zones ==========================
+\fill[black!3.5,rounded corners=5pt] (0.04,0.06) rectangle (6.12,6.62);
+\fill[fsblue!5,rounded corners=5pt] (6.30,0.06) rectangle (18.22,6.62);
+\draw[black!22,dashed,dash pattern=on 1.2pt off 1.4pt,line width=0.5pt]
+  (6.21,0.16) -- (6.21,6.48);
+\node[anchor=west,hdr,text=fsgray] at (0.16,6.46)
+  {LOGICAL \(\cdot\) TREE VERBS \textnormal{\tiny\ ($O(1)$ metadata)}};
+\node[anchor=west,hdr,text=fsblue] at (6.46,6.46)
+  {PHYSICAL \(\cdot\) FRAME POOL \textnormal{\tiny\ (alias, refcount, hash, free list)}};
+% ===================== 1. request table =====================
+\fill[white,rounded corners=2.5pt] (0.20,5.02) rectangle (5.96,6.28);
+\fill[fsblue!16,rounded corners=2.5pt] (0.20,5.96) rectangle (5.96,6.28);
+\fill[fsblue!16] (0.20,5.96) rectangle (5.96,6.08);
+\draw[fsblue!65,rounded corners=2.5pt,line width=0.5pt] (0.20,5.02) rectangle (5.96,6.28);
+\node[fmbadge=fsblue] at (0.44,6.12) {1};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.68,6.12)
+  {Request table \(\sigma_u\)};
+\node[tbox=fsblue,minimum width=0.70cm,minimum height=0.32cm] (uu) at (1.35,5.74) {\(u\)};
+\node[tbox=fsorange,minimum width=0.78cm,minimum height=0.32cm] (v1) at (0.58,5.30) {\(\rho_1\)};
+\node[tbox=fsgreen,minimum width=0.78cm,minimum height=0.32cm] (vs) at (1.52,5.30) {\(\rho_\star\)};
+\node[tbox=fsgray,minimum width=0.62cm,minimum height=0.32cm] (vk) at (2.36,5.30) {\(\cdots\)};
+\draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (v1.north);
+\draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (vs.north);
+\draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (vk.north);
+\node[fmcard=fsblue,anchor=west,align=left,text width=2.55cm,minimum height=0.82cm]
+  at (3.15,5.46)
+  {\(\sigma_u{=}(\mathrm{parent},\,\mathrm{alias\_len},\,\rho)\)\\[1pt]
+   mode, generation \(g_u\)\\[1pt]
+   spec \(\notin\) sampler\\[1pt]
+   \(\mathrm{ref}(p){=}\#\) live mappers};
+% ===================== 2. fork =====================
+\fill[white,rounded corners=2.5pt] (0.20,3.78) rectangle (5.96,4.90);
+\fill[fsblue!16,rounded corners=2.5pt] (0.20,4.58) rectangle (5.96,4.90);
+\fill[fsblue!16] (0.20,4.58) rectangle (5.96,4.70);
+\draw[fsblue!65,rounded corners=2.5pt,line width=0.5pt] (0.20,3.78) rectangle (5.96,4.90);
+\node[fmbadge=fsblue] at (0.44,4.74) {2};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.68,4.74)
+  {\texttt{fork}\((u)\): two words, \(O(1)\) in \(L\)};
+\node[fmcard=fsblue,minimum width=1.62cm,minimum height=0.44cm] (cp) at (1.20,4.24)
+  {\(\mathrm{parent}\leftarrow\sigma_u\)};
+\node[fmcard=fsblue,minimum width=1.70cm,minimum height=0.44cm] (ca) at (3.08,4.24)
+  {\(\mathrm{alias\_len}\leftarrow|x_u|\)};
+\node[fmcard=fsorange,minimum width=1.42cm,minimum height=0.44cm] (ci) at (4.98,4.24)
+  {incref trunk};
+\draw[fmdata] (cp) -- (ca);
+\draw[fmdata] (ca) -- (ci);
+\node[note] at (3.08,3.94)
+  {no memcpy of \(L\)\quad\(\cdot\)\quad no \(H\) probe\quad\(\cdot\)\quad CoW copies valid rows};
+% ===================== 6. LCP =====================
+\fill[white,rounded corners=2.5pt] (0.20,2.00) rectangle (5.96,3.66);
+\fill[fsgreen!18,rounded corners=2.5pt] (0.20,3.34) rectangle (5.96,3.66);
+\fill[fsgreen!18] (0.20,3.34) rectangle (5.96,3.46);
+\draw[fsgreen!60!black,rounded corners=2.5pt,line width=0.5pt] (0.20,2.00) rectangle (5.96,3.66);
+\node[fmbadge=fsgreen] at (0.44,3.50) {6};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.68,3.50)
+  {LCP commit publishes the winner};
+\node[fmcard=fsgreen,minimum width=5.40cm,minimum height=0.38cm] at (3.08,3.08)
+  {\(v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)\)\quad CoW-split if mid-page};
+\node[fmcard=fsgreen,minimum width=5.40cm,minimum height=0.38cm] at (3.08,2.64)
+  {full blocks \(\rightarrow H\);\quad partial tail stays unpublished};
+\node[fmcard=fspurple,minimum width=5.40cm,minimum height=0.38cm] at (3.08,2.20)
+  {\(g\leftarrow g{+}1\)\quad drop jobs tagged \(g\neq g_u\)};
+% ===================== 7. abort =====================
+\fill[white,rounded corners=2.5pt] (0.20,0.20) rectangle (5.96,1.88);
+\fill[fsorange!18,rounded corners=2.5pt] (0.20,1.56) rectangle (5.96,1.88);
+\fill[fsorange!18] (0.20,1.56) rectangle (5.96,1.68);
+\draw[fsorange!70,rounded corners=2.5pt,line width=0.5pt] (0.20,0.20) rectangle (5.96,1.88);
+\node[fmbadge=fsorange] at (0.44,1.72) {7};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.68,1.72)
+  {\texttt{abort}: residual refcount only};
+\node[fmcard=fsorange,minimum width=5.40cm,minimum height=0.40cm] at (3.08,1.26)
+  {decref pages mapped only by the dead subtree};
+\node[fmcard=fsorange,minimum width=5.40cm,minimum height=0.40cm] at (3.08,0.78)
+  {\(M_{\mathrm{spine}}{=}b(L{+}\ell_\star)\)\quad free \(b\ell_i\), not \(b(L{+}\ell_i)\)};
+\node[note] at (3.08,0.40) {trunk frames stay live};
+% ===================== 3. shared trunk + private residual =====================
+\fill[fsblue!7,rounded corners=3pt] (6.42,3.78) rectangle (18.10,6.28);
+\draw[fsblue!45,rounded corners=3pt,line width=0.5pt] (6.42,3.78) rectangle (18.10,6.28);
+\node[fmbadge=fsblue] at (6.66,6.08) {3};
+\node[anchor=west,font=\tiny\sffamily] at (6.90,6.08)
+  {\textbf{One physical trunk, private residuals}\quad \(\mathrm{ref}(\mathrm{trunk}){=}\#\mathrm{live}\)};
+\node[pg={fsblue}{fslight}] at (7.30,5.42) {trunk\\[-1pt]\(L\)\\[-1pt]RO};
+\node[pg={fsblue}{fslight}] at (8.62,5.42) {\(\cdots\)\\[-1pt]shared\\[-1pt]in \(H\)};
+\node[pg={fsorange!80!black}{fsspec}] at (10.30,5.42) {\(\rho_i\)\\[-1pt]private\\[-1pt]\(\mathrm{ref}{=}1\)};
+\node[pg={fsorange!80!black}{fsspec}] at (11.62,5.42) {\(\cdots\)\\[-1pt]\(\mathrm{hash}{=}\emptyset\)};
+\node[pg={fsorange!80!black}{fsspec},densely dashed] at (12.94,5.42) {tail\\[-1pt]\(n{<}P\)\\[-1pt]partial};
+\node[fmcard=fsblue,align=left,text width=3.55cm,minimum height=1.15cm,anchor=west]
+  at (14.05,4.85)
+  {child aliases \(x_u\), allocates only \(\rho\)\\[1pt]
+   write, \(\mathrm{ref}{>}1\): copy valid rows\\[1pt]
+   \texttt{fork} does not allocate a new trunk};
+\node[fmcard=fsblue,text width=11.15cm,minimum height=0.42cm] at (12.20,4.12)
+  {alias is a pointer, not a copy\qquad \(\mathrm{ref}(p)\) tracks every non-dead \(\sigma\) that maps \(p\)};
+% ===================== 4. hash index =====================
+\fill[fsgreen!8,rounded corners=3pt] (6.42,2.00) rectangle (18.10,3.66);
+\draw[fsgreen!50!black,rounded corners=3pt,line width=0.5pt] (6.42,2.00) rectangle (18.10,3.66);
+\node[fmbadge=fsgreen] at (6.66,3.46) {4};
+\node[anchor=west,font=\tiny\sffamily] at (6.90,3.46)
+  {\textbf{Publish index \(H\)}\quad full committed blocks only};
+\node[fmcard=fsgreen,minimum width=5.15cm,minimum height=0.42cm] (hk) at (9.20,2.95)
+  {\(h(\mathrm{parent},\,\mathrm{block},\,\mathrm{extra})\rightarrow\mathrm{page}\)};
+\node[fmcard=fsorange,minimum width=4.55cm,minimum height=0.42cm] (hu) at (14.85,2.95)
+  {spec and partial \(\notin H\)};
+\draw[fmdata,draw=fsgreen!55!black] (hk) -- (hu);
+\node[fmcard=fsgreen,text width=11.15cm,minimum height=0.42cm] at (12.20,2.32)
+  {LCP inserts the winner's full blocks;\ a later session can hash-hit them;\ speculative frames stay at \(\mathrm{hash}{=}\emptyset\)};
+% ===================== 5. free list =====================
+\fill[black!3,rounded corners=3pt] (6.42,0.20) rectangle (18.10,1.88);
+\draw[fsgray!70,rounded corners=3pt,line width=0.5pt] (6.42,0.20) rectangle (18.10,1.88);
+\node[fmbadge=fsgray] at (6.66,1.68) {5};
+\node[anchor=west,font=\tiny\sffamily] at (6.90,1.68)
+  {\textbf{Free list}\quad doubly linked, \(\mathrm{ref}{=}0\) only};
+\node[fp] (fh) at (7.55,1.12) {Head};
+\node[fp] (fa) at (8.70,1.12) {free};
+\node[fp] (fb) at (9.85,1.12) {\(\cdots\)};
+\node[fp] (ft) at (11.00,1.12) {Tail};
+\draw[flink] (fh) -- (fa);
+\draw[flink] (fa) -- (fb);
+\draw[flink] (fb) -- (ft);
+\node[fmcard=fsblue,minimum width=5.35cm,minimum height=0.40cm] at (14.85,1.12)
+  {\texttt{fork} pops frames for \(\rho\) only};
+\node[fmcard=fsorange,minimum width=11.15cm,minimum height=0.40cm] at (12.20,0.52)
+  {\texttt{abort} splices dead residuals onto the tail;\ trunk ids are not returned};
+% ===================== cross-boundary =====================
+\draw[fmfeed,draw=fsblue,rounded corners=1.6pt]
+  (5.96,4.24) -- (6.32,4.24) -- (6.32,5.42) -- (6.62,5.42);
+\draw[fmfeed,draw=fsgreen!50!black]
+  (5.96,2.64) -- (6.58,2.64);
+\draw[fmfeed,draw=fsorange!80!black,rounded corners=1.6pt]
+  (5.96,0.78) -- (6.32,0.78) -- (6.32,0.52) -- (6.62,0.52);
+% ===================== legend =====================
+\node[anchor=west,font=\tiny\sffamily,text=black!58] at (0.06,-0.20)
+  {\textbf{---}\ frame / refcount\qquad
+   \textbf{- -}\ tree verb (\texttt{fork}, LCP, abort)\qquad
+   \textcolor{fsblue}{trunk / alias}\,\(\cdot\)\,%
+   \textcolor{fsorange}{speculative residual}\,\(\cdot\)\,%
+   \textcolor{fsgreen}{commit / publish}\,\(\cdot\)\,%
+   \textcolor{fspurple}{generation}\,\(\cdot\)\,%
+   \textcolor{fsgray}{free / dead}\qquad
+   dashed edge \(=\) alias, not a copy};
 \end{tikzpicture}

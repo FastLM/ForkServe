@@ -244,20 +244,14 @@ FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & --- \\
 \end{tabular}
 \end{table}
 
-\paragraph{What transfers.}
-\Cref{tab:multi,fig:eval-multi} separate storage from stop.
-Recompute sits at $2.9\times$ APC on GSM8K ($4464$ vs.\ $1512$); the tree then cuts APC to $0.72$--$0.75\times$ on every family, and ForkServe+ does not move the peak.
-The $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ gap is stable across families and tensor width: it depends on $k$ and residual length, not on the weights.
-Game24 is lower ($0.57$--$0.61$) because trunks are short.
-ForkServe accuracy tracks APC.
-\Cref{fig:eval-hist} overlays the per-item decode-length histograms that produce those e2e numbers.
-On GSM8K, ForkServe+ left-shifts Qwen3-4B ($\mu{:}\,242{\to}180$); Llama-3-8B barely moves ($141{\to}132$).
-Game24 piles at the $512$ budget on every family: the stop list does not fire, matching the e2e plateau.
-\Cref{tab:r1stop} stops only when the last non-empty line is a finished \texttt{\#\#\#\#} or a closed \texttt{\textbackslash boxed}.
-On DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$, $\mathrm{tp}{=}2$) GSM8K peak stays $0.73\times$ APC.
-ForkServe+ then scores $18/32$ (APC $16/32$) on DeepSeek-R1 and $22/32$ (APC $23/32$) on Llama-3-8B, and drops to $6/32$ (APC $11/32$) on Mistral-7B.
-Decode tokens fall to $0.77\times$, $0.31\times$, and $0.41\times$ APC.
-Game24 peaks stay $0.56$--$0.60\times$ APC; success stays at most $1/32$ because $D{=}256$ does not finish an equation.
+\paragraph{Peak occupancy.}
+APC stores the shared trunk together with every residual, so its occupancy is the copy-on-write term $M_{\mathrm{APC}}=M_{\mathrm{CoW}}=b\bigl(L+\sum_i\ell_i\bigr)$ from \eqref{eq:mem}, while the tree stores only the committed spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+The ratio of these two terms cancels $b$ and equals $(L+\ell_\star)/(L+\sum_i\ell_i)$, so it depends on $k$ and the lengths $(L,\ell_\star)$ rather than on the weights or the tensor width.
+When the residuals have similar length, the ratio simplifies to $(L+\ell)/(L+k\ell)$ and decreases as $L/\ell$ decreases.
+\Cref{tab:multi,fig:eval-multi} shows this pattern: a long trunk on GSM8K gives $0.72$--$0.75$, and a shorter trunk on Game24 gives $0.57$--$0.61$.
+Relative to recompute, which stores the cloned occupancy $M_{\mathrm{clone}}$, the spine is $0.25\times$.
+ForkServe+ keeps the same ratio, since an answer marker shortens only the tokens that decode emits, and end-to-end latency drops only when that marker appears before the budget.
+Accuracy remains at the APC level, so the lower peak does not come from changing the committed answer.
 
 \begin{figure*}[t]
 \centering
@@ -315,5 +309,4 @@ Best storage in green.}
 \end{tabular}
 \end{table}
 
-HumanEval wrap+recovery ($k{=}2$) keeps peak $0.90$ / $0.89$ / $0.95$ of APC on Llama-3-8B, Mistral-7B, and Qwen3-14B.
-Mistral-7B pass@1 is $0.350$ ($14/40$) on recompute, APC, and \sys at both tensor widths.
+HumanEval ($k{=}2$) leaves less to share, so $M_{\mathrm{spine}}$ stays near $M_{\mathrm{APC}}$, and pass@1 does not move across recompute, APC, and \sys.
