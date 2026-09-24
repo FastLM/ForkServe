@@ -122,16 +122,16 @@ Percentages are the share of the stacked live tokens.}
 \fi
 
 \paragraph{Concurrency from measured KV.}
-Substituting DeepSeek-R1 GSM8K peaks ($1563$ APC tokens, $1163$ \sys tokens) into an $8$\,GiB pool in \eqref{eq:theta} gives $37$ concurrent trees for APC and $50$ for \sys.
-\Cref{fig:eval-slo} sweeps offered QPS: under a $1$\,s P99 \ttft{} constraint the same model admits $192$ QPS for APC and $256$ for the pruned tree, and saturated decode throughput rises from $23680$ to $32000$ tokens/s (\gain{$+35\%$}).
+Substituting the latest DeepSeek-R1 GSM8K peaks ($761$ APC tokens, $561$ \sys tokens, $n{=}16$, $k{=}4$) into an $8$\,GiB pool in \eqref{eq:theta} gives $76$ concurrent trees for APC and $103$ for \sys.
+\Cref{fig:eval-slo} sweeps offered QPS: under a $1$\,s P99 \ttft{} constraint the same model admits $384$ QPS for APC and $512$ for the pruned tree, and saturated decode throughput rises from $48640$ to $65920$ tokens/s (\gain{$+35.5\%$}).
 This uses measured $M$, not the control-plane peak of \Cref{tab:app}.
 
 \begin{figure}[t]
 \centering
 \resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_slo}}
 \caption{\textbf{SLO sweep} from measured DeepSeek GSM8K peaks.
-Left: saturated tok/s plateaus at $C{\times}$decode-rate ($37$ vs.\ $50$ slots).
-Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app{} stays under it.}
+Left: saturated tok/s plateaus at $C{\times}$decode-rate ($76$ vs.\ $103$ slots).
+Right: APC crosses the $1$\,s P99 line at $448$ QPS; \app{} stays under it through $512$.}
 \label{fig:eval-slo}
 \end{figure}
 

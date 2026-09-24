@@ -198,30 +198,30 @@
 \fill[fsblue!50] (1.70,0.52) rectangle (7.55,0.84);
 \draw[fsblue!75, line width=0.4pt] (1.70,0.52) rectangle (7.55,0.84);
 \node[font=\tiny\sffamily, text=white] at (4.62,0.68) {$M_{\mathrm{APC}}$};
-\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (7.65,0.68) {$1563$ tok};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (7.65,0.68) {$761$ tok};
 
 \node[font=\tiny\sffamily, anchor=east] at (1.58,0.26) {FS};
 \fill[black!5] (1.70,0.10) rectangle (7.55,0.42);
 \draw[fsgreen!45!black, line width=0.4pt, densely dashed] (1.70,0.10) rectangle (7.55,0.42);
-\fill[fsgreen!60!black] (1.70,0.10) rectangle ({1.70+0.74*5.85},0.42);
+\fill[fsgreen!60!black] (1.70,0.10) rectangle ({1.70+0.737*5.85},0.42);
 \node[font=\tiny\sffamily, text=white] at ({1.70+0.37*5.85},0.26) {$M_{\mathrm{spine}}$};
 \node[font=\tiny\sffamily, text=fsgreen!30!black] at ({1.70+0.87*5.85},0.26) {free};
-\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (7.65,0.26) {$1163$ tok};
+\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (7.65,0.26) {$561$ tok};
 \draw[fsgray!40, line width=0.4pt] (9.02,0.08) -- (9.02,1.05);
 
-% slots: max bar 50 → width 5.20cm, origin 10.15
+% slots: max bar 103 → width 5.20cm, origin 10.15
 \node[font=\tiny\sffamily\bfseries, text=fsgreen!30!black, anchor=south west] at (9.20,0.90) {SLO slots $C$};
-\node[font=\tiny\sffamily, anchor=east] at (10.05,0.68) {37};
-\fill[fsblue!50] (10.15,0.52) rectangle ({10.15+37/50*5.20},0.84);
-\draw[fsblue!75, line width=0.4pt] (10.15,0.52) rectangle ({10.15+37/50*5.20},0.84);
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at ({10.25+37/50*5.20},0.68) {APC};
+\node[font=\tiny\sffamily, anchor=east] at (10.05,0.68) {76};
+\fill[fsblue!50] (10.15,0.52) rectangle ({10.15+76/103*5.20},0.84);
+\draw[fsblue!75, line width=0.4pt] (10.15,0.52) rectangle ({10.15+76/103*5.20},0.84);
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at ({10.25+76/103*5.20},0.68) {APC};
 
-\node[font=\tiny\sffamily, anchor=east] at (10.05,0.26) {50};
+\node[font=\tiny\sffamily, anchor=east] at (10.05,0.26) {103};
 \fill[fsgreen!60!black] (10.15,0.10) rectangle ({10.15+5.20},0.42);
 \draw[fsgreen!40!black, line width=0.4pt] (10.15,0.10) rectangle ({10.15+5.20},0.42);
-\fill[fsgreen!25] (10.15+37/50*5.20,0.10) rectangle ({10.15+5.20},0.42);
+\fill[fsgreen!25] (10.15+76/103*5.20,0.10) rectangle ({10.15+5.20},0.42);
 \node[font=\tiny\sffamily, text=white] at (12.35,0.26) {FS};
-\node[chip, draw=fsgreen!50!black, fill=fscommit, inner sep=1.1pt] at (15.72,0.26) {$+35\%$};
+\node[chip, draw=fsgreen!50!black, fill=fscommit, inner sep=1.1pt] at (15.72,0.26) {$+35.5\%$};
 
 \draw[arr] (2.4,7.52) -- (2.4,7.28);
 \node[font=\tiny\sffamily, text=fsgray, anchor=east] at (2.28,7.40) {\texttt{fork}};

@@ -13,4 +13,4 @@ Longest-common-prefix commit binds the prompt the harness actually presents.
 We prove that speculative tokens never enter the sampler, so committed outputs are identical to a baseline that prefills only committed tokens.
 A two-class scheduler admits speculative prefill only from the budget left after committed requests meet their latency margins, and cancels it when the commit conflicts.
 
-On Qwen3-14B GSM8K, \sys matches prefix-cache accuracy at $0.72\times$ the median peak KV, cuts modeled fan-out prefill by $74.72\%$ relative to that cache, and raises the concurrency a fixed pool can sustain by $35.14\%$.
+On Qwen3-14B GSM8K, \sys matches prefix-cache accuracy at $0.72\times$ the median peak KV, cuts modeled fan-out prefill by $74.72\%$ relative to that cache, and raises the concurrency a fixed pool can sustain by $35.53\%$.
