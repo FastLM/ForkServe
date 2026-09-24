@@ -1,0 +1,137 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  >=Latex,
+]
+\definecolor{Tr}{HTML}{7EB6D9}
+\definecolor{Rs}{HTML}{F4A582}
+\definecolor{Sp}{HTML}{66C2A5}
+\definecolor{Cl}{HTML}{B3B3B3}
+
+% Stacked occupancy over a batch. y-scale in tokens (GPU medians / control-plane shape).
+% Time: 0 open, 20 fork, 40 prefill, 60 abort, 80--100 decode.
+% (a) three systems on GSM8K 14B (measured peak: rec 4136, APC 1430, FS 1030).
+% (b) two workloads at n=40 (GSM8K APC 1512 / FS 1112; Game24 APC 1287 / FS 791).
+
+% ---- helper: one stacked panel ----
+% We inline 6 panels.
+
+% ===== (a) =====
+\node[font=\scriptsize\bfseries, anchor=west] at (0,5.55) {(a) Three systems, GSM8K $n{=}1319$ (one batch of eight)};
+
+% Per-panel y-scale so each stack fills (reference style). Peak is in the title.
+% -- Recompute, max 4.2k → 2.00cm --
+\begin{scope}[shift={(0,2.85)}]
+  \foreach \y/\lab in {0/0, 2.1/2k, 4.2/4k} {
+    \draw[black!12] (0,\y*0.476) -- (4.55,\y*0.476);
+    \node[font=\tiny, text=black!50, anchor=east] at (-0.08,\y*0.476) {\lab};
+  }
+  \fill[Cl] (0.15,0) -- (1.00,1.48) -- (1.90,1.55) -- (4.40,1.55) -- (4.40,0) -- cycle;
+  \fill[Rs] (1.00,1.48) -- (1.90,1.98) -- (4.40,1.98) -- (4.40,1.55) -- (1.90,1.55) -- cycle;
+  \node[font=\tiny] at (2.80,0.78) {$79.2\%$};
+  \node[font=\tiny, text=fsorange!80!black] at (2.80,1.76) {$20.8\%$};
+  \foreach \x/\lab in {0.15/0, 1.90/40, 4.40/100} {
+    \node[font=\tiny, text=black!50] at (\x,-0.22) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (2.25,2.10) {Recompute \quad peak $4136$};
+\end{scope}
+
+% -- APC, max 1.50k → 2.00cm --
+\begin{scope}[shift={(5.05,2.85)}]
+  \foreach \y/\lab in {0/0, 0.75/0.8k, 1.50/1.5k} {
+    \draw[black!12] (0,\y*1.333) -- (4.55,\y*1.333);
+    \node[font=\tiny, text=black!50, anchor=east] at (-0.08,\y*1.333) {\lab};
+  }
+  \fill[Tr] (0.15,0) -- (1.00,1.25) -- (1.90,1.37) -- (4.40,1.37) -- (4.40,0) -- cycle;
+  \fill[Rs] (1.00,1.25) -- (1.90,1.90) -- (4.40,1.90) -- (4.40,1.37) -- (1.90,1.37) -- cycle;
+  \node[font=\tiny] at (2.80,0.68) {$68.4\%$};
+  \node[font=\tiny, text=fsorange!80!black] at (2.80,1.64) {$31.6\%$};
+  \foreach \x/\lab in {0.15/0, 1.90/40, 4.40/100} {
+    \node[font=\tiny, text=black!50] at (\x,-0.22) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (2.25,2.10) {APC \quad peak $1430$};
+\end{scope}
+
+% -- FS, max 1.10k → 2.00cm --
+\begin{scope}[shift={(10.10,2.85)}]
+  \foreach \y/\lab in {0/0, 0.55/0.6k, 1.10/1.1k} {
+    \draw[black!12] (0,\y*1.818) -- (4.55,\y*1.818);
+    \node[font=\tiny, text=black!50, anchor=east] at (-0.08,\y*1.818) {\lab};
+  }
+  \fill[Tr] (0.15,0) -- (1.00,1.55) -- (1.90,1.55) -- (2.55,1.55) -- (4.40,1.70) -- (4.40,0) -- cycle;
+  \fill[Rs] (1.00,1.55) -- (1.90,1.95) -- (2.55,1.95) -- (2.55,1.55) -- cycle;
+  \fill[Sp] (2.55,1.55) -- (4.40,1.87) -- (4.40,1.70) -- cycle;
+  \node[font=\tiny] at (1.70,0.78) {$88.1\%$};
+  \node[font=\tiny, text=fsorange!80!black] at (2.15,1.76) {$11.9\%$};
+  \foreach \x/\lab in {0.15/0, 1.90/40, 4.40/100} {
+    \node[font=\tiny, text=black!50] at (\x,-0.22) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (2.25,2.10) {\sys{} \quad peak $1030$};
+\end{scope}
+
+% ===== (b) =====
+\node[font=\scriptsize\bfseries, anchor=west] at (0,2.35) {(b) Two workloads, $n{=}40$ (GSM8K vs.\ Game24)};
+
+% GSM8K APC vs FS stacked as two systems in one panel? Reference has 3 schedulers.
+% Three panels: APC / FS / FS+ for GSM8K (left cluster) is too many.
+% Do: GSM8K (APC+FS overlay stacked) | Game24 (APC+FS) | mix percentages
+% Cleaner: three panels APC, FS, FS+ but only two workloads as two stacked hues? 
+% Match reference: 3 panels = APC, FS, APP; each stacks GSM8K (bottom) + Game24 (top) as two "models"
+
+\begin{scope}[shift={(0,0)}]
+  \foreach \y in {0,0.8,1.6} {
+    \draw[black!12] (0,\y*0.95) -- (4.55,\y*0.95);
+    \node[font=\tiny, text=black!50, anchor=east] at (-0.08,\y*0.95) {\y k};
+  }
+  % APC: GSM8K 1.51 + Game24 1.29 as stacked share of a 2-workload mix
+  % Show occupancy of GSM8K (bottom teal) and Game24 (top orange) under APC
+  \fill[Tr] (0.15,0) -- (1.20,0.68) -- (2.20,0.72) -- (4.40,0.72) -- (4.40,0) -- cycle;
+  \fill[Rs] (0.15,0) -- (1.20,0.68) -- (2.20,1.34) -- (4.40,1.34) -- (4.40,0.72) -- (2.20,0.72) -- (1.20,0.68) -- cycle;
+  \node[font=\tiny] at (3.10,0.36) {$54.0\%$};
+  \node[font=\tiny, text=fsorange!80!black] at (3.10,1.02) {$46.0\%$};
+  \foreach \x/\lab in {0.15/0, 2.20/50, 4.40/100} {
+    \node[font=\tiny, text=black!50] at (\x,-0.20) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (2.25,1.68) {APC \quad $1512{+}1287$};
+\end{scope}
+
+\begin{scope}[shift={(5.05,0)}]
+  \foreach \y in {0,0.8,1.6} {
+    \draw[black!12] (0,\y*0.95) -- (4.55,\y*0.95);
+  }
+  \fill[Tr] (0.15,0) -- (1.20,0.50) -- (2.20,0.53) -- (4.40,0.53) -- (4.40,0) -- cycle;
+  \fill[Sp] (1.20,0.50) -- (2.20,0.91) -- (4.40,0.91) -- (4.40,0.53) -- (2.20,0.53) -- cycle;
+  \node[font=\tiny] at (3.10,0.26) {$58.4\%$};
+  \node[font=\tiny, text=fsgreen!30!black] at (3.10,0.72) {$41.6\%$};
+  \foreach \x/\lab in {0.15/0, 2.20/50, 4.40/100} {
+    \node[font=\tiny, text=black!50] at (\x,-0.20) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (2.25,1.68) {\sys{} \quad $1112{+}791$};
+\end{scope}
+
+\begin{scope}[shift={(10.10,0)}]
+  \foreach \y in {0,0.8,1.6} {
+    \draw[black!12] (0,\y*0.95) -- (4.55,\y*0.95);
+  }
+  % APP same M as FS (1112+791) but residuals drop earlier
+  \fill[Tr] (0.15,0) -- (1.00,0.50) -- (1.80,0.53) -- (4.40,0.53) -- (4.40,0) -- cycle;
+  \fill[Sp] (1.00,0.50) -- (1.80,0.82) -- (4.40,0.91) -- (4.40,0.53) -- (1.80,0.53) -- cycle;
+  \node[font=\tiny] at (3.10,0.26) {$58.4\%$};
+  \node[font=\tiny, text=fsgreen!30!black] at (3.10,0.72) {$41.6\%$};
+  \foreach \x/\lab in {0.15/0, 2.20/50, 4.40/100} {
+    \node[font=\tiny, text=black!50] at (\x,-0.20) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (2.25,1.68) {\app{} \quad same $M$, less $\Work$};
+\end{scope}
+
+% legend
+\fill[Cl] (0.15,-0.55) rectangle (0.38,-0.42);
+\node[font=\tiny, anchor=west] at (0.44,-0.485) {trunk clones};
+\fill[Tr] (2.35,-0.55) rectangle (2.58,-0.42);
+\node[font=\tiny, anchor=west] at (2.64,-0.485) {shared trunk};
+\fill[Rs] (4.85,-0.55) rectangle (5.08,-0.42);
+\node[font=\tiny, anchor=west] at (5.14,-0.485) {residuals / Game24};
+\fill[Sp] (8.05,-0.55) rectangle (8.28,-0.42);
+\node[font=\tiny, anchor=west] at (8.34,-0.485) {committed spine};
+\node[font=\tiny, text=black!55, anchor=west] at (11.15,-0.485)
+  {Time is the expand$\rightarrow$abort$\rightarrow$decode phase. Peaks are measured.};
+\end{tikzpicture}

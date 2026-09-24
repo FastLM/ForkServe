@@ -36,44 +36,85 @@
 \node[head] at (5.76,7.10) {2\quad Prefill pruning};
 \node[head] at (11.42,7.10) {3\quad Prefill / decode};
 
-% ---------- 1. trunk + fork + LCP ----------
-\node[tinyL, anchor=west, text=fsblue] at (0.16,6.68) {trunk $L$, RO pages, $\sigma_u$};
-\foreach \i in {0,...,7} {
-  \fill[fsblue!32] ({0.24+\i*0.58},6.20) rectangle ({0.72+\i*0.58},6.50);
-  \draw[fsblue, line width=0.4pt] ({0.24+\i*0.58},6.20) rectangle ({0.72+\i*0.58},6.50);
-}
-\draw[fsblue, line width=0.95pt] (0.24,6.04) -- (4.80,6.04);
-\foreach \i in {0,...,7} {
-  \draw[fsblue, line width=0.4pt] ({0.48+\i*0.58},6.20) -- ({0.48+\i*0.58},6.04);
-}
+% ---------- 1. σ_u frames, alias rail, child tables ----------
+\draw[fsblue!45, line width=0.5pt, rounded corners=1.2pt, fill=fslight]
+  (0.14,6.02) rectangle (5.01,6.86);
+\node[font=\tiny\sffamily\bfseries, text=fsblue, anchor=west] at (0.22,6.74)
+  {$\sigma_u$};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (0.62,6.74)
+  {$(\mathrm{parent},\,\mathrm{alias\_len},\,\rho)$};
 
-\node[chip, draw=fsblue!70, fill=fslight, inner sep=1.8pt, align=center] (swap) at (2.52,5.58)
-  {pointer swap\\[-1pt]{\tiny $\mathrm{ref}{=}k$ \textperiodcentered\ no memcpy}};
-\draw[forkline] (2.52,6.04) -- (swap.north);
+\fill[fsblue!78] (0.22,6.48) rectangle (3.36,6.60);
+\node[font=\tiny\sffamily, text=white] at (1.79,6.54) {RO trunk $L$};
+\foreach \i in {0,...,4} {
+  \fill[fsblue!28] ({0.22+\i*0.52},6.16) rectangle ({0.68+\i*0.52},6.48);
+  \draw[fsblue, line width=0.4pt] ({0.22+\i*0.52},6.16) rectangle ({0.68+\i*0.52},6.48);
+  \node[font=\tiny\sffamily, text=fsblue] at ({0.45+\i*0.52},6.32) {\i};
+}
+\fill[white] (2.82,6.16) rectangle (3.36,6.48);
+\fill[fsblue!40] (2.82,6.16) rectangle (3.06,6.48);
+\draw[fsblue, densely dashed, line width=0.4pt] (3.06,6.16) -- (3.06,6.48);
+\draw[fsblue, line width=0.4pt] (2.82,6.16) rectangle (3.36,6.48);
+\node[font=\tiny\sffamily, text=fsblue] at (2.94,6.32) {5};
+\node[chip, draw=fsblue!55, fill=white, inner sep=1.0pt, anchor=west] at (3.48,6.38)
+  {$\mathrm{ref}{=}k$};
 
-\node[leaf, draw=fsgreen!65!black, fill=fscommit] (bs) at (0.95,4.28)
-  {$b_\star$\\[-1pt]{\tiny keep}};
-\node[leaf, draw=fsgray, fill=black!4, densely dashed, text=fsgray] (b1) at (2.52,4.28)
-  {$b_1$\\[-1pt]{\tiny drop}};
-\node[leaf, draw=fsorange!80!black, fill=fsspec] (b2) at (4.10,4.28)
-  {$b_2$\\[-1pt]{\tiny prefix}};
-\coordinate (stem) at (2.52,4.92);
+% ticks from every frame into one alias rail, then fork
+\foreach \i in {0,...,4} {
+  \draw[fsblue!75, line width=0.4pt] ({0.45+\i*0.52},6.16) -- ({0.45+\i*0.52},5.78);
+}
+\draw[fsblue!75, line width=0.4pt] (3.09,6.16) -- (3.09,5.78);
+\draw[fsblue, line width=0.95pt] (0.22,5.78) -- (3.36,5.78);
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (3.48,5.78) {alias};
+
+\node[chip, draw=fsblue!70, fill=white, inner sep=1.4pt] (swap) at (2.52,5.28)
+  {\texttt{fork} $O(1)$};
+\draw[forkline] (2.52,5.78) -- (swap.north);
+
+% children: same frame ids (alias) + private ρ
+\node[inner sep=0, minimum width=1.44cm, minimum height=1.00cm] (bs) at (0.96,3.88) {};
+\node[inner sep=0, minimum width=1.44cm, minimum height=1.00cm] (b1) at (2.52,3.88) {};
+\node[inner sep=0, minimum width=1.44cm, minimum height=1.00cm] (b2) at (4.08,3.88) {};
+\draw[fsgreen!65!black, fill=fscommit, rounded corners=1.2pt, line width=0.45pt]
+  (bs.south west) rectangle (bs.north east);
+\draw[fsgray, fill=black!4, densely dashed, rounded corners=1.2pt, line width=0.45pt]
+  (b1.south west) rectangle (b1.north east);
+\draw[fsorange!80!black, fill=fsspec, rounded corners=1.2pt, line width=0.45pt]
+  (b2.south west) rectangle (b2.north east);
+\node[font=\tiny\sffamily] at (0.96,4.24) {$\sigma_\star$};
+\node[font=\tiny\sffamily, text=fsgray] at (2.52,4.24) {$\sigma_1$};
+\node[font=\tiny\sffamily] at (4.08,4.24) {$\sigma_2$};
+\foreach \x in {0.96,2.52,4.08} {
+  \foreach \j in {0,1,2} {
+    \draw[fsblue!60, densely dashed, line width=0.35pt]
+      ({\x-0.62+\j*0.26},3.86) rectangle ({\x-0.40+\j*0.26},4.10);
+    \node[font=\tiny\sffamily, text=fsblue] at ({\x-0.51+\j*0.26},3.98) {\j};
+  }
+}
+\fill[fsgreen!55] (1.18,3.86) rectangle (1.54,4.10);
+\fill[black!18] (2.74,3.86) rectangle (3.10,4.10);
+\fill[fsorange!45] (4.30,3.86) rectangle (4.66,4.10);
+\foreach \x in {1.36,2.92,4.48} {
+  \draw[fsblue!40, line width=0.3pt] ({\x-0.18},3.86) rectangle ({\x+0.18},4.10);
+}
+\node[font=\tiny\sffamily] at (1.36,3.98) {$\rho$};
+\node[font=\tiny\sffamily, text=fsgray] at (2.92,3.98) {$\rho$};
+\node[font=\tiny\sffamily] at (4.48,3.98) {$\rho$};
+\node[font=\tiny\sffamily, text=fsgreen!30!black] at (0.96,3.54) {keep};
+\node[font=\tiny\sffamily, text=fsgray] at (2.52,3.54) {drop};
+\node[font=\tiny\sffamily, text=fsorange!80!black] at (4.08,3.54) {prefix};
+
+% hangers from fork into each table; dashed guides from rail into σ_★ cells
+\coordinate (stem) at (2.52,4.58);
 \draw[forkline] (swap.south) -- (stem);
-\draw[forkline] (0.95,4.92) -- (4.10,4.92);
-\draw[forkline, fsgreen!55!black] (0.95,4.92) -- (bs.north);
-\draw[forkline, densely dashed, draw=fsgray] (2.52,4.92) -- (b1.north);
-\draw[forkline, draw=fsorange!80!black] (4.10,4.92) -- (b2.north);
+\draw[forkline] (0.96,4.58) -- (4.08,4.58);
+\draw[forkline, fsgreen!55!black] (0.96,4.58) -- (bs.north);
+\draw[forkline, densely dashed, draw=fsgray] (2.52,4.58) -- (b1.north);
+\draw[forkline, draw=fsorange!80!black] (4.08,4.58) -- (b2.north);
 
-\node[chip, draw=fsgreen!60!black, fill=fscommit, inner sep=1.6pt, align=center] (lcp) at (2.52,3.38)
-  {LCP commit $v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)$\\[-1pt]
-   {\tiny publish full blocks of $x_\star$; $g_u{\leftarrow}g_u{+}1$}};
-\draw[arr] (bs.south) -- ++(0,-0.18) -- (lcp.north);
-
-\node[font=\tiny\sffamily, align=left, anchor=north west, text=fsgray] at (0.16,2.88)
-  {One physical trunk; $k$ page-table aliases.\\
-   Spec pages unpublished until commit.\\
-   Abort decrefs only $\rho_i$ ($\Theta(\ell_i/P)$).\\
-   $M_{\mathrm{spine}}=b(L+\ell_\star)$.};
+\node[chip, draw=fsgreen!60!black, fill=fscommit, inner sep=1.5pt, align=center] (lcp) at (2.52,2.55)
+  {LCP $v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)$};
+\draw[arr] (bs.south) -- ++(0,-0.14) -- (lcp.north);
 
 % ---------- 2. richer APP filter ----------
 \node[chip, draw=fsblue!45, fill=fslight, minimum width=2.35cm] (inr) at (7.05,6.58) {$k$ residuals $\rho_i$};
@@ -135,7 +176,8 @@
   {$D^{+}=\sum_j\min(t_j,D)$};
 
 % tree exports residuals into APP; survivors take a bus into prefill
-\draw[arr] (5.15,6.58) -- (inr.west);
+\draw[arr] (b2.east) -- (5.38,3.88) -- (5.38,6.58) -- (inr.west);
+\node[font=\tiny\sffamily, text=fsblue, anchor=south] at (4.92,3.98) {$\rho$};
 \draw[arr] (mt.east) -- (10.62,2.58) -- (10.62,5.82) -- (11.52,5.82);
 \node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south west] at (8.70,2.22) {kept};
 
