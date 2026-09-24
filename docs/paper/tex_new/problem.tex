@@ -64,7 +64,7 @@ Hash-only prefill therefore helps the second session, not the first expand.
 
 \paragraph{Why stock P/D does not raise tokens/s.}
 DistServe/Splitwise isolate \ttft{} from ITL by running prefill and decode on different instances and moving KV through a connector ($\texttt{insert}$ non-blocking, $\texttt{drop\_select}$ blocking)~\cite{distserve,splitwise}.
-The stock connector ships every page the prefiller computed,
+The stock connector transfers the pages the prefiller computed,
 \begin{equation}
 \label{eq:xfer-stock}
 \Xfer_{\mathrm{PD}}=kL+\textstyle\sum_i\ell_i,
@@ -81,14 +81,14 @@ In all four cases the next call is drawn from a discrete set $\Br(u)$; existing 
 
 \begin{insight}[Prune before prefill]
 \label{ins:prune}
-APC reuses a trunk only after a hash hit; stock P/D ships whatever was computed.
-The missing verb is a per-residual decision $(\Work_i,\Xfer_i,a_i)$ issued \emph{before} a GPU kernel and \emph{before} \texttt{insert}.
+APC reuses a trunk only after a hash hit; stock P/D transfers the span that was computed.
+The missing operation is a per-residual decision $(\Work_i,\Xfer_i,a_i)$, issued \emph{before} a GPU kernel and \emph{before} \texttt{insert}.
 \end{insight}
 
-\begin{insight}[Fork, don't clone]
+\begin{insight}[Fork by reference]
 \label{ins:fork}
 On fan-out the trunk is typically several times the per-child residual.
-Materializing $k$ independent KV copies wastes $\Theta(k)$ HBM for tensors attention will read as identical.
+Materializing $k$ independent KV copies allocates $\Theta(k)$ redundant HBM for tensors that attention reads as identical.
 A location-addressed alias at \texttt{fork} makes a miss residual-only.
 \end{insight}
 

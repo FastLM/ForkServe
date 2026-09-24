@@ -1,50 +1,54 @@
 \begin{tikzpicture}[
   font=\scriptsize\sffamily,
-  spoke/.style={black!25, line width=0.3pt},
-  ring/.style={black!18, line width=0.3pt},
-  apc/.style={draw=APC, fill=APC, fill opacity=0.28, draw opacity=1, line width=0.7pt},
-  fs/.style={draw=FS, fill=FS, fill opacity=0.35, draw opacity=1, line width=0.7pt},
-  lab/.style={font=\tiny, inner sep=1pt},
+  spoke/.style={black!28, line width=0.3pt},
+  ring/.style={black!16, line width=0.3pt},
+  rec/.style={draw=Rec, fill=Rec, fill opacity=0.22, draw opacity=1, line width=0.65pt},
+  apc/.style={draw=APC, fill=APC, fill opacity=0.22, draw opacity=1, line width=0.65pt},
+  fs/.style={draw=FS, fill=FS, fill opacity=0.20, draw opacity=1, line width=0.7pt},
+  fsp/.style={draw=FSp, fill=FSp, fill opacity=0.16, draw opacity=1, line width=0.7pt},
+  lab/.style={font=\tiny, inner sep=0.6pt},
 ]
+\definecolor{Rec}{HTML}{8A8F55}
 \definecolor{APC}{HTML}{C48A3A}
 \definecolor{FS}{HTML}{D97B2F}
+\definecolor{FSp}{HTML}{4A2878}
 
-\newcommand{\radar}[3]{%
+\newcommand{\radar}[5]{%
   \begin{scope}[shift={(#1)}]
-    \foreach \r in {0.675,1.350}
-      \draw[ring] (90:\r) \foreach \k in {1,...,5} { -- ({90-\k*60}:\r) } -- cycle;
-    \foreach \k in {0,...,5}
-      \draw[spoke] (0,0) -- ({90-\k*60}:1.350);
-    \draw[apc] #2 -- cycle;
-    \draw[fs] #3 -- cycle;
-  \end{scope}%
-}
-\newcommand{\labs}[1]{%
-  \begin{scope}[shift={(#1)}]
-    \node[lab, anchor=south] at (90:1.58) {4B};
-    \node[lab, anchor=south west] at (30:1.58) {1.5B};
-    \node[lab, anchor=north west] at (-30:1.58) {14B};
-    \node[lab, anchor=north] at (-90:1.58) {L8B};
-    \node[lab, anchor=north east] at (-150:1.58) {M7B};
-    \node[lab, anchor=south east] at (150:1.58) {R1};
+    \foreach \r in {0.71,1.42}
+      \draw[ring] (90:\r) -- (-30:\r) -- (210:\r) -- cycle;
+    \foreach \a in {90,-30,210}
+      \draw[spoke] (0,0) -- (\a:1.42);
+    \draw[rec] #2 -- cycle;
+    \draw[apc] #3 -- cycle;
+    \draw[fs] #4 -- cycle;
+    \draw[fsp] #5 -- cycle;
+    \node[lab, anchor=south] at (90:1.58) {quality};
+    \node[lab, anchor=north west] at (-30:1.55) {KV};
+    \node[lab, anchor=north east] at (210:1.58) {e2e};
   \end{scope}%
 }
 
-\radar{0,0}{(0.000,1.350) -- (1.169,0.675) -- (1.169,-0.675) -- (0.000,-1.350) -- (-1.169,-0.675) -- (-1.169,0.675)}{(0.000,0.999) -- (0.865,0.499) -- (0.865,-0.499) -- (0.000,-0.986) -- (-0.877,-0.506) -- (-0.842,0.486)}
-\labs{0,0}
-\node[font=\tiny\bfseries, anchor=south] at (0,1.95) {(a) GSM8K peak / APC};
+\radar{0,0}%
+  {(0.000,1.420) -- (0.306,-0.177) -- (-0.930,-0.537)}%
+  {(0.000,1.382) -- (0.919,-0.530) -- (-0.964,-0.557)}%
+  {(0.000,1.362) -- (1.230,-0.710) -- (-0.963,-0.556)}%
+  {(0.000,1.325) -- (1.230,-0.710) -- (-1.230,-0.710)}
+\node[font=\tiny\bfseries] at (0,2.05) {(a) GSM8K};
 
-\radar{4.55,0}{(0.000,1.350) -- (1.169,0.675) -- (1.169,-0.675) -- (0.000,-1.350) -- (-1.169,-0.675) -- (-1.169,0.675)}{(0.000,0.824) -- (0.713,0.412) -- (0.713,-0.412) -- (0.000,-0.824) -- (-0.678,-0.391) -- (-0.666,0.385)}
-\labs{4.55,0}
-\node[font=\tiny\bfseries, anchor=south] at (4.55,1.95) {(b) Game24 peak / APC};
+\radar{4.7,0}%
+  {(0.000,1.150) -- (0.317,-0.183) -- (-1.201,-0.694)}%
+  {(0.000,1.420) -- (0.756,-0.437) -- (-1.225,-0.707)}%
+  {(0.000,1.343) -- (1.230,-0.710) -- (-1.230,-0.710)}%
+  {(0.000,1.074) -- (1.230,-0.710) -- (-1.227,-0.709)}
+\node[font=\tiny\bfseries] at (4.7,2.05) {(b) Game24};
 
-\radar{9.10,0}{(0.000,1.249) -- (0.263,0.152) -- (0.994,-0.574) -- (0.000,-0.844) -- (-0.585,-0.337) -- (-0.760,0.439)}{(0.000,1.181) -- (0.322,0.186) -- (0.965,-0.557) -- (0.000,-0.911) -- (-0.555,-0.321) -- (-0.760,0.439)}
-\labs{9.10,0}
-\node[font=\tiny\bfseries, anchor=south] at (9.10,1.95) {(c) GSM8K accuracy};
-
-\fill[APC] (2.55,-2.15) rectangle (2.78,-2.00);
-\node[lab, anchor=west] at (2.84,-2.07) {APC};
-\fill[FS] (4.15,-2.15) rectangle (4.38,-2.00);
-\node[lab, anchor=west] at (4.44,-2.07) {\sys};
-\node[lab, text=black!55] at (7.35,-2.07) {outer ring $=1$};
+\fill[Rec] (0.15,-2.15) rectangle (0.36,-2.01);
+\node[lab, anchor=west] at (0.40,-2.08) {recompute};
+\fill[APC] (1.55,-2.15) rectangle (1.76,-2.01);
+\node[lab, anchor=west] at (1.80,-2.08) {APC};
+\fill[FS] (2.55,-2.15) rectangle (2.76,-2.01);
+\node[lab, anchor=west] at (2.80,-2.08) {\sys};
+\fill[FSp] (4.15,-2.15) rectangle (4.36,-2.01);
+\node[lab, anchor=west] at (4.40,-2.08) {ForkServe+};
 \end{tikzpicture}

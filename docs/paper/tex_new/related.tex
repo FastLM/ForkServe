@@ -4,7 +4,7 @@
 \paragraph{Request-level serving.}
 Orca~\cite{orca} introduced iteration-level scheduling; vLLM~\cite{vllm} paged the KV cache and hashes full blocks for APC; SGLang~\cite{sglang} added radix prefix sharing; Sarathi~\cite{sarathi,sarathisplit} chunked prefills; DistServe and Splitwise~\cite{distserve,splitwise} disaggregated prefill from decode.
 Prefix caching discovers sharing after tokens exist.
-Stock P/D isolates \ttft{} from ITL; it does not choose which branch to compute, and it transfers every page the prefiller produced.
+Stock P/D isolates \ttft{} from ITL; it does not select which branch to compute, and it transfers the pages the prefiller produced.
 \app uses both mechanisms as filters: the hash as a skip, the connector as a gate.
 
 \paragraph{Program- and SLO-aware scheduling.}

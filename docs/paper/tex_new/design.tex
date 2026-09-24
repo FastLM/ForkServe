@@ -1,7 +1,7 @@
 \section{Design}
 \label{sec:design}
 
-\sys sits between the agent runtime and the LLM engine (\Cref{fig:system}).
+\sys is placed between the agent runtime and the LLM engine (\Cref{fig:system}).
 The harness announces structure; the control plane admits, prunes, binds, and retains; the backend moves pages and tokens.
 
 \subsection{API}
@@ -102,8 +102,8 @@ The stages are a block-hash probe, a CPU draft score, a prefix of the prefill ke
 Stage $i{+}1$ runs only when stage $i$ does not reject $\rho_i$.
 The committed winner is exempt: index $0$ is forced into $\Keep$, speculative pages stay unpublished until LCP commit, and Theorem~\ref{thm:correct} is unchanged.
 CoW remains the storage substrate; \app is the filter on compute and on transfer.
-On the GSM8K forest the tree already holds less KV than APC, yet expand is slower ($140$ vs.\ $87$\,ms) because every residual is still prefilled.
-The cascade is what removes that work.
+On the Qwen3-14B GSM8K forest, copy-on-write already stores less KV than APC, yet median fan-out is $140$\,ms against APC's $87$\,ms: the $k$ residuals are still submitted to prefill.
+The cascade is the stage that removes that work.
 
 \begin{figure*}[t]
 \centering
@@ -111,7 +111,7 @@ The cascade is what removes that work.
 \caption{\textbf{Cost-ordered prefill pruning and transfer gating.}
 (a)~A residual exits at the first decisive stage: block-hash probe ($\otimes$), draft score ($\oplus$), kernel prefix ($\rhd$), then the GPU miss tail.
 Only a kept miss tail reaches \texttt{insert}.
-(b)~APC and stock P/D clone the trunk $k$ ways on the first expand; CoW aliases $L$; \app{} also drops loser $\Work$ and $\Xfer$ before a kernel or a connector write.}
+(b)~APC and stock P/D clone the trunk $k$ ways on the first expand; CoW aliases $L$; \app{} also rejects non-winner $\Work$ and $\Xfer$ before a kernel or a connector write.}
 \label{fig:app}
 \end{figure*}
 
@@ -215,7 +215,7 @@ stock P/D & \botn{$kL+\sum_i\ell_i$} & \botn{$kL+\sum_i\ell_i$} & $kL+\sum_i\ell
 FS CoW & $L+\sum_i\ell_i$ & $0$ & \win{$L+\ell_\star$} & $\Theta(\ell_i/P)$ & $1$ & $L_{\mathrm{miss}}$ \\
 \rowcolor{tblalt}
 FS+ + P/D & \win{$L+\sum_{i\in\Keep}\ell_i$} & \win{$\sum_{i\in\Keep}\Work_i$} & \win{$L+\ell_\star$} & lazy, residual only & $1$ & \win{$0$} \\
-FS+ + stop & $L+\sum_{i\in\Keep}\ell_i$ & $\sum_{i\in\Keep}\Work_i$ & \win{$L+\ell_\star$} & lazy & $1$ & $0$ \\
+% FS+ + stop & $L+\sum_{i\in\Keep}\ell_i$ & $\sum_{i\in\Keep}\Work_i$ & \win{$L+\ell_\star$} & lazy & $1$ & $0$ \\
 \bottomrule
 \end{tabular}
 
@@ -224,12 +224,13 @@ FS+ + stop & $L+\sum_{i\in\Keep}\ell_i$ & $\sum_{i\in\Keep}\Work_i$ & \win{$L+\e
 $P{=}16$.
 Known-suffix items ($p{=}1$) are admitted before residuals ($p{<}1$).
 Spec pages are never hashed; LCP commit publishes full blocks of $x_\star$.
-Decode stop changes $D^{+}$, not $W_{\mathrm{pre}}$.}
+% Decode stop changes $D^{+}$, not $W_{\mathrm{pre}}$.
+}
 \end{table*}
 
 \begin{lemma}[First-fan-out dominance]
 \label{lem:dom}
-On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}=\Work_{\mathrm{PD}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with strict inequality in $\Work$ whenever at least one non-winner fails the draft score, and strict inequality in $\Xfer$ whenever $\Keep\neq[k]$ or any kept residual is a hash hit.
+On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}=\Work_{\mathrm{PD}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with strict inequality in $\Work$ whenever the draft score rejects at least one non-winner, and strict inequality in $\Xfer$ whenever $\Keep\neq[k]$ or any kept residual is a hash hit.
 \end{lemma}
 
 \paragraph{Block-hash pruning.}
@@ -245,17 +246,17 @@ The same published blocks are already APC-visible on the decode instance, so $\X
 \paragraph{Draft-score rejection.}
 On a hash miss the next stage is a CPU score, still before the prefill kernel.
 Each residual receives a score from illegal-token and repetition checks, token entropy, or an optional draft model.
-A score below $\tau$ (default $0.15$) is $\mathrm{DS}$: the branch never starts prefill, and it never becomes a hash key.
+A score below $\tau$ (default $0.15$) is $\mathrm{DS}$: that residual is not submitted to prefill and is not inserted as a hash key.
 If the residual has already entered chunked prefill and the first fraction $\alpha{=}0.20$ fails, the action is $\mathrm{EA}$ and only $\lceil\alpha\ell_i\rceil$ tokens are charged.
-That is abort expressed as a prefix of the kernel, not a wait for all $k$ residuals to finish.
+The abort is therefore a prefix of the kernel, rather than a barrier on the remaining residuals.
 Draft-skipped and early-aborted residuals are not in $\Keep$, so they never enter the connector buffer.
 
 \paragraph{Gated connector insert.}
 P/D disaggregation is a placement of prefill and decode~\cite{distserve,splitwise}.
 It does not choose a branch.
 The connector stays vLLM-shaped---\texttt{insert} is non-blocking, \texttt{drop\_select} blocks---and a production pipe (Nixl, LMCache, Mooncake) keeps the same gate.
-Stock P/D uses \eqref{eq:xfer-stock} and therefore ships every page it computed, including the $k$-way trunk.
-\app uses \eqref{eq:xfer}: $\Xfer_i$ is nonzero only for a kept residual whose action is $\mathrm{HP}$ or $\mathrm{PF}$, and then only for the miss tail that was actually computed.
+Stock P/D uses \eqref{eq:xfer-stock} and therefore transfers the computed span, including the $k$-way trunk.
+\app uses \eqref{eq:xfer}: $\Xfer_i$ is nonzero only for a kept residual whose action is $\mathrm{HP}$ or $\mathrm{PF}$, and then only for the miss tail that the kernel computed.
 Rejected residuals and hash-local hits stay on the prefill instance, so \app{}+P/D reduces both $\Work$ and $\Xfer$ relative to stock P/D.
 Let $\mu$ be microseconds per transferred token.
 Fan-out time is
@@ -266,6 +267,7 @@ T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
 with $T_{\mathrm{CoW}}$ a pointer swap (no KV memcpy) and $T_{\mathrm{abort}}$ deferrable when \texttt{abort} is lazy.
 Under the control-plane model of \S\ref{sec:eval-app} ($\ell{\times}12\,\mu\mathrm{s}$, $\mu{=}2\,\mu\mathrm{s}$), \eqref{eq:tfan} is $139$\,ms for APC, $162$\,ms for stock P/D, $47$\,ms for CoW, and $35.9$\,ms for \app.
 
+\iffalse
 \paragraph{Orthogonal decode-length stop.}
 The cascade changes $\Work$ and $M$.
 End-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}(D)$, so a shorter prefill does not by itself shorten decode.
@@ -273,6 +275,7 @@ ForkServe+ stops committed decode only when the last non-empty line is a finishe
 An earlier \texttt{\#\#\#\#} is an intermediate step, and a bare \texttt{</think>} is not an answer.
 If item $j$ hits a marker at $t_j$, emitted tokens are $D^{+}=\sum_j\min(t_j,D)\le nD$, and $T_{\mathrm{dec}}$ scales with $D^{+}$ when decode is memory-bandwidth bound.
 The stop ends a finished answer; it does not draft output tokens, and it does not change which residual was admitted.
+\fi
 
 \subsection{Two-Class Scheduling}
 \label{sec:schedule}
@@ -283,8 +286,8 @@ We allocate
 B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t}\max(\underline{s}_r\Delta,\;1)\Bigr), \label{eq:bc}\\
 B^{\mathrm{s}}_t &= B_t-B^{\mathrm{c}}_t. \label{eq:bs}
 \end{align}
-If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted---speculation is leftover compute, not load.
-A tree-sticky router pins the trunk to the worker that prefills the root; only residual work may steal.
+If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted: speculation is drawn from residual budget and is not additional load.
+A tree-sticky router pins the trunk to the worker that prefills the root; only residual work may migrate.
 Under P/D, speculative known suffixes are prefiller work tagged with $\texttt{soft-deadline}=\Idle(u)$ and produce small residuals that transfer once to the trunk-owner decoder.
 Throughput under an HBM pool of size $H$ is
 \begin{equation}

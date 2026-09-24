@@ -1,7 +1,7 @@
 \section{Introduction}
 \label{sec:intro}
 
-LLM serving used to be a single-turn problem: a prompt arrives, the engine prefills, tokens stream out~\cite{orca,vllm,sglang}.
+LLM serving began as a single-turn problem: a prompt arrives, the engine prefills, and tokens are streamed~\cite{orca,vllm,sglang}.
 Production agents---coding assistants~\cite{sweagent,openhands}, computer-use systems~\cite{webarena}, and multi-agent workflows~\cite{autogen,metagpt}---execute programs of LLM calls interleaved with tools~\cite{react,compoundai}.
 Tree-of-Thoughts and MCTS expand sibling thoughts that share a prefix and diverge in a short residual~\cite{tot,hive}.
 The serving unit is a \emph{branching execution}, not a request.
@@ -10,9 +10,9 @@ Prior systems raise the atom from a request to a program~\cite{autellix,thundera
 They share an implicit assumption: the next LLM call is a unique continuation of the current context.
 After a tool call is emitted, the next prompt is a \emph{distribution} over branches the engine can see \emph{before} the observation returns:
 known suffixes with $p{=}1$ (templates, wrappers), fan-out siblings that share a trunk of length $L$ and differ in residuals $\ell_i$, and observation residuals with $p{<}1$.
-Today's engines wait until the chosen branch is fully materialized.
-Automatic prefix caching (APC)~\cite{vllm,sglang} discovers sharing only after tokens exist; stock P/D disaggregation~\cite{distserve,splitwise} isolates \ttft{} from inter-token latency but ships whatever the prefiller computed.
-Once KV retention has eliminated trunk recompute~\cite{continuum,mori}, residual-suffix prefill---not queuing, not decode---is the remaining \ttft{} term.
+Current engines wait until the chosen branch is fully materialized.
+Automatic prefix caching (APC)~\cite{vllm,sglang} discovers sharing only after tokens exist; stock P/D disaggregation~\cite{distserve,splitwise} isolates \ttft{} from inter-token latency but transfers the pages the prefiller computed.
+Once KV retention has removed trunk recompute~\cite{continuum,mori}, the remaining \ttft{} term is residual-suffix prefill.
 
 \begin{figure*}[t]
 \centering
@@ -20,7 +20,7 @@ Once KV retention has eliminated trunk recompute~\cite{continuum,mori}, residual
 \caption{\textbf{\sys{} architecture.}
 (1)~$\sigma_u$ holds one RO trunk; \texttt{fork} aliases it in $O(1)$; LCP binds the winner.
 (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt{insert}.
-(3)~Prefill and decode run as separate instances. Pruning drops blocks at arbitrary positions (dashed), not as a suffix; only surviving KV is inserted, so fan-out time falls from $162$\,ms under stock ship-all P/D to $35.9$\,ms.
+(3)~Prefill and decode run as separate instances. Pruning removes blocks at arbitrary positions (dashed), rather than as a suffix; only surviving KV is inserted, so fan-out time falls from $162$\,ms under stock ship-all P/D to $35.9$\,ms.
 After abort the live occupancy is the spine $M_{\mathrm{spine}}$; the same $8$\,GiB pool then admits $76{\to}103$ sessions ($+35.5\%$ tok/s).}
 \label{fig:system}
 \end{figure*}
@@ -40,11 +40,11 @@ A hash index skips published full blocks; a draft score and an early-prefix chec
 Longest-common-prefix commit binds the observed prompt; speculative tokens never enter the sampler.
 
 \smallskip\noindent\textbf{(3) A two-class scheduler that does not degrade the committed path (\S\ref{sec:schedule}).}
-Speculative prefills fill leftover token budget after committed decode and prefill meet their \tbt{}/\ttft{} margins~\cite{jitserve,sarathi}, are chunked, and are cancelled on commit conflict.
+Speculative prefills use the token budget that remains after committed decode and prefill meet their \tbt{}/\ttft{} margins~\cite{jitserve,sarathi}, are chunked, and are cancelled on commit conflict.
 
-\S\ref{sec:eval} reports four measurements that must not be conflated.
+\S\ref{sec:eval} reports four measurements that are not interchangeable.
 On Qwen3-14B GSM8K, \sys matches APC accuracy at $0.72\times$ median peak KV; fan-out is still slower than APC.
 A control-plane study of \app then shows that hash skip, draft prune, and the P/D gate remove most of that prefill on illegal residuals, and that the measured KV gap raises SLO-feasible concurrency by $35.5\%$.
-A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering and a decode-stop gain ($0.31\times$ decode tokens, $0.75\times$ e2e at $\mathrm{tp}{=}4$).
+A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering.
 A six-model forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC.
-A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$) keeps that peak: ForkServe+ is at or above APC on DeepSeek-R1 and within one problem on Llama-3-8B, and still drops Mistral-7B.
+% A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$) keeps that peak: ForkServe+ is at or above APC on DeepSeek-R1 and within one problem on Llama-3-8B, and still drops Mistral-7B.
