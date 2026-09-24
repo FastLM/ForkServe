@@ -131,22 +131,22 @@
 \newlabel{tab:app@cref}{{[table][5][]5}{[1][8][]8}{}{}{}}
 \newlabel{sec:eval-app}{{4.2}{8}{}{subsection.4.2}{}}
 \newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][8][]8}{}{}{}}
-\newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
-\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
 \newlabel{fig:eval-slo}{{5}{8}{\textbf {SLO sweep} from measured DeepSeek GSM8K peaks. Left: saturated tok/s plateaus at $C{\times }$decode-rate ($76$ vs.\ $103$ slots). Right: APC crosses the $1$\,s P99 line at $448$ QPS; \app {} stays under it through $512$}{figure.5}{}}
 \newlabel{fig:eval-slo@cref}{{[figure][5][]5}{[1][8][]8}{}{}{}}
 \newlabel{tab:plus}{{6}{8}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. Game24 / HumanEval peaks stay with the spine}{table.6}{}}
 \newlabel{tab:plus@cref}{{[table][6][]6}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
+\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
 \newlabel{sec:eval-multi}{{4.4}{8}{}{subsection.4.4}{}}
 \newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][8][]8}{}{}{}}
 \newlabel{fig:eval-multi}{{6}{9}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.6}{}}
 \newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
 \newlabel{tab:r1stop}{{7}{9}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green}{table.7}{}}
-\newlabel{tab:r1stop@cref}{{[table][7][]7}{[1][8][]9}{}{}{}}
-\newlabel{sec:eval-sens}{{4.5}{9}{}{subsection.4.5}{}}
-\newlabel{sec:eval-sens@cref}{{[subsection][5][4]4.5}{[1][8][]9}{}{}{}}
+\newlabel{tab:r1stop@cref}{{[table][7][]7}{[1][9][]9}{}{}{}}
 \newlabel{tab:branch}{{8}{9}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green}{table.8}{}}
 \newlabel{tab:branch@cref}{{[table][8][]8}{[1][9][]9}{}{}{}}
+\newlabel{sec:eval-sens}{{4.5}{9}{}{subsection.4.5}{}}
+\newlabel{sec:eval-sens@cref}{{[subsection][5][4]4.5}{[1][9][]9}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
@@ -171,20 +171,20 @@
 \newlabel{sec:related}{{5}{10}{}{section.5}{}}
 \newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
 \newlabel{tab:longcot}{{9}{10}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage and shortest end-to-end time in green}{table.9}{}}
-\newlabel{tab:longcot@cref}{{[table][9][]9}{[1][9][]10}{}{}{}}
+\newlabel{tab:longcot@cref}{{[table][9][]9}{[1][10][]10}{}{}{}}
 \newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
 \newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
+\newlabel{fig:eval-hist}{{8}{11}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and ForkServe+. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.8}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][8][]8}{[1][9][]11}{}{}{}}
+\newlabel{fig:eval-branch}{{9}{11}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.9}{}}
+\newlabel{fig:eval-branch@cref}{{[figure][9][]9}{[1][9][]11}{}{}{}}
 \bibcite{spork}{{5}{}{{}}{{}}}
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
 \bibcite{medusa}{{7}{}{{}}{{}}}
-\newlabel{fig:eval-hist}{{8}{11}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and ForkServe+. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.8}{}}
-\newlabel{fig:eval-hist@cref}{{[figure][8][]8}{[1][8][]11}{}{}{}}
-\newlabel{fig:eval-branch}{{9}{11}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.9}{}}
-\newlabel{fig:eval-branch@cref}{{[figure][9][]9}{[1][9][]11}{}{}{}}
 \bibcite{murakkab}{{8}{}{{}}{{}}}
 \bibcite{idlespec}{{9}{}{{}}{{}}}
 \bibcite{contextrot}{{10}{}{{}}{{}}}

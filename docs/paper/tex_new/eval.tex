@@ -1,23 +1,27 @@
 \section{Evaluation}
 \label{sec:eval}
 
-We separate five measurements.
-\S\ref{sec:eval-gpu} is a GPU forest on Qwen3-14B.
-\S\ref{sec:eval-app} is a control-plane cost model of \app against APC, hash prefill, stock P/D, and \sys.
-\S\ref{sec:eval-plus} is a GPU run of ForkServe+ on Qwen3-8B.
-\S\ref{sec:eval-multi} repeats the forest on six model families.
-\S\ref{sec:eval-sens} sweeps branching, depth, pruning, and batch width, and runs a $D{=}2048$ contest forest.
+The GPU measurements share one node and one engine, and they differ by model, tensor-parallel width, and workload.
+\S\ref{sec:eval-gpu} is the full GSM8K forest on Qwen3-14B at $\mathrm{tp}{=}2$.
+\S\ref{sec:eval-app} is a control-plane cost model of \app, with no GPU, against APC, hash prefill, stock P/D, and \sys.
+\S\ref{sec:eval-plus} runs ForkServe+ on Qwen3-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
+\S\ref{sec:eval-multi} repeats the forest on six families at $n{=}40$.
+\S\ref{sec:eval-sens} sweeps branching, depth, pruning, and batch width on Llama-3-8B, Mistral-7B, and DeepSeek-R1-Distill-Llama-8B, then runs a $2048$-token contest forest on that DeepSeek model and on Qwen3-4B.
+
+\paragraph{Setup.}
+GPU runs use four A100-SXM4 40GB GPUs, \texttt{bfloat16} weights, and $\mathrm{tp}{=}2$ or $4$.
+The models are Qwen3-14B, Qwen3-8B, Qwen3-4B, Qwen2.5-Math-1.5B, Llama-3-8B, Mistral-7B, and DeepSeek-R1-Distill-Llama-8B.
+Tree-of-Thoughts uses $k{=}4$ and a $512$-token budget ($2048$ on the contest forest), in batches of eight.
+A math answer is correct when its final number matches the reference.
 
 \subsection{GPU forest}
 \label{sec:eval-gpu}
 
 \paragraph{Setup.}
-Qwen3-14B, \texttt{bfloat16}, $\mathrm{tp}{=}2$ on two A100-SXM4 40GB GPUs.
-GSM8K test ($n{=}1319$) is Tree-of-Thoughts with $k{=}4$ and a $512$-token decode budget, scored by the official \texttt{\#\#\#\#} extractor.
-Requests run in batches of eight ($165$ batches).
-Recompute disables the prefix cache.
-APC hashes full blocks after tokens exist.
-\sys forks the trunk by reference, prefills residuals, aborts non-winners, and decodes the committed path.
+This section uses Qwen3-14B at $\mathrm{tp}{=}2$.
+The GSM8K test set has $1319$ problems.
+Each problem is expanded with four thoughts and decoded for at most $512$ tokens, in $165$ batches of eight.
+Accuracy is the fraction of problems whose final number matches the reference.
 
 \begin{table}[t]
 \centering
