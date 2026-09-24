@@ -34,8 +34,7 @@ $\sigma_u=(\mathrm{parent},\;\mathrm{alias\_len},\;\rho^{\mathrm{pages}}_u)$.
 Invariants: (i)~prefix; (ii)~at most one committed child per node except during join; (iii)~speculative nodes are invisible to sampling; (iv)~a page's refcount equals the number of non-dead nodes that map it.
 \texttt{fork}$(u,\mathit{bid},x^{\mathrm{k}})$ copies two words $(\mathrm{parent}\leftarrow\sigma_u,\;\mathrm{alias\_len}\leftarrow|x_u|)$ and increfs the aliased frames---$O(1)$ in $L$.
 A write that hits $\mathrm{ref}>1$ or a read-only tail CoW-copies only the valid rows.
-
-RadixAttention~\cite{sglang} indexes by token identity and merges after the fact; \sys indexes by \emph{node identity} and shares \emph{before} tokens exist.
+A multi-level fan-out is a \emph{sequence} of CoWs (\Cref{fig:tree}): each edge aliases the parent and allocates only $+$r; live paths share every page on the common prefix; abort is residual-only, and a subtree with no live child cascades until the committed spine.
 The two compose: LCP commit publishes full winner pages into the APC index so a later session can hash-hit them (\S\ref{sec:app}).
 Abort frees $b\ell_i$ bytes, not $b(L+\ell_i)$.
 TTL and offload are node-granular: speculative leaves first, then idle committed leaves, then the spine~\cite{continuum,mori}.
@@ -97,6 +96,18 @@ The winner index is always retained, so Theorem~\ref{thm:correct} still applies.
 (a)~Residuals pass a four-layer filter (hash $\otimes$, draft $\oplus$, early abort $\rhd$, GPU miss tail) before a gated \texttt{insert}.
 (b)~APC and stock P/D pay a $k$-way trunk clone on the first expand; CoW aliases $L$; \app{} additionally drops loser $\Work$ and $\Xfer$.}
 \label{fig:app}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_tree}}
+\caption{\textbf{Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.}
+(a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r).
+Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$.
+Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B.
+(b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies.
+Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$.}
+\label{fig:tree}
 \end{figure*}
 
 \paragraph{Operator composition.}

@@ -21,7 +21,7 @@ Once KV retention has eliminated trunk recompute~\cite{continuum,mori}, residual
 (1)~A context tree aliases trunk pages at \texttt{fork} by pointer swap ($\mathrm{ref}{=}k$, no memcpy) and binds the winner by LCP.
 (2)~Advanced prefill pruning admits work by $G/C$, then filters each residual: hash skip, draft prune, early abort, miss-tail prefill, and a P/D gate.
 (3)~The prefiller computes only retained miss tails; \texttt{insert} is gated, and the decoder \texttt{drop\_select}s the committed spine.
-Freed KV raises concurrent sessions under the same HBM budget.}
+After abort the live occupancy is the spine $M_{\mathrm{spine}}$; the same $8$\,GiB pool then admits $37{\to}50$ sessions ($+35\%$ tok/s).}
 \label{fig:system}
 \end{figure*}
 

@@ -24,7 +24,7 @@
 \citation{sarathi}
 \citation{continuum,mori}
 \citation{vllm}
-\newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~A context tree aliases trunk pages at \texttt {fork} by pointer swap ($\mathrm {ref}{=}k$, no memcpy) and binds the winner by LCP. (2)~Advanced prefill pruning admits work by $G/C$, then filters each residual: hash skip, draft prune, early abort, miss-tail prefill, and a P/D gate. (3)~The prefiller computes only retained miss tails; \texttt {insert} is gated, and the decoder \texttt {drop\_select}s the committed spine. Freed KV raises concurrent sessions under the same HBM budget}{figure.1}{}}
+\newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~A context tree aliases trunk pages at \texttt {fork} by pointer swap ($\mathrm {ref}{=}k$, no memcpy) and binds the winner by LCP. (2)~Advanced prefill pruning admits work by $G/C$, then filters each residual: hash skip, draft prune, early abort, miss-tail prefill, and a P/D gate. (3)~The prefiller computes only retained miss tails; \texttt {insert} is gated, and the decoder \texttt {drop\_select}s the committed spine. After abort the live occupancy is the spine $M_{\mathrm {spine}}$; the same $8$\,GiB pool then admits $37{\to }50$ sessions ($+35\%$ tok/s)}{figure.1}{}}
 \newlabel{fig:system@cref}{{[figure][1][]1}{[1][1][]2}{}{}{}}
 \newlabel{sec:problem}{{2}{2}{}{section.2}{}}
 \newlabel{sec:problem@cref}{{[section][2][]2}{[1][2][]2}{}{}{}}
@@ -58,7 +58,6 @@
 \citation{hive}
 \citation{distserve}
 \citation{splitwise}
-\citation{sglang}
 \citation{continuum,mori}
 \citation{speculative,medusa}
 \newlabel{tab:notation}{{1}{3}{Notation for one branching step and for \app }{table.1}{}}
@@ -110,6 +109,8 @@
 \newlabel{eq:tfan@cref}{{[equation][8][]8}{[1][5][]5}{}{}{}}
 \citation{sarathi}
 \citation{jitserve}
+\newlabel{fig:tree}{{3}{6}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.3}{}}
+\newlabel{fig:tree@cref}{{[figure][3][]3}{[1][4][]6}{}{}{}}
 \newlabel{sec:schedule}{{3.5}{6}{}{subsection.3.5}{}}
 \newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][6][]6}{}{}{}}
 \newlabel{eq:bc}{{9}{6}{}{equation.9}{}}
@@ -118,16 +119,24 @@
 \newlabel{eq:bs@cref}{{[equation][10][]10}{[1][6][]6}{}{}{}}
 \newlabel{eq:theta}{{11}{6}{}{equation.11}{}}
 \newlabel{eq:theta@cref}{{[equation][11][]11}{[1][6][]6}{}{}{}}
+\newlabel{tab:gsm}{{4}{6}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight}{table.4}{}}
+\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][6][]6}{}{}{}}
 \newlabel{sec:eval}{{4}{6}{}{section.4}{}}
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][6][]6}{}{}{}}
 \newlabel{sec:eval-gpu}{{4.1}{6}{}{subsection.4.1}{}}
 \newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][6][]6}{}{}{}}
-\newlabel{tab:gsm}{{4}{6}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight}{table.4}{}}
-\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][6][]6}{}{}{}}
-\newlabel{tab:app}{{5}{6}{Control-plane first fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Improvement versus APC in green. Not GPU wall-clock}{table.5}{}}
-\newlabel{tab:app@cref}{{[table][5][]5}{[1][6][]6}{}{}{}}
-\newlabel{sec:eval-app}{{4.2}{6}{}{subsection.4.2}{}}
-\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][6][]6}{}{}{}}
+\newlabel{tab:app}{{5}{7}{Control-plane first fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Improvement versus APC in green. Not GPU wall-clock}{table.5}{}}
+\newlabel{tab:app@cref}{{[table][5][]5}{[1][7][]7}{}{}{}}
+\newlabel{sec:eval-app}{{4.2}{7}{}{subsection.4.2}{}}
+\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][7][]7}{}{}{}}
+\newlabel{fig:eval-kv}{{4}{7}{\textbf {Normalized KV occupancy} of one $k{=}4$ step ($L{=}256$, $\ell {=}32$). APC clones the trunk and retains hashed residuals. CoW aliases $L$ and collapses to the spine at abort. \app prefills only kept residuals}{figure.4}{}}
+\newlabel{fig:eval-kv@cref}{{[figure][4][]4}{[1][7][]7}{}{}{}}
+\newlabel{fig:eval-slo}{{5}{7}{\textbf {SLO sweep} from measured DeepSeek GSM8K peaks. Left: saturated tok/s plateaus at $C{\times }$decode-rate ($37$ vs.\ $50$ slots). Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app {} stays under it}{figure.5}{}}
+\newlabel{fig:eval-slo@cref}{{[figure][5][]5}{[1][7][]7}{}{}{}}
+\newlabel{sec:eval-plus}{{4.3}{7}{}{subsection.4.3}{}}
+\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][7][]7}{}{}{}}
+\newlabel{sec:eval-multi}{{4.4}{7}{}{subsection.4.4}{}}
+\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][7][]7}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
@@ -138,20 +147,6 @@
 \citation{hermes}
 \citation{thunderagent}
 \citation{saga}
-\newlabel{fig:eval-kv}{{3}{7}{\textbf {Normalized KV occupancy} of one $k{=}4$ step ($L{=}256$, $\ell {=}32$). APC clones the trunk and retains hashed residuals. CoW aliases $L$ and collapses to the spine at abort. \app prefills only kept residuals}{figure.3}{}}
-\newlabel{fig:eval-kv@cref}{{[figure][3][]3}{[1][6][]7}{}{}{}}
-\newlabel{fig:eval-slo}{{4}{7}{\textbf {SLO sweep} from measured DeepSeek GSM8K peaks. Left: saturated tok/s plateaus at $C{\times }$decode-rate ($37$ vs.\ $50$ slots). Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app {} stays under it}{figure.4}{}}
-\newlabel{fig:eval-slo@cref}{{[figure][4][]4}{[1][7][]7}{}{}{}}
-\newlabel{sec:eval-plus}{{4.3}{7}{}{subsection.4.3}{}}
-\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][7][]7}{}{}{}}
-\newlabel{tab:plus}{{6}{7}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. $D^{+}$ and e2e are GSM8K}{table.6}{}}
-\newlabel{tab:plus@cref}{{[table][6][]6}{[1][7][]7}{}{}{}}
-\newlabel{tab:multi}{{7}{7}{GSM8K $n{=}40$, $\mathrm {tp}{=}2$. Peak KV is unchanged at $\mathrm {tp}{=}4$. APC decode tokens are always $nD{=}20480$}{table.7}{}}
-\newlabel{tab:multi@cref}{{[table][7][]7}{[1][7][]7}{}{}{}}
-\newlabel{sec:eval-multi}{{4.4}{7}{}{subsection.4.4}{}}
-\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][7][]7}{}{}{}}
-\newlabel{sec:related}{{5}{7}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][7][]7}{}{}{}}
 \citation{infercept}
 \citation{continuum}
 \citation{mori}
@@ -164,6 +159,16 @@
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
+\newlabel{tab:plus}{{6}{8}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. $D^{+}$ and e2e are GSM8K}{table.6}{}}
+\newlabel{tab:plus@cref}{{[table][6][]6}{[1][7][]8}{}{}{}}
+\newlabel{tab:multi}{{7}{8}{GSM8K $n{=}40$, $\mathrm {tp}{=}2$. Peak KV is unchanged at $\mathrm {tp}{=}4$. APC decode tokens are always $nD{=}20480$}{table.7}{}}
+\newlabel{tab:multi@cref}{{[table][7][]7}{[1][7][]8}{}{}{}}
+\newlabel{sec:related}{{5}{8}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][8][]8}{}{}{}}
+\newlabel{fig:eval-multi}{{6}{8}{\textbf {GSM8K peak KV} on six models ($n{=}40$). \sys {} is $0.72$--$0.75\times $ APC on every family; the ratio is independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.6}{}}
+\newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][7][]8}{}{}{}}
+\newlabel{sec:conclusion}{{6}{8}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][8][]8}{}{}{}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
 \bibcite{spork}{{5}{}{{}}{{}}}
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
@@ -176,10 +181,6 @@
 \bibcite{saga}{{13}{}{{}}{{}}}
 \bibcite{metagpt}{{14}{}{{}}{{}}}
 \bibcite{swebench}{{15}{}{{}}{{}}}
-\newlabel{fig:eval-multi}{{5}{8}{\textbf {GSM8K peak KV} on six models ($n{=}40$). \sys {} is $0.72$--$0.75\times $ APC on every family; the ratio is independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.5}{}}
-\newlabel{fig:eval-multi@cref}{{[figure][5][]5}{[1][7][]8}{}{}{}}
-\newlabel{sec:conclusion}{{6}{8}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][8][]8}{}{}{}}
 \bibcite{thunderagent}{{16}{}{{}}{{}}}
 \bibcite{vllm}{{17}{}{{}}{{}}}
 \bibcite{speculative}{{18}{}{{}}{{}}}

@@ -139,19 +139,45 @@
 \draw[arr] (mt.east) -- (10.62,2.58) -- (10.62,5.82) -- (11.52,5.82);
 \node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south west] at (8.70,2.22) {kept};
 
-% ---------- HBM ----------
-\draw[panel] (0,0) rectangle (16.45,1.35);
-\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.16,1.10) {HBM};
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (1.15,1.10)
-  {$M_{\mathrm{spine}}=b(L+\ell_\star)$ after abort \quad
-   $\Theta\propto C/T_{\mathrm{e2e}}$ \quad $C\propto\mathrm{HBM}/M$ \quad
-   DeepSeek GSM8K: $37{\to}50$ slots};
-\fill[fsblue!22] (0.18,0.22) rectangle (9.4,0.78);
-\draw[fsblue!70, line width=0.4pt] (0.18,0.22) rectangle (9.4,0.78);
-\fill[fsgreen!12] (9.4,0.22) rectangle (16.22,0.78);
-\draw[fsgreen!55!black, line width=0.4pt, densely dashed] (9.4,0.22) rectangle (16.22,0.78);
-\node[font=\tiny\sffamily, text=fsblue] at (4.8,0.50) {live spine};
-\node[font=\tiny\sffamily, text=fsgreen!40!black] at (12.8,0.50) {freed KV $\rightarrow$ extra sessions};
+% ---------- HBM (occupancy vs slots) ----------
+\draw[panel] (0,0) rectangle (16.45,1.50);
+\fill[fsblue] (0,1.16) rectangle (0.08,1.50);
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.18,1.33) {HBM after abort};
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (3.22,1.33)
+  {DeepSeek-R1 GSM8K, $8$\,GiB pool};
+\node[chip, draw=fsblue!40, fill=fslight] at (8.70,1.33) {$M_{\mathrm{spine}}=b(L+\ell_\star)$};
+\node[chip, draw=fsblue!40, fill=white] at (11.85,1.33) {$C\propto H/M$};
+\node[chip, draw=fsblue!40, fill=white] at (14.15,1.33) {$\Theta\propto C/T_{\mathrm{e2e}}$};
+
+% occupancy: pool 1.70--7.55 (5.85cm). APC full; FS 0.74 of that.
+\node[font=\tiny\sffamily\bfseries, text=fsblue, anchor=south west] at (0.16,0.90) {per-session $M$};
+\node[font=\tiny\sffamily, anchor=east] at (1.58,0.68) {APC};
+\fill[fsblue!50] (1.70,0.52) rectangle (7.55,0.84);
+\draw[fsblue!75, line width=0.4pt] (1.70,0.52) rectangle (7.55,0.84);
+\node[font=\tiny\sffamily, text=white] at (4.62,0.68) {$M_{\mathrm{APC}}$};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (7.65,0.68) {$1563$ tok};
+
+\node[font=\tiny\sffamily, anchor=east] at (1.58,0.26) {FS};
+\fill[black!5] (1.70,0.10) rectangle (7.55,0.42);
+\draw[fsgreen!45!black, line width=0.4pt, densely dashed] (1.70,0.10) rectangle (7.55,0.42);
+\fill[fsgreen!60!black] (1.70,0.10) rectangle ({1.70+0.74*5.85},0.42);
+\node[font=\tiny\sffamily, text=white] at ({1.70+0.37*5.85},0.26) {$M_{\mathrm{spine}}$};
+\node[font=\tiny\sffamily, text=fsgreen!30!black] at ({1.70+0.87*5.85},0.26) {free};
+\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (7.65,0.26) {$1163$ tok};
+
+% slots: max bar 50 → 5.85cm, origin 9.55
+\node[font=\tiny\sffamily\bfseries, text=fsgreen!30!black, anchor=south west] at (9.20,0.90) {SLO slots $C$};
+\node[font=\tiny\sffamily, anchor=east] at (10.05,0.68) {37};
+\fill[fsblue!50] (10.15,0.52) rectangle ({10.15+37/50*5.20},0.84);
+\draw[fsblue!75, line width=0.4pt] (10.15,0.52) rectangle ({10.15+37/50*5.20},0.84);
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at ({10.25+37/50*5.20},0.68) {APC};
+
+\node[font=\tiny\sffamily, anchor=east] at (10.05,0.26) {50};
+\fill[fsgreen!60!black] (10.15,0.10) rectangle ({10.15+5.20},0.42);
+\draw[fsgreen!40!black, line width=0.4pt] (10.15,0.10) rectangle ({10.15+5.20},0.42);
+\fill[fsgreen!25] (10.15+37/50*5.20,0.10) rectangle ({10.15+5.20},0.42);
+\node[font=\tiny\sffamily, text=white] at (12.35,0.26) {FS};
+\node[chip, draw=fsgreen!50!black, fill=fscommit, inner sep=1.1pt] at (15.72,0.26) {$+35\%$};
 
 \draw[arr] (2.4,7.52) -- (2.4,7.28);
 \node[font=\tiny\sffamily, text=fsgray, anchor=east] at (2.28,7.40) {\texttt{fork}};
