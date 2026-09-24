@@ -9,6 +9,7 @@ control plane still drops hopeless branches.
 from __future__ import annotations
 
 import math
+import os
 import re
 from dataclasses import dataclass, replace
 from typing import Sequence
@@ -102,6 +103,14 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     # Marker strings cut the answer off (#### before the number, </think>
     # before the R1 reply). Answer-complete stop replaces them.
     cfg.decode_stop = ()
-    if not cfg.answer_stop:
+    flags = os.environ.get("FORKSERVE_PLUS_FLAGS", "").strip()
+    if flags:
+        want = {p.strip() for p in flags.split(",") if p.strip()}
+        cfg.skip_known_losers = "skip" in want
+        cfg.prune_enabled = bool(want & {"skip", "prune"})
+        cfg.hash_prune = "hash" in want or cfg.hash_prune
+        cfg.answer_stop = "auto" if "stop" in want else ""
+        cfg.lazy_abort = "lazy" in want or cfg.lazy_abort
+    elif not cfg.answer_stop:
         cfg.answer_stop = "auto"
     return cfg

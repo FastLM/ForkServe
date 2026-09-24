@@ -193,6 +193,10 @@ class VllmBackend:
             seed=seed,
             extra_args=extra,
         )
+        if not speculative:
+            mt = int(os.environ.get("FORKSERVE_MIN_TOKENS", "0") or 0)
+            if mt > 0:
+                kwargs["min_tokens"] = min(mt, max_tokens)
         stops = tuple(self.config.decode_stop or ())
         if stops and not speculative:
             kwargs["stop"] = list(stops)

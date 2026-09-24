@@ -240,17 +240,27 @@ def gsm8k_thoughts(branching: int) -> list[str]:
 
 def game24_trunk(item: MathItem) -> str:
     system = (
-        "You solve the 24 game. Use each number once with +, -, *, / and "
-        "parentheses. Reply with an equation that equals 24."
+        "You solve the 24 game. Use each of the four numbers exactly once "
+        "with + - * / and parentheses. "
+        "Finish with one line of the form: Equation: <expression> = 24"
     )
-    return _chat(system, item.question + _think_tail())
+    user = (
+        f"{item.question}\n"
+        "Write the equation. Do not stop after the plan."
+        f"{_think_tail()}"
+    )
+    return _chat(system, user)
 
 
 def game24_thoughts(branching: int) -> list[str]:
     w = _wrappers()
     out: list[str] = []
     for i in range(branching):
-        out.append(w.thought_prefix(i) + GAME24_STRATEGIES[i % len(GAME24_STRATEGIES)])
+        out.append(
+            w.thought_prefix(i)
+            + GAME24_STRATEGIES[i % len(GAME24_STRATEGIES)]
+            + "\nEquation: "
+        )
     return out
 
 

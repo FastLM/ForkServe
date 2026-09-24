@@ -588,7 +588,11 @@ def _tok_ids(llm: Any, text: str) -> list[int]:
 
 def _gen(llm: Any, SamplingParams: Any, TokensPrompt: Any, seqs: Sequence[Sequence[int]], n: int) -> list[list[int]]:
     prompts = [TokensPrompt(prompt_token_ids=list(s)) for s in seqs]
-    params = SamplingParams(max_tokens=n, temperature=0.0)
+    mt = int(os.environ.get("FORKSERVE_MIN_TOKENS", "0") or 0)
+    kwargs: dict[str, Any] = dict(max_tokens=n, temperature=0.0)
+    if mt > 0:
+        kwargs["min_tokens"] = min(mt, n)
+    params = SamplingParams(**kwargs)
     outs = llm.generate(prompts, params, use_tqdm=False)
     return [[int(t) for t in o.outputs[0].token_ids] for o in outs]
 
@@ -1422,6 +1426,15 @@ def run_react_forest_vllm(
     )
 
 
+def _apply_depth(trunks: list[str], thoughts: Sequence[str]) -> list[str]:
+    """Prefix the committed thought so a second fan-out sits on a longer spine."""
+    depth = int(os.environ.get("FORKSERVE_DEPTH", "1") or 1)
+    if depth <= 1 or not thoughts:
+        return trunks
+    extra = thoughts[0]
+    return [t + extra for t in trunks]
+
+
 def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
     from forkserve.bench_tasks import gsm8k_thoughts, gsm8k_trunk, load_gsm8k
 
@@ -1436,7 +1449,7 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        trunks = [gsm8k_trunk(item) for item in batch]
+        trunks = _apply_depth([gsm8k_trunk(item) for item in batch], thoughts)
         row = run_tot_forest_forkserve(
             eng, cfg, trunks, thoughts,
             decode_n=workload_decode(args, "gsm8k"), idle_ms=0.0, workload="gsm8k",
@@ -1461,19 +1474,23 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
         )
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
-    for start, batch in _iter_chunks(problems, args):
-        trunks = [game24_trunk(item) for item in batch]
-        eng.config.answer_stop_hints = tuple(p.question for p in batch)
-        row = run_tot_forest_forkserve(
-            eng, cfg, trunks, thoughts,
-            decode_n=args.decode, idle_ms=0.0, workload="game24",
-        )
-        eng.config.answer_stop_hints = ()
-        _set_golds(row, [p.question for p in batch], _fs_texts(eng, row.decode_ids))
-        row.item_ids = [p.item_id for p in batch]
-        parts.append(row)
-        _log_forest_chunk(args, "forkserve", "game24", start, batch, len(problems), row, parts)
-        _close_all(eng)
+    os.environ["FORKSERVE_MIN_TOKENS"] = "24"
+    try:
+        for start, batch in _iter_chunks(problems, args):
+            trunks = _apply_depth([game24_trunk(item) for item in batch], thoughts)
+            eng.config.answer_stop_hints = tuple(p.question for p in batch)
+            row = run_tot_forest_forkserve(
+                eng, cfg, trunks, thoughts,
+                decode_n=args.decode, idle_ms=0.0, workload="game24",
+            )
+            eng.config.answer_stop_hints = ()
+            _set_golds(row, [p.question for p in batch], _fs_texts(eng, row.decode_ids))
+            row.item_ids = [p.item_id for p in batch]
+            parts.append(row)
+            _log_forest_chunk(args, "forkserve", "game24", start, batch, len(problems), row, parts)
+            _close_all(eng)
+    finally:
+        os.environ.pop("FORKSERVE_MIN_TOKENS", None)
     return merge_metrics(parts)
 
 
@@ -1559,7 +1576,7 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
     thoughts = gsm8k_thoughts(args.branching)
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
-        trunks = [gsm8k_trunk(item) for item in batch]
+        trunks = _apply_depth([gsm8k_trunk(item) for item in batch], thoughts)
         row = run_tot_forest_vllm(
             llm, SamplingParams, TokensPrompt, system, cfg_bpt,
             trunks, thoughts,
@@ -1656,17 +1673,21 @@ def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: st
         )
     thoughts = game24_thoughts(args.branching)
     parts: list[RunMetrics] = []
-    for start, batch in _iter_chunks(problems, args):
-        trunks = [game24_trunk(item) for item in batch]
-        row = run_tot_forest_vllm(
-            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-            trunks, thoughts,
-            decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
-        )
-        _set_golds(row, [p.question for p in batch], _vllm_texts(llm, row.decode_ids))
-        row.item_ids = [p.item_id for p in batch]
-        parts.append(row)
-        _log_forest_chunk(args, system, "game24", start, batch, len(problems), row, parts)
+    os.environ["FORKSERVE_MIN_TOKENS"] = "24"
+    try:
+        for start, batch in _iter_chunks(problems, args):
+            trunks = _apply_depth([game24_trunk(item) for item in batch], thoughts)
+            row = run_tot_forest_vllm(
+                llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+                trunks, thoughts,
+                decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
+            )
+            _set_golds(row, [p.question for p in batch], _vllm_texts(llm, row.decode_ids))
+            row.item_ids = [p.item_id for p in batch]
+            parts.append(row)
+            _log_forest_chunk(args, system, "game24", start, batch, len(problems), row, parts)
+    finally:
+        os.environ.pop("FORKSERVE_MIN_TOKENS", None)
     return merge_metrics(parts)
 
 

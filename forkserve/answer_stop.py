@@ -43,14 +43,13 @@ def answer_ready(text: str, mode: str, *, hint: str = "") -> bool:
         body = raw.rsplit("</think>", 1)[-1] if "</think>" in raw else raw
         if not body.strip():
             return False
-        # Only the last line. An earlier ``####`` is an intermediate step;
-        # stopping there dropped Llama and Mistral accuracy.
-        last = next((ln.strip() for ln in reversed(body.splitlines()) if ln.strip()), "")
-        if _HASH_ANS.search(last):
+        # Stop only after the model has left a finished answer line
+        # (a newline follows it). A ``####`` that is still the last line
+        # may be revised, and cutting it dropped Llama and Mistral.
+        if re.search(r"(?m)^####\s*-?\d+(?:,\d{3})*(?:\.\d+)?[ \t]*\n", body):
             return True
-        if (mode == "math" or "\\boxed" in last) and _boxed_closed(last):
-            boxed = extract_boxed(last)
-            return bool(boxed)
+        if mode == "math" and _boxed_closed(body) and re.search(r"\\boxed\{[^{}]*\}\s*\n", body):
+            return True
         return False
     if mode == "game24":
         if hint and game24_correct(raw, hint):
