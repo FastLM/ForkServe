@@ -121,12 +121,12 @@
 \newlabel{eq:bs@cref}{{[equation][10][]10}{[1][7][]7}{}{}{}}
 \newlabel{eq:theta}{{11}{7}{}{equation.11}{}}
 \newlabel{eq:theta@cref}{{[equation][11][]11}{[1][7][]7}{}{}{}}
-\newlabel{tab:gsm}{{4}{7}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
-\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][7][]7}{}{}{}}
 \newlabel{sec:eval}{{4}{7}{}{section.4}{}}
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][7][]7}{}{}{}}
 \newlabel{sec:eval-gpu}{{4.1}{7}{}{subsection.4.1}{}}
 \newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][7][]7}{}{}{}}
+\newlabel{tab:gsm}{{4}{8}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
+\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][7][]8}{}{}{}}
 \newlabel{tab:app}{{5}{8}{Control-plane fan-out and replay ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; ForkServe+ in green. Not GPU wall-clock}{table.5}{}}
 \newlabel{tab:app@cref}{{[table][5][]5}{[1][8][]8}{}{}{}}
 \newlabel{sec:eval-app}{{4.2}{8}{}{subsection.4.2}{}}
@@ -137,19 +137,27 @@
 \newlabel{tab:plus@cref}{{[table][6][]6}{[1][8][]8}{}{}{}}
 \newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
 \newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
-\citation{orca}
-\citation{vllm}
-\citation{sglang}
-\citation{sarathi,sarathisplit}
-\citation{distserve,splitwise}
 \newlabel{fig:eval-multi}{{6}{9}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.6}{}}
 \newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
 \newlabel{tab:multi}{{7}{9}{Cross-model forest, $n{=}40$, $\mathrm {tp}{=}2$ (peak KV unchanged at $\mathrm {tp}{=}4$). APC decode tokens are $nD{=}20480$. Game24 peaks use the same $k{=}4$ ToT. Best storage in green}{table.7}{}}
 \newlabel{tab:multi@cref}{{[table][7][]7}{[1][9][]9}{}{}{}}
 \newlabel{sec:eval-multi}{{4.4}{9}{}{subsection.4.4}{}}
 \newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][8][]9}{}{}{}}
-\newlabel{sec:related}{{5}{9}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][9][]9}{}{}{}}
+\newlabel{sec:eval-sens}{{4.5}{9}{}{subsection.4.5}{}}
+\newlabel{sec:eval-sens@cref}{{[subsection][5][4]4.5}{[1][9][]9}{}{}{}}
+\citation{orca}
+\citation{vllm}
+\citation{sglang}
+\citation{sarathi,sarathisplit}
+\citation{distserve,splitwise}
+\newlabel{fig:eval-hist}{{7}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
+\newlabel{tab:r1stop}{{8}{10}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. Best storage in green}{table.8}{}}
+\newlabel{tab:r1stop@cref}{{[table][8][]8}{[1][9][]10}{}{}{}}
+\newlabel{tab:branch}{{9}{10}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak does not grow with $k$; APC does. Best storage in green}{table.9}{}}
+\newlabel{tab:branch@cref}{{[table][9][]9}{[1][9][]10}{}{}{}}
+\newlabel{sec:related}{{5}{10}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
 \citation{autellix}
 \citation{jitserve}
 \citation{hermes}
@@ -164,12 +172,6 @@
 \citation{idlespec}
 \citation{speculative,medusa,eagledraft}
 \citation{forkkv}
-\newlabel{fig:eval-hist}{{7}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
-\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
-\newlabel{tab:r1stop}{{8}{10}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. Best storage in green}{table.8}{}}
-\newlabel{tab:r1stop@cref}{{[table][8][]8}{[1][9][]10}{}{}{}}
-\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
@@ -183,6 +185,10 @@
 \bibcite{conserve}{{11}{}{{}}{{}}}
 \bibcite{pie}{{12}{}{{}}{{}}}
 \bibcite{saga}{{13}{}{{}}{{}}}
+\newlabel{tab:longcot}{{10}{11}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. Qwen3-4B ForkServe+ is still running and is omitted. Best storage in green}{table.10}{}}
+\newlabel{tab:longcot@cref}{{[table][10][]10}{[1][10][]11}{}{}{}}
+\newlabel{sec:conclusion}{{6}{11}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][11][]11}{}{}{}}
 \bibcite{metagpt}{{14}{}{{}}{{}}}
 \bibcite{swebench}{{15}{}{{}}{{}}}
 \bibcite{thunderagent}{{16}{}{{}}{{}}}
@@ -223,4 +229,4 @@
 \bibcite{distserve}{{51}{}{{}}{{}}}
 \bibcite{webarena}{{52}{}{{}}{{}}}
 \providecommand\NAT@force@numbers{}\NAT@force@numbers
-\gdef \@abspage@last{12}
+\gdef \@abspage@last{13}

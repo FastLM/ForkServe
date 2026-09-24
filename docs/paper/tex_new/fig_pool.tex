@@ -91,36 +91,32 @@
 \draw[fsblue!45,rounded corners=3pt,line width=0.5pt] (6.38,3.02) rectangle (14.44,5.28);
 \node[fmbadge=fsblue] at (6.60,5.08) {3};
 \node[anchor=west,font=\tiny\sffamily] at (6.82,5.08) {\textbf{Shared trunk, private \(\rho\)}};
-\node[pg={fsblue}{fslight}] at (7.55,4.28) {trunk\\[-1pt]\(L\)\\[-1pt]RO};
-\node[pg={fsblue}{fslight}] at (8.72,4.28) {\(\cdots\)\\[-1pt]in \(H\)};
-\node[pg={fsorange!80!black}{fsspec}] at (10.05,4.28) {\(\rho_i\)\\[-1pt]\(\mathrm{ref}{=}1\)};
-\node[pg={fsorange!80!black}{fsspec}] at (11.22,4.28) {\(\cdots\)\\[-1pt]\(\mathrm{hash}{=}\emptyset\)};
-\node[pg={fsorange!80!black}{fsspec},densely dashed] at (12.39,4.28) {tail\\[-1pt]\(n{<}P\)};
-\node[note] at (10.41,3.48)
-  {alias \(x_u\), alloc \(\rho\) only\qquad \(\mathrm{ref}{>}1\): copy valid rows};
+\node[pg={fsblue}{fslight},minimum width=2.35cm,minimum height=0.92cm] at (7.75,4.22)
+  {\textbf{shared trunk}\\[-1pt] one copy of \(L\)\\[-1pt] read-only};
+\node[pg={fsorange!80!black}{fsspec},minimum width=2.35cm,minimum height=0.92cm] at (10.35,4.22)
+  {\textbf{private \(\rho\)}\\[-1pt] new frames only\\[-1pt] \(\mathrm{ref}{=}1\), not in \(H\)};
+\node[pg={fsorange!80!black}{fsspec},densely dashed,minimum width=2.35cm,minimum height=0.92cm] at (12.95,4.22)
+  {\textbf{partial tail}\\[-1pt] last page \(n{<}P\)\\[-1pt] not published};
+\node[note] at (10.41,3.42)
+  {child aliases \(L\);\ a write with \(\mathrm{ref}{>}1\) copies that page's valid rows};
 % ===================== 4. hash index =====================
 \fill[fsgreen!8,rounded corners=3pt] (6.38,1.52) rectangle (14.44,2.88);
 \draw[fsgreen!50!black,rounded corners=3pt,line width=0.5pt] (6.38,1.52) rectangle (14.44,2.88);
 \node[fmbadge=fsgreen] at (6.60,2.68) {4};
 \node[anchor=west,font=\tiny\sffamily] at (6.82,2.68) {\textbf{Publish index \(H\)}};
-\node[fmcard=fsgreen,minimum width=4.15cm,minimum height=0.40cm] (hk) at (8.70,2.05)
-  {\(h(\mathrm{parent},\,\mathrm{block},\,\mathrm{extra})\rightarrow\mathrm{page}\)};
-\node[fmcard=fsorange,minimum width=2.55cm,minimum height=0.40cm] (hu) at (12.55,2.05)
-  {spec, partial \(\notin H\)};
-\draw[fmdata,draw=fsgreen!55!black] (hk) -- (hu);
+\node[fmcard=fsgreen,minimum width=3.55cm,minimum height=0.62cm] at (8.40,2.02)
+  {in \(H\): full committed block\\[-1pt] \(h(\mathrm{parent},\mathrm{block})\)};
+\node[fmcard=fsorange,minimum width=3.55cm,minimum height=0.62cm] at (12.35,2.02)
+  {out of \(H\): speculative\\[-1pt] or partial page};
 % ===================== 5. free list =====================
 \fill[black!3,rounded corners=3pt] (6.38,0.16) rectangle (14.44,1.38);
 \draw[fsgray!70,rounded corners=3pt,line width=0.5pt] (6.38,0.16) rectangle (14.44,1.38);
 \node[fmbadge=fsgray] at (6.60,1.18) {5};
 \node[anchor=west,font=\tiny\sffamily] at (6.82,1.18) {\textbf{Free list}\quad \(\mathrm{ref}{=}0\)};
-\node[fp] (fh) at (7.15,0.62) {Head};
-\node[fp] (fa) at (8.15,0.62) {free};
-\node[fp] (fb) at (9.15,0.62) {\(\cdots\)};
-\node[fp] (ft) at (10.15,0.62) {Tail};
-\draw[flink] (fh) -- (fa);
-\draw[flink] (fa) -- (fb);
-\draw[flink] (fb) -- (ft);
-\node[note,anchor=west] at (10.70,0.62) {\texttt{fork} pops \(\rho\)\;\(\cdot\)\;\texttt{abort} returns \(\rho\)};
+\node[fmcard=fsblue,minimum width=3.55cm,minimum height=0.58cm] at (8.40,0.58)
+  {\texttt{fork} takes free frames\\[-1pt] for the new \(\rho\)};
+\node[fmcard=fsorange,minimum width=3.55cm,minimum height=0.58cm] at (12.35,0.58)
+  {\texttt{abort} returns those frames\\[-1pt] trunk stays allocated};
 % ===================== cross-boundary =====================
 \draw[fmfeed,draw=fsblue,rounded corners=1.5pt]
   (5.92,3.42) -- (6.28,3.42) -- (6.28,4.28) -- (6.55,4.28);

@@ -1,11 +1,12 @@
 \section{Evaluation}
 \label{sec:eval}
 
-We separate four measurements.
+We separate five measurements.
 \S\ref{sec:eval-gpu} is a GPU forest on Qwen3-14B.
 \S\ref{sec:eval-app} is a control-plane cost model of \app against APC, hash prefill, stock P/D, and \sys.
 \S\ref{sec:eval-plus} is a GPU run of ForkServe+ on Qwen3-8B.
 \S\ref{sec:eval-multi} repeats the forest on six model families.
+\S\ref{sec:eval-sens} sweeps branching, depth, pruning, and batch width, and runs a $D{=}2048$ contest forest.
 
 \subsection{GPU forest}
 \label{sec:eval-gpu}
@@ -310,3 +311,108 @@ Best storage in green.}
 \end{table}
 
 HumanEval ($k{=}2$) leaves less to share, so $M_{\mathrm{spine}}$ stays near $M_{\mathrm{APC}}$, and pass@1 does not move across recompute, APC, and \sys.
+
+\subsection{Branching, pruning, and long traces}
+\label{sec:eval-sens}
+
+\paragraph{Setup.}
+GSM8K, $n{=}16$, $D{=}512$, $\mathrm{tp}{=}2$, batches of four, on Llama-3-8B-Instruct, Mistral-7B-Instruct, and DeepSeek-R1-Distill-Llama-8B.
+The default tree is $k{=}4$.
+The sweep changes only $k\in\{2,8\}$, or stacks a second ToT level at $k{=}4$.
+ForkServe+ is also rerun with draft prune off, and with the last-line stop off.
+A batch-width pair runs the same $16$ items as $16$ steps of one and as one step of $16$.
+The contest forest is MATH-500 ($n{=}200$) and AIME ($n{=}73$) at $D{=}2048$, $k{=}4$, batches of eight.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K peak KV versus branching ($n{=}16$, $\mathrm{tp}{=}2$, $D{=}512$).
+The spine peak does not grow with $k$; APC does.
+Best storage in green.}
+\label{tab:branch}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrrr}
+\rowcolor{tblhead}
+\toprule
+ & & $k{=}2$ & $k{=}4$ & $k{=}8$ & depth $2$ \\
+\midrule
+\multirow{3}{*}{L8B}
+ & APC & $610$ & $750$ & $998$ & $814$ \\
+\rowcolor{tblalt}
+ & FS & \win{$550$} & \win{$550$} & \win{$550$} & \win{$614$} \\
+ & FS / APC & \win{$0.90$} & \win{$0.73$} & \win{$0.55$} & \win{$0.75$} \\
+\midrule
+\multirow{3}{*}{M7B}
+ & APC & $629$ & $769$ & $1033$ & $841$ \\
+\rowcolor{tblalt}
+ & FS & \win{$569$} & \win{$569$} & \win{$569$} & \win{$641$} \\
+ & FS / APC & \win{$0.90$} & \win{$0.74$} & \win{$0.55$} & \win{$0.76$} \\
+\midrule
+\multirow{3}{*}{R1-8B}
+ & APC & $629$ & $761$ & --- & --- \\
+\rowcolor{tblalt}
+ & FS & \win{$561$} & \win{$561$} & --- & --- \\
+ & FS / APC & \win{$0.89$} & \win{$0.74$} & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The ratio falls with $k$.}
+\Cref{tab:branch} is $(L+\ell)/(L+k\ell)$ on the GPU.
+The spine stays at $550$ tokens on Llama-3-8B and $569$ on Mistral-7B from $k{=}2$ to $k{=}8$, while APC grows, so the ratio moves from $0.90$ to $0.55$.
+DeepSeek-R1 matches at $k{=}2$ and $k{=}4$ ($0.89$, $0.74$).
+Depth $2$ stays in the $k{=}4$ band ($0.75$--$0.76$).
+Accuracy on $16$ items stays within two problems of APC.
+ForkServe+ does not move the peak; at $k{=}8$ it drops $28$ draft branches and cuts fan-out from $307$\,ms to $179$\,ms on Llama-3-8B and from $349$\,ms to $191$\,ms on Mistral-7B.
+With prune off, fan-out returns to $247$\,ms and $248$\,ms.
+With the last-line stop off, decode stays near $2500$--$3800$ tokens rather than APC's $8192$: only the winner is decoded, and it already ends inside $D$.
+A batch of $16$ keeps the ratio ($0.72$ and $0.73$).
+
+\begin{table}[t]
+\centering
+\caption{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$.
+MATH-500 is $n{=}200$; AIME is $n{=}73$.
+Qwen3-4B ForkServe+ is still running and is omitted.
+Best storage in green.}
+\label{tab:longcot}
+\scriptsize
+\setlength{\tabcolsep}{2.6pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrrr}
+\rowcolor{tblhead}
+\toprule
+ & & peak & / APC & acc. & e2e (s) \\
+\midrule
+\multirow{3}{*}{R1 MATH}
+ & APC & $1863$ & --- & $0.555$ & $433$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1391$} & \win{$0.75$} & $0.505$ & $431$ \\
+ & FS+ & \win{$1391$} & \win{$0.75$} & $0.505$ & $433$ \\
+\midrule
+\multirow{3}{*}{R1 AIME}
+ & APC & $2118$ & --- & $0.068$ & $178$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1646$} & \win{$0.78$} & $0.096$ & $178$ \\
+ & FS+ & \win{$1646$} & \win{$0.78$} & $0.055$ & $200$ \\
+\midrule
+\multirow{2}{*}{Q4 MATH}
+ & APC & $1937$ & --- & $0.635$ & $328$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1521$} & \win{$0.79$} & $0.615$ & $326$ \\
+\midrule
+\multirow{2}{*}{Q4 AIME}
+ & APC & $2150$ & --- & $0.014$ & $135$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1734$} & \win{$0.81$} & $0.068$ & $135$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{A long budget does not erase the spine.}
+\Cref{tab:longcot} keeps $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ in $0.75$--$0.81$ at $D{=}2048$.
+DeepSeek-R1 MATH-500 is $101/200$ against APC $111/200$, and end-to-end stays at $431$--$433$\,s because the trace spends the budget.
+ForkServe+ still prunes $75$ MATH residuals, so its fan-out is $1553$\,ms against $2375$\,ms for \sys.
+Qwen3-4B matches the ratio ($0.79$, $0.81$) with end-to-end within $1\%$ of APC.
