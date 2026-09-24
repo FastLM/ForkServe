@@ -90,7 +90,7 @@
 \newlabel{sec:app}{{3.4}{4}{}{subsection.3.4}{}}
 \newlabel{sec:app@cref}{{[subsection][4][3]3.4}{[1][4][]4}{}{}{}}
 \citation{vllm}
-\newlabel{fig:pool}{{2}{5}{\textbf {Context-tree page pool.} A branch is an alias over the same three structures as a prefix-cache block pool: a request table, a hash index, and a frame free list. \emph {Left:} $\sigma _u$ stores $(\mathrm {parent},\mathrm {alias\_len},\rho )$, a mode, and a generation~\textcircled {1}. \texttt {fork} copies the two words and increfs the trunk, $O(1)$ in $L$, and does not probe $H$~\textcircled {2}. LCP commit publishes full winner blocks and bumps $g$, so in-flight speculative jobs drop~\textcircled {6}. \texttt {abort} decrefs residual pages only, leaving the spine $M_{\mathrm {spine}}{=}b(L{+}\ell _\star )$~\textcircled {7}. \emph {Right:} the trunk is one physical copy whose refcount is the number of live mappers; each child allocates only $\rho $, still at $\mathrm {hash}{=}\emptyset $~\textcircled {3}. $H$ holds full committed blocks, so a later session can hash-hit the winner~\textcircled {4}. The free list is doubly linked and stores only $\mathrm {ref}{=}0$ frames; \texttt {fork} pops residual frames and \texttt {abort} splices them back, never the trunk~\textcircled {5}. A write with $\mathrm {ref}{>}1$ copies the valid rows of that page}{figure.2}{}}
+\newlabel{fig:pool}{{2}{5}{\textbf {Context-tree page pool.} \texttt {fork} aliases the trunk in $O(1)$ and allocates only $\rho $~\textcircled {1}--\textcircled {3}. $H$ publishes full committed blocks~\textcircled {4}\textcircled {6}. \texttt {abort} returns residual frames only, so live occupancy is the spine $M_{\mathrm {spine}}{=}b(L{+}\ell _\star )$~\textcircled {5}\textcircled {7}}{figure.2}{}}
 \newlabel{fig:pool@cref}{{[figure][2][]2}{[1][4][]5}{}{}{}}
 \newlabel{eq:action}{{5}{5}{}{equation.5}{}}
 \newlabel{eq:action@cref}{{[equation][5][]5}{[1][5][]5}{}{}{}}
@@ -107,12 +107,12 @@
 \newlabel{fig:app@cref}{{[figure][3][]3}{[1][4][]6}{}{}{}}
 \newlabel{tab:span}{{3}{6}{Work, transfer, and memory spans (bottleneck in \textcolor {fsred}{red}). $W_{\mathrm {pre}}$ is GPU prefill tokens; $X$ is connector tokens; $M$ is live KV after abort; $T_{\mathrm {ab}}$ is abort cost in pages; replay is a later \texttt {open} of the published winner. $\mathrm {PAR}$ is the number of trunk copies touched on the first expand}{table.3}{}}
 \newlabel{tab:span@cref}{{[table][3][]3}{[1][5][]6}{}{}{}}
+\newlabel{eq:tfan}{{8}{6}{}{equation.8}{}}
+\newlabel{eq:tfan@cref}{{[equation][8][]8}{[1][6][]6}{}{}{}}
 \citation{sarathi}
 \citation{jitserve}
 \newlabel{fig:tree}{{4}{7}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.4}{}}
 \newlabel{fig:tree@cref}{{[figure][4][]4}{[1][4][]7}{}{}{}}
-\newlabel{eq:tfan}{{8}{7}{}{equation.8}{}}
-\newlabel{eq:tfan@cref}{{[equation][8][]8}{[1][6][]7}{}{}{}}
 \newlabel{sec:schedule}{{3.5}{7}{}{subsection.3.5}{}}
 \newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][7][]7}{}{}{}}
 \newlabel{eq:bc}{{9}{7}{}{equation.9}{}}
@@ -121,12 +121,12 @@
 \newlabel{eq:bs@cref}{{[equation][10][]10}{[1][7][]7}{}{}{}}
 \newlabel{eq:theta}{{11}{7}{}{equation.11}{}}
 \newlabel{eq:theta@cref}{{[equation][11][]11}{[1][7][]7}{}{}{}}
+\newlabel{tab:gsm}{{4}{7}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
+\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][7][]7}{}{}{}}
 \newlabel{sec:eval}{{4}{7}{}{section.4}{}}
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][7][]7}{}{}{}}
 \newlabel{sec:eval-gpu}{{4.1}{7}{}{subsection.4.1}{}}
 \newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][7][]7}{}{}{}}
-\newlabel{tab:gsm}{{4}{8}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
-\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][7][]8}{}{}{}}
 \newlabel{tab:app}{{5}{8}{Control-plane fan-out and replay ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; ForkServe+ in green. Not GPU wall-clock}{table.5}{}}
 \newlabel{tab:app@cref}{{[table][5][]5}{[1][8][]8}{}{}{}}
 \newlabel{sec:eval-app}{{4.2}{8}{}{subsection.4.2}{}}
@@ -137,6 +137,8 @@
 \newlabel{tab:plus@cref}{{[table][6][]6}{[1][8][]8}{}{}{}}
 \newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
 \newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-multi}{{4.4}{8}{}{subsection.4.4}{}}
+\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][8][]8}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
@@ -145,11 +147,9 @@
 \newlabel{fig:eval-multi}{{6}{9}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.6}{}}
 \newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
 \newlabel{tab:multi}{{7}{9}{Cross-model forest, $n{=}40$, $\mathrm {tp}{=}2$ (peak KV unchanged at $\mathrm {tp}{=}4$). APC decode tokens are $nD{=}20480$. Game24 peaks use the same $k{=}4$ ToT. Best storage in green}{table.7}{}}
-\newlabel{tab:multi@cref}{{[table][7][]7}{[1][9][]9}{}{}{}}
-\newlabel{sec:eval-multi}{{4.4}{9}{}{subsection.4.4}{}}
-\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][9][]9}{}{}{}}
-\newlabel{sec:related}{{5}{9}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][9][]9}{}{}{}}
+\newlabel{tab:multi@cref}{{[table][7][]7}{[1][8][]9}{}{}{}}
+\newlabel{tab:r1stop}{{8}{9}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. Best storage in green}{table.8}{}}
+\newlabel{tab:r1stop@cref}{{[table][8][]8}{[1][9][]9}{}{}{}}
 \citation{autellix}
 \citation{jitserve}
 \citation{hermes}
@@ -164,14 +164,14 @@
 \citation{idlespec}
 \citation{speculative,medusa,eagledraft}
 \citation{forkkv}
-\newlabel{fig:eval-hist}{{7}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
-\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
-\newlabel{tab:r1stop}{{8}{10}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. Best storage in green}{table.8}{}}
-\newlabel{tab:r1stop@cref}{{[table][8][]8}{[1][9][]10}{}{}{}}
-\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
+\newlabel{fig:eval-hist}{{7}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
+\newlabel{sec:related}{{5}{10}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][9][]10}{}{}{}}
+\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
 \bibcite{spork}{{5}{}{{}}{{}}}

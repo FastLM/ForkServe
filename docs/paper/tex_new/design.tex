@@ -44,15 +44,9 @@ TTL and offload are node-granular: speculative leaves first, then idle committed
 \centering
 \resizebox{\textwidth}{!}{\input{tex_new/fig_pool}}
 \caption{\textbf{Context-tree page pool.}
-A branch is an alias over the same three structures as a prefix-cache block pool: a request table, a hash index, and a frame free list.
-\emph{Left:} $\sigma_u$ stores $(\mathrm{parent},\mathrm{alias\_len},\rho)$, a mode, and a generation~\textcircled{1}.
-\texttt{fork} copies the two words and increfs the trunk, $O(1)$ in $L$, and does not probe $H$~\textcircled{2}.
-LCP commit publishes full winner blocks and bumps $g$, so in-flight speculative jobs drop~\textcircled{6}.
-\texttt{abort} decrefs residual pages only, leaving the spine $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{7}.
-\emph{Right:} the trunk is one physical copy whose refcount is the number of live mappers; each child allocates only $\rho$, still at $\mathrm{hash}{=}\emptyset$~\textcircled{3}.
-$H$ holds full committed blocks, so a later session can hash-hit the winner~\textcircled{4}.
-The free list is doubly linked and stores only $\mathrm{ref}{=}0$ frames; \texttt{fork} pops residual frames and \texttt{abort} splices them back, never the trunk~\textcircled{5}.
-A write with $\mathrm{ref}{>}1$ copies the valid rows of that page.}
+\texttt{fork} aliases the trunk in $O(1)$ and allocates only $\rho$~\textcircled{1}--\textcircled{3}.
+$H$ publishes full committed blocks~\textcircled{4}\textcircled{6}.
+\texttt{abort} returns residual frames only, so live occupancy is the spine $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
 \label{fig:pool}
 \end{figure*}
 
