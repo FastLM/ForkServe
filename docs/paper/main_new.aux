@@ -23,7 +23,8 @@
 \citation{sglang}
 \citation{sarathi}
 \citation{continuum,mori}
-\newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~$\sigma _u$ holds one RO trunk; \texttt {fork} aliases it in $O(1)$; LCP binds the winner. (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt {insert}. (3)~A hash hit stays off the kernel ($\Xfer {=}0$); the GPU runs only the miss tail, and \texttt {insert} admits $i\in \Keep $. \texttt {drop\_select} keeps the spine $x_\star {=}L{+}\ell _\star $ for the sampler; \texttt {stop} ends decode at $D^{+}$. After abort the live occupancy is the spine $M_{\mathrm {spine}}$; the same $8$\,GiB pool then admits $37{\to }50$ sessions ($+35\%$ tok/s)}{figure.1}{}}
+\citation{vllm}
+\newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~$\sigma _u$ holds one RO trunk; \texttt {fork} aliases it in $O(1)$; LCP binds the winner. (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt {insert}. (3)~Prefill and decode stay separate instances. Trunk tokens $1{:}3$ remain by alias; only keep token $4$ crosses \texttt {insert} ($\Xfer {=}\Work _\star $); dropped tokens never leave prefill. Decode attends $x_\star {=}1{:}4$ and stops at $D^{+}$. After abort the live occupancy is the spine $M_{\mathrm {spine}}$; the same $8$\,GiB pool then admits $37{\to }50$ sessions ($+35\%$ tok/s)}{figure.1}{}}
 \newlabel{fig:system@cref}{{[figure][1][]1}{[1][1][]2}{}{}{}}
 \newlabel{sec:problem}{{2}{2}{}{section.2}{}}
 \newlabel{sec:problem@cref}{{[section][2][]2}{[1][2][]2}{}{}{}}
@@ -31,7 +32,6 @@
 \newlabel{sec:model@cref}{{[subsection][2][2]2.2}{[1][2][]2}{}{}{}}
 \newlabel{eq:mem}{{1}{2}{}{equation.1}{}}
 \newlabel{eq:mem@cref}{{[equation][1][]1}{[1][2][]2}{}{}{}}
-\citation{vllm}
 \citation{distserve,splitwise}
 \citation{react,toolformer}
 \citation{autogen,metagpt}
@@ -80,9 +80,9 @@
 \newlabel{tab:landscape}{{2}{4}{Comparison of agentic serving systems. \cmark {}~full support; \pmark {}~partial / single-path; \xmark {}~absent. \sys {} is the first to combine forkable branch state, multi-child speculative prefill, and a gated P/D insert}{table.2}{}}
 \newlabel{tab:landscape@cref}{{[table][2][]2}{[1][3][]4}{}{}{}}
 \newlabel{eq:gain}{{3}{4}{}{equation.3}{}}
-\newlabel{eq:gain@cref}{{[equation][3][]3}{[1][3][]4}{}{}{}}
+\newlabel{eq:gain@cref}{{[equation][3][]3}{[1][4][]4}{}{}{}}
 \newlabel{eq:cost}{{4}{4}{}{equation.4}{}}
-\newlabel{eq:cost@cref}{{[equation][4][]4}{[1][3][]4}{}{}{}}
+\newlabel{eq:cost@cref}{{[equation][4][]4}{[1][4][]4}{}{}{}}
 \newlabel{prop:known}{{1}{4}{Known-suffix first}{proposition.1}{}}
 \newlabel{prop:known@cref}{{[proposition][1][]1}{[1][4][]4}{}{}{}}
 \newlabel{thm:correct}{{2}{4}{Output identity}{theorem.2}{}}
@@ -92,29 +92,29 @@
 \newlabel{eq:action}{{5}{4}{}{equation.5}{}}
 \newlabel{eq:action@cref}{{[equation][5][]5}{[1][4][]4}{}{}{}}
 \citation{vllm}
-\newlabel{fig:app}{{2}{5}{\textbf {Cost-ordered prefill pruning and transfer gating.} (a)~A residual exits at the first decisive stage: block-hash probe ($\otimes $), draft score ($\oplus $), kernel prefix ($\rhd $), then the GPU miss tail. Only a kept miss tail reaches \texttt {insert}. (b)~APC and stock P/D clone the trunk $k$ ways on the first expand; CoW aliases $L$; \app {} also drops loser $\Work $ and $\Xfer $ before a kernel or a connector write}{figure.2}{}}
-\newlabel{fig:app@cref}{{[figure][2][]2}{[1][4][]5}{}{}{}}
+\newlabel{fig:pool}{{2}{5}{\textbf {Context-tree page pool.} The same three structures as a prefix-cache block pool---a request table, a hash index, and a frame free list---hold a tree of aliased pages. (a)~\texttt {fork} writes $(\pi ,\mathrm {alias\_len})$ and increfs trunk frames $0$ and $1$. Only residual frames $5$, $6$, $8$, and $9$ come off the free list. $H$ stores full committed blocks; speculative frames stay at $\mathrm {hash}{=}\emptyset $. (b)~LCP commit of $v^\star $ inserts full page $8$ and leaves partial page $9$ unpublished. Abort drops $v_1$ and $v_2$ from the refcount, so the free tail gains frames $5$ and $6$ only. Trunk frames stay live at $\mathrm {ref}{=}2$. $g{\leftarrow }2$ retires in-flight speculative jobs in $O(1)$}{figure.2}{}}
+\newlabel{fig:pool@cref}{{[figure][2][]2}{[1][3][]5}{}{}{}}
 \newlabel{eq:work}{{6}{5}{}{equation.6}{}}
 \newlabel{eq:work@cref}{{[equation][6][]6}{[1][4][]5}{}{}{}}
 \newlabel{eq:xfer}{{7}{5}{}{equation.7}{}}
 \newlabel{eq:xfer@cref}{{[equation][7][]7}{[1][4][]5}{}{}{}}
 \newlabel{lem:dom}{{3}{5}{First-fan-out dominance}{lemma.3}{}}
 \newlabel{lem:dom@cref}{{[lemma][3][]3}{[1][5][]5}{}{}{}}
-\newlabel{alg:app}{{1}{5}{}{algorithm.1}{}}
-\newlabel{alg:app@cref}{{[algorithm][1][]1}{[1][5][]5}{}{}{}}
 \citation{distserve,splitwise}
-\citation{sarathi}
-\citation{jitserve}
-\newlabel{fig:tree}{{3}{6}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.3}{}}
-\newlabel{fig:tree@cref}{{[figure][3][]3}{[1][4][]6}{}{}{}}
+\newlabel{fig:app}{{3}{6}{\textbf {Cost-ordered prefill pruning and transfer gating.} (a)~A residual exits at the first decisive stage: block-hash probe ($\otimes $), draft score ($\oplus $), kernel prefix ($\rhd $), then the GPU miss tail. Only a kept miss tail reaches \texttt {insert}. (b)~APC and stock P/D clone the trunk $k$ ways on the first expand; CoW aliases $L$; \app {} also drops loser $\Work $ and $\Xfer $ before a kernel or a connector write}{figure.3}{}}
+\newlabel{fig:app@cref}{{[figure][3][]3}{[1][4][]6}{}{}{}}
 \newlabel{tab:span}{{3}{6}{Work, transfer, and memory spans (bottleneck in \textcolor {fsred}{red}). $W_{\mathrm {pre}}$ is GPU prefill tokens; $X$ is connector tokens; $M$ is live KV after abort; $T_{\mathrm {ab}}$ is abort cost in pages; replay is a later \texttt {open} of the published winner. $\mathrm {PAR}$ is the number of trunk copies touched on the first expand}{table.3}{}}
 \newlabel{tab:span@cref}{{[table][3][]3}{[1][5][]6}{}{}{}}
 \newlabel{eq:tfan}{{8}{6}{}{equation.8}{}}
 \newlabel{eq:tfan@cref}{{[equation][8][]8}{[1][6][]6}{}{}{}}
-\newlabel{tab:gsm}{{4}{7}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
-\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][7][]7}{}{}{}}
+\citation{sarathi}
+\citation{jitserve}
+\newlabel{fig:tree}{{4}{7}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.4}{}}
+\newlabel{fig:tree@cref}{{[figure][4][]4}{[1][4][]7}{}{}{}}
+\newlabel{alg:app}{{1}{7}{}{algorithm.1}{}}
+\newlabel{alg:app@cref}{{[algorithm][1][]1}{[1][5][]7}{}{}{}}
 \newlabel{sec:schedule}{{3.5}{7}{}{subsection.3.5}{}}
-\newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][6][]7}{}{}{}}
+\newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][7][]7}{}{}{}}
 \newlabel{eq:bc}{{9}{7}{}{equation.9}{}}
 \newlabel{eq:bc@cref}{{[equation][9][]9}{[1][7][]7}{}{}{}}
 \newlabel{eq:bs}{{10}{7}{}{equation.10}{}}
@@ -125,10 +125,24 @@
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][7][]7}{}{}{}}
 \newlabel{sec:eval-gpu}{{4.1}{7}{}{subsection.4.1}{}}
 \newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][7][]7}{}{}{}}
-\newlabel{tab:app}{{5}{7}{Control-plane fan-out and replay ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; \app {} in green. Not GPU wall-clock}{table.5}{}}
-\newlabel{tab:app@cref}{{[table][5][]5}{[1][7][]7}{}{}{}}
-\newlabel{sec:eval-app}{{4.2}{7}{}{subsection.4.2}{}}
-\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][7][]7}{}{}{}}
+\newlabel{tab:gsm}{{4}{8}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
+\newlabel{tab:gsm@cref}{{[table][4][]4}{[1][8][]8}{}{}{}}
+\newlabel{tab:app}{{5}{8}{Control-plane fan-out and replay ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; ForkServe+ in green. Not GPU wall-clock}{table.5}{}}
+\newlabel{tab:app@cref}{{[table][5][]5}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-app}{{4.2}{8}{}{subsection.4.2}{}}
+\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][8][]8}{}{}{}}
+\newlabel{fig:eval-slo}{{5}{8}{\textbf {SLO sweep} from measured DeepSeek GSM8K peaks. Left: saturated tok/s plateaus at $C{\times }$decode-rate ($37$ vs.\ $50$ slots). Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app {} stays under it}{figure.5}{}}
+\newlabel{fig:eval-slo@cref}{{[figure][5][]5}{[1][8][]8}{}{}{}}
+\newlabel{tab:plus}{{6}{8}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. $D^{+}$ and e2e are GSM8K; Game24 / HumanEval peaks stay with the spine}{table.6}{}}
+\newlabel{tab:plus@cref}{{[table][6][]6}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
+\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
+\newlabel{fig:eval-multi}{{6}{9}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.6}{}}
+\newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
+\newlabel{sec:eval-multi}{{4.4}{9}{}{subsection.4.4}{}}
+\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][9][]9}{}{}{}}
+\newlabel{tab:multi}{{7}{9}{Cross-model forest, $n{=}40$, $\mathrm {tp}{=}2$ (peak KV unchanged at $\mathrm {tp}{=}4$). APC decode tokens are $nD{=}20480$. Game24 peaks use the same $k{=}4$ ToT. Best storage in green}{table.7}{}}
+\newlabel{tab:multi@cref}{{[table][7][]7}{[1][9][]9}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
@@ -139,18 +153,6 @@
 \citation{hermes}
 \citation{thunderagent}
 \citation{saga}
-\newlabel{fig:eval-slo}{{4}{8}{\textbf {SLO sweep} from measured DeepSeek GSM8K peaks. Left: saturated tok/s plateaus at $C{\times }$decode-rate ($37$ vs.\ $50$ slots). Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app {} stays under it}{figure.4}{}}
-\newlabel{fig:eval-slo@cref}{{[figure][4][]4}{[1][8][]8}{}{}{}}
-\newlabel{tab:plus}{{6}{8}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. $D^{+}$ and e2e are GSM8K; Game24 / HumanEval peaks stay with the spine}{table.6}{}}
-\newlabel{tab:plus@cref}{{[table][6][]6}{[1][8][]8}{}{}{}}
-\newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
-\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
-\newlabel{sec:eval-multi}{{4.4}{8}{}{subsection.4.4}{}}
-\newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][8][]8}{}{}{}}
-\newlabel{tab:multi}{{7}{8}{Cross-model forest, $n{=}40$, $\mathrm {tp}{=}2$ (peak KV unchanged at $\mathrm {tp}{=}4$). APC decode tokens are $nD{=}20480$. Game24 peaks use the same $k{=}4$ ToT. Best storage in green}{table.7}{}}
-\newlabel{tab:multi@cref}{{[table][7][]7}{[1][8][]8}{}{}{}}
-\newlabel{sec:related}{{5}{8}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][8][]8}{}{}{}}
 \citation{infercept}
 \citation{continuum}
 \citation{mori}
@@ -162,14 +164,16 @@
 \citation{forkkv}
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
+\newlabel{fig:eval-hist}{{7}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B and DeepSeek-R1; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
+\newlabel{sec:related}{{5}{10}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
+\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
 \bibcite{spork}{{5}{}{{}}{{}}}
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
-\newlabel{fig:eval-multi}{{5}{9}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.5}{}}
-\newlabel{fig:eval-multi@cref}{{[figure][5][]5}{[1][8][]9}{}{}{}}
-\newlabel{sec:conclusion}{{6}{9}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][9][]9}{}{}{}}
 \bibcite{medusa}{{7}{}{{}}{{}}}
 \bibcite{murakkab}{{8}{}{{}}{{}}}
 \bibcite{idlespec}{{9}{}{{}}{{}}}
@@ -185,8 +189,6 @@
 \bibcite{continuum}{{19}{}{{}}{{}}}
 \bibcite{eagledraft}{{20}{}{{}}{{}}}
 \bibcite{parrot}{{21}{}{{}}{{}}}
-\newlabel{fig:eval-hist}{{6}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B and DeepSeek-R1; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.6}{}}
-\newlabel{fig:eval-hist@cref}{{[figure][6][]6}{[1][8][]10}{}{}{}}
 \bibcite{hermes}{{22}{}{{}}{{}}}
 \bibcite{autellix}{{23}{}{{}}{{}}}
 \bibcite{hive}{{24}{}{{}}{{}}}

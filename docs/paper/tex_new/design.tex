@@ -34,10 +34,26 @@ $\sigma_u=(\mathrm{parent},\;\mathrm{alias\_len},\;\rho^{\mathrm{pages}}_u)$.
 Invariants: (i)~prefix; (ii)~at most one committed child per node except during join; (iii)~speculative nodes are invisible to sampling; (iv)~a page's refcount equals the number of non-dead nodes that map it.
 \texttt{fork}$(u,\mathit{bid},x^{\mathrm{k}})$ copies two words $(\mathrm{parent}\leftarrow\sigma_u,\;\mathrm{alias\_len}\leftarrow|x_u|)$ and increfs the aliased frames---$O(1)$ in $L$.
 A write that hits $\mathrm{ref}>1$ or a read-only tail CoW-copies only the valid rows.
+\Cref{fig:pool} is one fan-out on that pool.
 A multi-level fan-out is a \emph{sequence} of CoWs (\Cref{fig:tree}): each edge aliases the parent and allocates only $+$r; live paths share every page on the common prefix; abort is residual-only, and a subtree with no live child cascades until the committed spine.
 The two compose: LCP commit publishes full winner pages into the APC index so a later session can hash-hit them (\S\ref{sec:app}).
 Abort frees $b\ell_i$ bytes, not $b(L+\ell_i)$.
 TTL and offload are node-granular: speculative leaves first, then idle committed leaves, then the spine~\cite{continuum,mori}.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_pool}}
+\caption{\textbf{Context-tree page pool.}
+The same three structures as a prefix-cache block pool---a request table, a hash index, and a frame free list---hold a tree of aliased pages.
+(a)~\texttt{fork} writes $(\pi,\mathrm{alias\_len})$ and increfs trunk frames $0$ and $1$.
+Only residual frames $5$, $6$, $8$, and $9$ come off the free list.
+$H$ stores full committed blocks; speculative frames stay at $\mathrm{hash}{=}\emptyset$.
+(b)~LCP commit of $v^\star$ inserts full page $8$ and leaves partial page $9$ unpublished.
+Abort drops $v_1$ and $v_2$ from the refcount, so the free tail gains frames $5$ and $6$ only.
+Trunk frames stay live at $\mathrm{ref}{=}2$.
+$g{\leftarrow}2$ retires in-flight speculative jobs in $O(1)$.}
+\label{fig:pool}
+\end{figure*}
 
 \subsection{Admission}
 \label{sec:speculate}
@@ -201,10 +217,10 @@ APC (first expand) & \botn{$kL+\sum_i\ell_i$} & $0$ & $kL+\sum_i\ell_i$ & LRU of
 hash prefill (first) & \botn{$kL+\sum_i\ell_i$} & $0$ & $kL+\sum_i\ell_i$ & LRU & $k$ & $0$ \\
 \rowcolor{tblalt}
 stock P/D & \botn{$kL+\sum_i\ell_i$} & \botn{$kL+\sum_i\ell_i$} & $kL+\sum_i\ell_i$ & $0$ (ship-all) & $k$ & $0$ \\
-\sys{} CoW & $L+\sum_i\ell_i$ & $0$ & \win{$L+\ell_\star$} & $\Theta(\ell_i/P)$ & $1$ & $L_{\mathrm{miss}}$ \\
+FS CoW & $L+\sum_i\ell_i$ & $0$ & \win{$L+\ell_\star$} & $\Theta(\ell_i/P)$ & $1$ & $L_{\mathrm{miss}}$ \\
 \rowcolor{tblalt}
-\app{} + P/D & \win{$L+\sum_{i\in\Keep}\ell_i$} & \win{$\sum_{i\in\Keep}\Work_i$} & \win{$L+\ell_\star$} & lazy, residual only & $1$ & \win{$0$} \\
-\app{} + stop & $L+\sum_{i\in\Keep}\ell_i$ & $\sum_{i\in\Keep}\Work_i$ & \win{$L+\ell_\star$} & lazy & $1$ & $0$ \\
+FS+ + P/D & \win{$L+\sum_{i\in\Keep}\ell_i$} & \win{$\sum_{i\in\Keep}\Work_i$} & \win{$L+\ell_\star$} & lazy, residual only & $1$ & \win{$0$} \\
+FS+ + stop & $L+\sum_{i\in\Keep}\ell_i$ & $\sum_{i\in\Keep}\Work_i$ & \win{$L+\ell_\star$} & lazy & $1$ & $0$ \\
 \bottomrule
 \end{tabular}
 

@@ -31,7 +31,7 @@ Best storage in green.}
 \begin{tabular}{lrrr}
 \rowcolor{tblhead}
 \toprule
- & recompute & APC & \sys \\
+ & recompute & APC & FS \\
 \midrule
 Accuracy & $0.847$ & $0.844$ & $0.845$ \\
 \rowcolor{tblalt}
@@ -89,7 +89,7 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
  & hash & \botn{$11520$} & $139.0$ & $0$ & $11520$ & $0$ & $0$ \\
  & stock P/D & \botn{$11520$} & \botn{$162.1$} & \botn{$11520$} & $11520$ & $0$ & $0$ \\
 \rowcolor{tblalt}
- & \sys & $3840$ & $47.1$ & $0$ & $3840$ & $0$ & $0$ \\
+ & FS & $3840$ & $47.1$ & $0$ & $3840$ & $0$ & $0$ \\
  & ForkServe+ & \win{$2912$} & \win{$35.9$} & \win{$352$} & \win{$2880$} & $9$ & $20$ \\
 \midrule
 \multirow{5}{*}{replay}
@@ -98,7 +98,7 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
  & hash & $0$ & $0$ & $0$ & $5760$ & $20$ & $0$ \\
  & stock P/D & $0$ & $0$ & $0$ & $5760$ & $20$ & $0$ \\
 \rowcolor{tblalt}
- & \sys & $640$ & $7.7$ & $0$ & $5760$ & $20$ & $0$ \\
+ & FS & $640$ & $7.7$ & $0$ & $5760$ & $20$ & $0$ \\
  & ForkServe+ & \win{$0$} & \win{$0$} & $0$ & $5760$ & $20$ & $0$ \\
 \midrule
  & ForkServe+ / APC & \win{$-75\%$} & \win{$-74\%$} & --- & \win{$-75\%$} & --- & --- \\
@@ -144,6 +144,17 @@ Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app{} stays under it.}
 \label{fig:eval-slo}
 \end{figure}
 
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_eval_bars}}
+\caption{\textbf{Peak KV} on six models ($n{=}40$, $\mathrm{tp}{=}2$).
+Each panel is one family; groups are GSM8K and Game24.
+Bars are recompute, APC, \sys, and ForkServe+ (cream / tan / orange / purple).
+\sys{} and ForkServe+ share the spine.
+Annotated $\times$ is $M_{\mathrm{spine}}/M_{\mathrm{APC}}$: $0.72$--$0.75\times$ on GSM8K and $0.57$--$0.61\times$ on Game24, independent of checkpoint size, as \eqref{eq:mem} predicts.}
+\label{fig:eval-multi}
+\end{figure*}
+
 \subsection{GPU ForkServe+}
 \label{sec:eval-plus}
 
@@ -169,10 +180,10 @@ $D^{+}$ and e2e are GSM8K; Game24 / HumanEval peaks stay with the spine.}
 \midrule
 APC $\mathrm{tp}{=}2$ & $1582$ & $40960$ & $36.0$ & $0.900$ & --- & $1289$ & $1970$ \\
 \rowcolor{tblalt}
-\sys $\mathrm{tp}{=}2$ & $1182$ & $13356$ & $28.2$ & $0.863$ & \win{$0.78\times$} & $793$ & $1882$ \\
+ForkServe+ $\mathrm{tp}{=}2$ & $1182$ & $13356$ & $28.2$ & $0.863$ & \win{$0.78\times$} & $793$ & $1882$ \\
 APC $\mathrm{tp}{=}4$ & $1582$ & $40960$ & $22.7$ & $0.938$ & --- & $1289$ & $1970$ \\
 \rowcolor{tblalt}
-\sys $\mathrm{tp}{=}4$ & $1182$ & \win{$12826$} & \win{$16.9$} & $0.925$ & \win{$0.75\times$} & $793$ & $1882$ \\
+ForkServe+ $\mathrm{tp}{=}4$ & $1182$ & \win{$12826$} & \win{$16.9$} & $0.925$ & \win{$0.75\times$} & $793$ & $1882$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -232,17 +243,6 @@ FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.000$ \\
 \bottomrule
 \end{tabular}
 \end{table}
-
-\begin{figure*}[t]
-\centering
-\resizebox{\textwidth}{!}{\input{tex_new/fig_eval_bars}}
-\caption{\textbf{Peak KV} on six models ($n{=}40$, $\mathrm{tp}{=}2$).
-Each panel is one family; groups are GSM8K and Game24.
-Bars are recompute, APC, \sys, and ForkServe+ (cream / tan / orange / purple).
-\sys{} and ForkServe+ share the spine.
-Annotated $\times$ is $M_{\mathrm{spine}}/M_{\mathrm{APC}}$: $0.72$--$0.75\times$ on GSM8K and $0.57$--$0.61\times$ on Game24, independent of checkpoint size, as \eqref{eq:mem} predicts.}
-\label{fig:eval-multi}
-\end{figure*}
 
 \paragraph{What transfers.}
 \Cref{tab:multi,fig:eval-multi} separate storage from stop.

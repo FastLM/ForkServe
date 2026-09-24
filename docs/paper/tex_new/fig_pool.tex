@@ -1,0 +1,147 @@
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  card/.style={draw, rounded corners=1.2pt, align=left, font=\tiny\sffamily,
+               inner sep=2.2pt, line width=0.4pt, text width=3.15cm, minimum height=1.05cm},
+  page/.style={draw, rounded corners=1pt, align=center, font=\tiny\sffamily,
+               inner sep=1.4pt, line width=0.4pt, text width=1.42cm, minimum height=1.22cm},
+  freep/.style={draw=fsgray, fill=black!4, rounded corners=1pt, align=center,
+                font=\tiny\sffamily, inner sep=1.2pt, line width=0.35pt,
+                text width=1.15cm, minimum height=0.78cm, text=fsgray},
+  hrow/.style={font=\tiny\sffamily, anchor=west},
+  lab/.style={font=\tiny\sffamily\bfseries, anchor=west},
+  note/.style={font=\tiny\sffamily, text=fsgray, align=left, anchor=west},
+  arr/.style={-{Latex[length=1.4mm,width=1.05mm]}, line width=0.4pt, draw=fsblue!70},
+  flink/.style={{Latex[length=1.15mm,width=0.85mm]}-{Latex[length=1.15mm,width=0.85mm]},
+                line width=0.35pt, draw=fsgray},
+  alias/.style={densely dashed, line width=0.4pt, draw=fsblue!55},
+]
+\path (0,0) rectangle (16.55,11.55);
+
+% ===================== (a) after fork =====================
+\node[font=\scriptsize\bfseries, anchor=west] at (0.05,11.32)
+  {(a) After \texttt{fork}$(u)$: three children alias one trunk};
+
+% node cards
+\node[card, draw=fsblue, fill=fslight] (nu) at (1.72,10.15)
+  {\textbf{node $u$}\quad Commit\quad $g{=}1$\\
+   $\pi{=}\bot$\quad $\mathrm{alias\_len}{=}0$\\
+   maps pages $0,1$};
+\node[card, draw=fsorange!80!black, fill=fsspec] (nv1) at (5.15,10.15)
+  {\textbf{node $v_1$}\quad Spec\quad $g{=}1$\\
+   $\pi{=}u$\quad $\mathrm{alias\_len}{=}8$\\
+   $\uparrow\{0,1\}$ $+$ page $5$};
+\node[card, draw=fsorange!80!black, fill=fsspec] (nv2) at (8.58,10.15)
+  {\textbf{node $v_2$}\quad Spec\quad $g{=}1$\\
+   $\pi{=}u$\quad $\mathrm{alias\_len}{=}8$\\
+   $\uparrow\{0,1\}$ $+$ page $6$};
+\node[card, draw=fsgreen!55!black, fill=fscommit] (nvs) at (12.02,10.15)
+  {\textbf{node $v^\star$}\quad Spec\quad $g{=}1$\\
+   $\pi{=}u$\quad $\mathrm{alias\_len}{=}8$\\
+   $\uparrow\{0,1\}$ $+$ pages $8,9$};
+\node[note] at (14.05,10.35) {\texttt{fork} writes\\two words and\\increfs. No new\\trunk id.};
+
+% publish index
+\node[lab, text=fsblue] at (0.08,8.72) {Publish index $H$};
+\draw[fsblue!35, fill=fslight, rounded corners=1pt] (0.08,7.05) rectangle (5.35,8.48);
+\node[hrow, font=\tiny\sffamily\bfseries, text=fsblue] at (0.18,8.28) {hash key \hfill page};
+\draw[fsblue!30] (0.18,8.12) -- (5.22,8.12);
+\node[hrow] at (0.18,7.90) {$h(\bot,\texttt{ABCD})$ \hfill $0$ \quad pub};
+\node[hrow] at (0.18,7.62) {$h(0,\texttt{EFGH})$ \hfill $1$ \quad pub};
+\node[hrow, text=fsorange!80!black] at (0.18,7.30) {spec pages $5,6,8,9$ \hfill $\notin H$};
+
+% spine pages
+\node[lab, text=fsblue] at (5.55,8.72) {Page pool};
+\node[note] at (7.35,8.72) {live spine, $\mathrm{ref}{=}4$, not on the free list};
+
+\node[page, draw=fsblue, fill=fsblue!12] (p0) at (6.45,7.72)
+  {\textbf{ID 0}\\ \texttt{ABCD}\\ $\mathrm{ref}{=}4$\\ RO $\cdot$ pub};
+\node[page, draw=fsblue, fill=fsblue!12] (p1) at (8.05,7.72)
+  {\textbf{ID 1}\\ \texttt{EFGH}\\ $\mathrm{ref}{=}4$\\ RO $\cdot$ pub};
+\draw[alias] (5.15,9.52) -- (p0.north);
+\draw[alias] (8.58,9.52) -- (p1.north);
+\draw[alias] (11.20,9.52) -- (p1.north east);
+
+% private residuals
+\node[note, text=fsorange!80!black] at (5.55,6.85) {private residuals, $\mathrm{ref}{=}1$, hash $=\emptyset$};
+\node[page, draw=fsorange!80!black, fill=fsspec] (p5) at (6.45,6.05)
+  {\textbf{ID 5}\\ \texttt{IJkl}\\ $\mathrm{ref}{=}1$\\ $v_1$ $\cdot$ spec};
+\node[page, draw=fsorange!80!black, fill=fsspec] (p6) at (8.05,6.05)
+  {\textbf{ID 6}\\ \texttt{MNOP}\\ $\mathrm{ref}{=}1$\\ $v_2$ $\cdot$ spec};
+\node[page, draw=fsgreen!55!black, fill=fscommit] (p8) at (9.65,6.05)
+  {\textbf{ID 8}\\ \texttt{QRST}\\ $\mathrm{ref}{=}1$\\ $v^\star$ full};
+\node[page, draw=fsorange!80!black, fill=fsspec] (p9) at (11.25,6.05)
+  {\textbf{ID 9}\\ \texttt{UV}$\cdot\cdot$\\ $\mathrm{ref}{=}1$\\ partial tail};
+
+% free list
+\node[lab, text=fsgray] at (5.55,5.28) {Free list};
+\node[note] at (7.20,5.28) {$\mathrm{num\_free}{=}4$\quad doubly linked, $\mathrm{ref}{=}0$ only};
+\node[freep] (f7) at (6.30,4.48) {\textbf{ID 7}\\ Head};
+\node[freep] (f4) at (7.70,4.48) {\textbf{ID 4}\\ free};
+\node[freep] (f3) at (9.10,4.48) {\textbf{ID 3}\\ free};
+\node[freep] (f2) at (10.50,4.48) {\textbf{ID 2}\\ Tail};
+\draw[flink] (f7) -- (f4);
+\draw[flink] (f4) -- (f3);
+\draw[flink] (f3) -- (f2);
+
+\node[note, text width=4.6cm] at (12.15,6.55)
+  {A write with $\mathrm{ref}{>}1$ CoW-copies\\
+   only the valid rows of that page.\\
+   \texttt{fork} does not probe $H$.\\
+   Spec frames stay unpublished.};
+
+% ===================== (b) after LCP =====================
+\draw[fsblue!20] (0.05,3.95) -- (16.45,3.95);
+\node[font=\scriptsize\bfseries, anchor=west] at (0.05,3.72)
+  {(b) After LCP commit of $v^\star$ and abort of $v_1,v_2$};
+
+\node[card, draw=fsblue, fill=fslight, text width=2.85cm] at (1.58,2.78)
+  {\textbf{$u$}\quad Commit\quad $g{=}2$\\
+   maps $0,1$ \quad gen bump};
+\node[card, draw=fsgray, fill=black!5, text=fsgray, densely dashed, text width=2.85cm] at (4.62,2.78)
+  {\textbf{$v_1$}\quad Dead\\
+   page $5$ off the refcount};
+\node[card, draw=fsgray, fill=black!5, text=fsgray, densely dashed, text width=2.85cm] at (7.66,2.78)
+  {\textbf{$v_2$}\quad Dead\\
+   page $6$ off the refcount};
+\node[card, draw=fsgreen!60!black, fill=fscommit, text width=2.85cm] at (10.70,2.78)
+  {\textbf{$v^\star$}\quad Commit\quad $g{=}2$\\
+   $\uparrow\{0,1\}{+}8,9$ kept};
+
+\node[lab, text=fsblue] at (0.08,1.72) {$H$ after publish};
+\draw[fsblue!35, fill=fslight, rounded corners=1pt] (0.08,0.08) rectangle (4.55,1.58);
+\node[hrow] at (0.18,1.38) {$h(\bot,\texttt{ABCD})$ \hfill $0$};
+\node[hrow] at (0.18,1.10) {$h(0,\texttt{EFGH})$ \hfill $1$};
+\node[hrow, text=fsgreen!40!black] at (0.18,0.82) {$h(1,\texttt{QRST})$ \hfill $8$ \quad new};
+\node[hrow, text=fsorange!80!black] at (0.18,0.52) {page $9$ partial \hfill $\notin H$};
+\node[hrow, text=fsgray] at (0.18,0.26) {pages $5,6$ never inserted};
+
+\node[page, draw=fsblue, fill=fsblue!12] (q0) at (5.55,0.85)
+  {\textbf{ID 0}\\ \texttt{ABCD}\\ $\mathrm{ref}{=}2$\\ stays live};
+\node[page, draw=fsblue, fill=fsblue!12] (q1) at (7.10,0.85)
+  {\textbf{ID 1}\\ \texttt{EFGH}\\ $\mathrm{ref}{=}2$\\ stays live};
+\node[page, draw=fsgreen!60!black, fill=fscommit] (q8) at (8.65,0.85)
+  {\textbf{ID 8}\\ \texttt{QRST}\\ $\mathrm{ref}{=}1$\\ now in $H$};
+\node[page, draw=fsorange!75!black, fill=fsspec] (q9) at (10.20,0.85)
+  {\textbf{ID 9}\\ \texttt{UV}$\cdot\cdot$\\ $\mathrm{ref}{=}1$\\ still out};
+
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (11.15,1.72)
+  {free list \quad $\mathrm{num\_free}{=}6$};
+\node[freep, text width=0.72cm, minimum height=0.62cm] (g7) at (11.55,0.95) {\textbf{7}};
+\node[freep, text width=0.72cm, minimum height=0.62cm] (g4) at (12.45,0.95) {\textbf{4}};
+\node[freep, text width=0.72cm, minimum height=0.62cm] (g3) at (13.35,0.95) {\textbf{3}};
+\node[freep, text width=0.72cm, minimum height=0.62cm] (g2) at (14.25,0.95) {\textbf{2}};
+\node[freep, draw=fsorange!60, fill=fsspec, text width=0.72cm, minimum height=0.62cm] (g5) at (15.15,0.95) {\textbf{5}};
+\node[freep, draw=fsorange!60, fill=fsspec, text width=0.72cm, minimum height=0.62cm] (g6) at (16.05,0.95) {\textbf{6}};
+\draw[flink] (g7) -- (g4);
+\draw[flink] (g4) -- (g3);
+\draw[flink] (g3) -- (g2);
+\draw[flink] (g2) -- (g5);
+\draw[flink] (g5) -- (g6);
+\node[font=\tiny\sffamily, text=fsgray] at (11.55,0.42) {Head};
+\node[font=\tiny\sffamily, text=fsgray] at (16.05,0.42) {Tail};
+\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=west] at (11.15,1.48)
+  {tail gains aborted residuals $5,6$ only};
+\end{tikzpicture}
