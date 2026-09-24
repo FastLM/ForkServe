@@ -1,13 +1,16 @@
-Agentic serving forks a shared trunk into short residuals and then keeps one committed path.
-Prefix caches reuse a trunk only after tokens exist and a hash hits; stock prefill/decode (P/D) disaggregation ships every page the prefiller computed.
-\sys makes the branch a serving object: a copy-on-write context tree aliases the trunk at \texttt{fork}, and advanced prefill pruning (\app) decides, per residual $\rho_i$, whether GPU work $\Work_i$ and connector transfer $\Xfer_i$ run at all.
-A four-layer filter---hash skip, draft prune, early abort, then a P/D gate---inserts only retained miss tails; decode attends solely to the committed spine $L{+}\ell_\star$.
-We give the work, transfer, and occupancy spans
-$\Work{=}L+\sum_{i\in\Keep}\ell_i$,
-$\Xfer{=}\sum_{i\in\Keep}\Work_i$,
-$M_{\mathrm{spine}}=b(L+\ell_\star)$,
-and prove output identity under longest-common-prefix commit.
-On Qwen3-14B GSM8K ($n{=}1319$, two A100s) \sys matches APC accuracy ($0.845$ vs.\ $0.844$) at $0.72\times$ median peak KV.
-A control-plane comparison shows \app cutting modeled fan-out prefill by $75\%$ versus APC ($35.9$ vs.\ $139$\,ms; $2880$ vs.\ $11520$ tokens).
-On Qwen3-8B ($n{=}80$, $\mathrm{tp}{=}4$) ForkServe+ keeps that KV gap and, with answer-marker stop, emits $0.31\times$ APC decode tokens and $0.75\times$ e2e ($16.9$ vs.\ $22.7$\,s) at accuracy $0.925$ vs.\ $0.938$.
-The same $0.72$--$0.75\times$ GSM8K peak holds on six model families; an $8$\,GiB pool raises SLO-feasible concurrency by $35\%$ ($192{\to}256$ QPS, $23680{\to}32000$ tok/s).
+Agentic LLM serving forks a shared trunk into short residuals and then keeps one committed path.
+Prefix caches can reuse that trunk only after the tokens exist and a hash hits, so the first fan-out still copies the trunk once per child.
+Prefill/decode disaggregation separates time-to-first-token from decode latency, yet the connector ships every page the prefiller computed, including residuals that will be aborted.
+The cost of a branch should be paid only for the residual that survives, and only at the cheapest stage that can reject it.
+
+\sys makes the branch a serving object.
+A copy-on-write context tree turns \texttt{fork} into an alias of the parent's KV pages and allocates frames only for the residual.
+Aborting a sibling releases those frames alone, so live occupancy collapses to the committed spine.
+On that tree, \sys decides for each residual whether GPU prefill runs and whether any KV crosses the disaggregated connector.
+The decision is a cascade of increasing cost: a block-hash probe reuses published pages, a draft score drops low-value siblings before a kernel starts, an early-abort check stops a residual whose prefix already fails, and a transfer gate inserts only the miss tail of a residual that is kept.
+Decode attends that spine alone.
+Longest-common-prefix commit binds the prompt the harness actually presents.
+We prove that speculative tokens never enter the sampler, so committed outputs are identical to a baseline that prefills only committed tokens.
+A two-class scheduler admits speculative prefill only from the budget left after committed requests meet their latency margins, and cancels it when the commit conflicts.
+
+On Qwen3-14B GSM8K, \sys matches prefix-cache accuracy at $0.72\times$ the median peak KV, cuts modeled fan-out prefill by $75\%$ relative to that cache, and raises the concurrency a fixed pool can sustain by $35\%$.
