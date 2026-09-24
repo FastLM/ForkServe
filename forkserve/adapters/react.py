@@ -52,7 +52,9 @@ class ReActAdapter:
                     p_b=0.2,
                     schema=SchemaKind.FREEFORM,
                     declared=True,
-                    gpu_prefill=True,
+                    # The harness already committed the happy path. ForkServe+
+                    # does not spend a prefill on the recovery residual.
+                    gpu_prefill=not bool(getattr(self.engine.config, "skip_known_losers", False)),
                 )
             )
         self.engine.speculate_set(session, parent, cands, t_idle_ms=t_idle_ms)

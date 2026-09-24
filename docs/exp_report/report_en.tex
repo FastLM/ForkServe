@@ -100,8 +100,9 @@ Peak KV stays $1182$ vs.\ $1582$ ($0.75\times$ APC) at both widths.
 Setting N repeats the same four-system forest on six models ($n{=}40$): GSM8K peak KV is $0.72$--$0.75\times$ APC on every family, and Game24 is $0.57$--$0.62\times$.
 A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$, $\mathrm{tp}{=}2$) keeps GSM8K peak at $0.73\times$ APC.
 ForkServe+ scores $18/32$ (APC $16/32$) on DeepSeek-R1 and $22/32$ (APC $23/32$) on Llama-3-8B, and drops to $6/32$ (APC $11/32$) on Mistral-7B.
-A $k$ sweep on the same three models ($n{=}16$) leaves the spine flat while APC grows: the ratio moves from $0.89$--$0.90$ at $k{=}2$ to $0.55$ at $k{=}8$.
-On MATH-500 ($n{=}200$, $D{=}2048$) DeepSeek-R1 peak is $0.75\times$ APC and Qwen3-4B peak is $0.79\times$, with end-to-end within $1\%$ of APC.
+A $k$ sweep on the same three models ($n{=}16$) leaves the spine flat while APC grows: the ratio moves from $0.89$--$0.90$ at $k{=}2$ to $0.53$--$0.55$ at $k{=}8$.
+On MATH-500 ($n{=}200$, $D{=}2048$) DeepSeek-R1 peak is $0.75\times$ APC and Qwen3-4B peak is $0.79\times$.
+ForkServe+ keeps that peak and brings MATH-500 fan-out to the APC level ($1553$ vs.\ $1604$\,ms on DeepSeek-R1, $1223$ vs.\ $1178$\,ms on Qwen3-4B).
 \end{abstract}
 
 \section{Design}
@@ -2164,7 +2165,8 @@ At $\mathrm{tp}{=}4$, peak KV is unchanged and wall-clock scales by $0.60$--$0.7
 
 Setting O holds the model, the $16$ GSM8K items, $D{=}512$, and $\mathrm{tp}{=}2$, and changes only the tree.
 Setting P is the same ToT recipe on MATH-500 and AIME with $D{=}2048$.
-Qwen3-4B ForkServe+ on setting P is still running and is omitted.
+Both settings are complete for the models reported below.
+Qwen3-8B contest traces are still running and are omitted.
 
 \begin{table}[h]
 \centering
@@ -2192,34 +2194,42 @@ depth $2$ & peak & $814$ & $614$ & $614$ & $0.75$ & $841$ & $641$ & $641$ & $0.7
 }
 \caption{Setting O, GSM8K $n{=}16$, $\mathrm{tp}{=}2$, $D{=}512$.
 The spine peak is independent of $k$; APC peak grows with the hashed union.
-DeepSeek-R1 at the same $n$ is $561/629{=}0.89$ at $k{=}2$ ($8/16$ ForkServe+ vs.\ $10/16$ APC) and $561/761{=}0.74$ at $k{=}4$ ($8/16$ vs.\ $9/16$).
-Its $k{=}8$ and depth-$2$ runs are not finished.}
+DeepSeek-R1 at the same $n$ is $561/629{=}0.89$ at $k{=}2$, $561/761{=}0.74$ at $k{=}4$, $561/1053{=}0.53$ at $k{=}8$, and $641/841{=}0.76$ at depth $2$.
+ForkServe+ accuracy is $8/16$, $8/16$, $10/16$, and $1/16$ against APC $10/16$, $9/16$, $8/16$, and $1/16$.}
 \end{table}
 
-ForkServe+ at $k{=}8$ prunes $28$ branches on both families and brings fan-out below the $k{=}4$ ForkServe number.
-Disabling that prune (answer stop left on) returns fan-out to $247$\,ms on Llama-3-8B and $248$\,ms on Mistral-7B, with the same peak ($550$, $569$) and transfer tokens $376$ and $364$ instead of $92$.
-Disabling the last-line stop (prune left on) leaves fan-out at $176$\,ms and $174$\,ms.
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/branch_peak.pdf}
+\caption{Setting O peak KV.
+ForkServe+ matches the ForkServe bar on every cell.
+The spine stays at $550$, $569$, and $561$ from $k{=}2$ to $k{=}8$.}
+\end{figure}
+
+ForkServe+ at $k{=}8$ prunes $28$ branches on all three families and cuts fan-out from $307$ to $179$\,ms on Llama-3-8B, from $349$ to $191$\,ms on Mistral-7B, and from $363$ to $194$\,ms on DeepSeek-R1.
+Disabling that prune (answer stop left on) returns fan-out to $247$\,ms on Llama-3-8B, $248$\,ms on Mistral-7B, and $271$\,ms on DeepSeek-R1, with the same peak and transfer tokens $376$, $364$, and $400$ instead of $92$ or $110$.
+Disabling the last-line stop (prune left on) leaves fan-out at $176$\,ms, $174$\,ms, and $191$\,ms.
 Decode tokens stay near $2500$--$3800$ rather than APC's $8192$, because only the winner is decoded and it already emits an EOS well inside $D{=}512$.
 
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{@{}llrrrr@{}}
+\begin{tabular}{@{}llrrrrrr@{}}
 \toprule
- & & \multicolumn{2}{c}{Llama-3-8B} & \multicolumn{2}{c}{Mistral-7B} \\
-\cmidrule(lr){3-4}\cmidrule(lr){5-6}
- & & APC & FS+ & APC & FS+ \\
+ & & \multicolumn{2}{c}{Llama-3-8B} & \multicolumn{2}{c}{Mistral-7B} & \multicolumn{2}{c}{DeepSeek-R1} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+ & & APC & FS+ & APC & FS+ & APC & FS+ \\
 \midrule
-$1{\times}16$ & peak & $226$ & $176$ & $237$ & $187$ \\
- & e2e (s) & $19.8$ & $21.9$ & $28.2$ & $27.8$ \\
- & accuracy & $10/16$ & $9/16$ & $4/16$ & $5/16$ \\
-$16$ in one step & peak & $2871$ & $2071$ & $2935$ & $2135$ \\
- & e2e (s) & $2.4$ & $4.4$ & $4.4$ & $3.6$ \\
- & accuracy & $12/16$ & $10/16$ & $4/16$ & $6/16$ \\
+$1{\times}16$ & peak & $226$ & $176$ & $237$ & $187$ & $246$ & $196$ \\
+ & e2e (s) & $19.8$ & $21.9$ & $28.2$ & $27.8$ & $52.9$ & $52.4$ \\
+ & accuracy & $10/16$ & $9/16$ & $4/16$ & $5/16$ & $8/16$ & $7/16$ \\
+$16$ in one step & peak & $2871$ & $2071$ & $2935$ & $2135$ & $2893$ & $2093$ \\
+ & e2e (s) & $2.4$ & $4.4$ & $4.4$ & $3.6$ & $4.7$ & $4.7$ \\
+ & accuracy & $12/16$ & $10/16$ & $4/16$ & $6/16$ & $10/16$ & $7/16$ \\
 \bottomrule
 \end{tabular}
 \caption{Setting O batch width, GSM8K $n{=}16$, $k{=}4$.
-Peak ratio is $0.78$ and $0.79$ at one item, and $0.72$ and $0.73$ when all $16$ share a step.
+Peak ratio is $0.78$--$0.80$ at one item, and $0.72$--$0.73$ when all $16$ share a step.
 The wide step is the first GPU measurement of the concurrency term in \eqref{eq:conc}; it is not a closed-loop QPS sweep.}
 \end{table}
 
@@ -2242,19 +2252,27 @@ DeepSeek-R1 & peak & $1863$ & $1391$ & $1391$ & $2118$ & $1646$ & $1646$ \\
  & decode tokens & $409600$ & $227470$ & $228991$ & $149504$ & $146008$ & $145879$ \\
  & e2e (s) & $432.7$ & $431.2$ & $433.2$ & $178.3$ & $178.3$ & $199.9$ \\
  & fan-out (ms) & $1604$ & $2375$ & $1553$ & $613$ & $988$ & $670$ \\
-Qwen3-4B & peak & $1937$ & $1521$ & --- & $2150$ & $1734$ & --- \\
- & accuracy & $127/200$ & $123/200$ & --- & $1/73$ & $5/73$ & --- \\
- & decode tokens & $409600$ & $286935$ & --- & $149504$ & $147851$ & --- \\
- & e2e (s) & $328.3$ & $326.3$ & --- & $135.4$ & $135.3$ & --- \\
- & fan-out (ms) & $1178$ & $1750$ & --- & $462$ & $748$ & --- \\
+Qwen3-4B & peak & $1937$ & $1521$ & $1521$ & $2150$ & $1734$ & $1734$ \\
+ & accuracy & $127/200$ & $123/200$ & $127/200$ & $1/73$ & $5/73$ & $4/73$ \\
+ & decode tokens & $409600$ & $286935$ & $265299$ & $149504$ & $147851$ & $148682$ \\
+ & e2e (s) & $328.3$ & $326.3$ & $322.2$ & $135.4$ & $135.3$ & $138.0$ \\
+ & fan-out (ms) & $1178$ & $1750$ & $1223$ & $462$ & $748$ & $501$ \\
 \bottomrule
 \end{tabular}%
 }
 \caption{Setting P, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$, batches of eight.
 Peak ratios are $0.75$ and $0.78$ on DeepSeek-R1, $0.79$ and $0.81$ on Qwen3-4B.
-ForkServe+ prunes $75$ MATH-500 branches and $30$ AIME branches on DeepSeek-R1, which is why its fan-out is below ForkServe.
-The long trace still spends most of $D$, so end-to-end stays with APC except AIME ForkServe+ ($199.9$ vs.\ $178.3$\,s).}
+ForkServe+ prunes $75$ MATH-500 branches and $30$ AIME branches on both models, which brings MATH-500 fan-out to $1553$\,ms (APC $1604$) and $1223$\,ms (APC $1178$).
+Qwen3-4B ForkServe+ matches the APC MATH-500 score ($127/200$).
+End-to-end stays with APC except DeepSeek-R1 AIME ForkServe+ ($199.9$ vs.\ $178.3$\,s).}
 \end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/longcot_peak.pdf}
+\caption{Setting P peak KV and fan-out.
+ForkServe+ keeps the spine peak and closes the fan-out gap that ForkServe leaves against APC.}
+\end{figure}
 
 \section{Discussion}
 
@@ -2274,9 +2292,9 @@ Setting N repeats the forest on six models ($n{=}40$): GSM8K peak $0.72$--$0.75\
 The last-line rerun ($n{=}32$) keeps GSM8K peak at $0.73$--$0.74\times$ APC.
 ForkServe+ scores $18/32$ on DeepSeek-R1 (APC $16/32$) and $22/32$ on Llama-3-8B (APC $23/32$); Mistral-7B falls to $6/32$ from $11/32$.
 HumanEval pass@1 on Mistral-7B is $0.350$ for every system, with peak $0.89\times$ APC.
-Setting O shows the $k$ term directly: the spine stays at $550$ (Llama) and $569$ (Mistral) from $k{=}2$ to $k{=}8$, and the ratio falls from $0.90$ to $0.55$.
-A batch of $16$ keeps that ratio ($0.72$--$0.73$) and is the first measured wide step, not a closed-loop QPS sweep.
-Setting P keeps the ratio at $0.75$--$0.81$ when $D{=}2048$; end-to-end stays with APC because the contest trace spends the budget.
+Setting O shows the $k$ term directly: the spine stays at $550$ (Llama), $569$ (Mistral), and $561$ (DeepSeek-R1) from $k{=}2$ to $k{=}8$, and the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$.
+A batch of $16$ keeps that ratio ($0.72$--$0.73$) on all three models and is the first measured wide step, not a closed-loop QPS sweep.
+Setting P keeps the ratio at $0.75$--$0.81$ when $D{=}2048$; ForkServe+ returns MATH-500 fan-out to APC while end-to-end stays with APC because the contest trace spends the budget.
 
 \section{Conclusion}
 
@@ -2311,9 +2329,10 @@ Game24 and HumanEval keep APC-level e2e because those traces do not hit the stop
 Setting N extends that storage claim to six families at $n{=}40$: GSM8K peak $0.72$--$0.75\times$ APC, Game24 $0.57$--$0.62\times$, ForkServe accuracy with APC.
 The last-line rerun at $n{=}32$ scores $18/32$ on DeepSeek-R1 (APC $16/32$), $22/32$ on Llama-3-8B (APC $23/32$), and $6/32$ on Mistral-7B (APC $11/32$), with GSM8K peak $0.73$--$0.74\times$ APC.
 Mistral-7B HumanEval pass@1 is $0.350$ ($14/40$) on recompute, APC, and ForkServe.
-Setting O repeats the storage claim under a change of $k$: spine peak is flat and the ratio is $0.55$ at $k{=}8$.
-Draft prune is what cuts that fan-out ($179$ vs.\ $307$\,ms on Llama-3-8B); the last-line stop is not, because the winner already ends inside $D$.
-Setting P is the same claim at $D{=}2048$: MATH-500 peak $0.75\times$ (DeepSeek-R1) and $0.79\times$ (Qwen3-4B), with generate time matched to APC.
+Setting O repeats the storage claim under a change of $k$: spine peak is flat and the ratio is $0.53$--$0.55$ at $k{=}8$ on Llama-3-8B, Mistral-7B, and DeepSeek-R1.
+Draft prune is what cuts that fan-out ($179$ vs.\ $307$\,ms on Llama-3-8B, $194$ vs.\ $363$\,ms on DeepSeek-R1); the last-line stop is not, because the winner already ends inside $D$.
+Setting P is the same claim at $D{=}2048$: MATH-500 peak $0.75\times$ (DeepSeek-R1) and $0.79\times$ (Qwen3-4B).
+ForkServe+ prunes $75$ MATH-500 residuals on both models and returns fan-out to $1553$\,ms and $1223$\,ms, against APC at $1604$\,ms and $1178$\,ms, with generate time matched to APC.
 
 The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.
 A live-scheduler concurrent-load experiment should likewise confirm the analytical $C$ and $\Theta$ of setting K.

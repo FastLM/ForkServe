@@ -1243,10 +1243,17 @@ def run_react_forest_forkserve(
     t_obs = _now()
     for h, wrap, recov, obs, commit_ids in handles:
         eng.commit(h.id, h.tip, commit_ids, preferred_bid="bash")
-    if hasattr(eng, "generate_many"):
-        outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
-    else:
-        outs = [eng.generate(h.id, decode_n) for h, *_ in handles]
+    from forkserve.answer_stop import stop_mode_for
+
+    prev_mode = str(getattr(eng.config, "answer_stop", "") or "")
+    eng.config.answer_stop = stop_mode_for(workload, prev_mode)
+    try:
+        if hasattr(eng, "generate_many"):
+            outs = eng.generate_many([h.id for h, *_ in handles], decode_n)
+        else:
+            outs = [eng.generate(h.id, decode_n) for h, *_ in handles]
+    finally:
+        eng.config.answer_stop = prev_mode
     n_out = sum(len(o) for o in outs)
     ttft = (_now() - t_obs) * 1000.0
     t1 = _now()

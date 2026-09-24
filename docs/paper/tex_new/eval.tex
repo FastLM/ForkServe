@@ -348,19 +348,74 @@ Best storage in green.}
  & FS / APC & \win{$0.90$} & \win{$0.74$} & \win{$0.55$} & \win{$0.76$} \\
 \midrule
 \multirow{3}{*}{R1-8B}
- & APC & $629$ & $761$ & --- & --- \\
+ & APC & $629$ & $761$ & $1053$ & $841$ \\
 \rowcolor{tblalt}
- & FS & \win{$561$} & \win{$561$} & --- & --- \\
- & FS / APC & \win{$0.89$} & \win{$0.74$} & --- & --- \\
+ & FS & \win{$561$} & \win{$561$} & \win{$561$} & \win{$641$} \\
+ & FS / APC & \win{$0.89$} & \win{$0.74$} & \win{$0.53$} & \win{$0.76$} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig/branch_peak.pdf}
+\caption{\textbf{GSM8K peak KV versus branching} ($n{=}16$, $\mathrm{tp}{=}2$, $D{=}512$).
+ForkServe+ matches the ForkServe bar.
+The spine is flat in $k$; APC grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$.}
+\label{fig:eval-branch}
+\end{figure}
+
 \paragraph{The ratio falls with $k$.}
-\Cref{tab:branch} is $(L+\ell)/(L+k\ell)$ on the GPU: the spine stays flat while APC grows, so the ratio moves from $0.90$ to $0.55$.
+\Cref{tab:branch,fig:eval-branch} is $(L+\ell)/(L+k\ell)$ on the GPU: the spine stays flat while APC grows, so the ratio moves from $0.89$--$0.90$ at $k{=}2$ to $0.53$--$0.55$ at $k{=}8$ on all three families.
 Depth $2$ stays at $0.75$--$0.76$.
-ForkServe+ does not move the peak; at $k{=}8$ it drops $28$ branches and cuts Llama fan-out from $307$\,ms to $179$\,ms.
-Prune off returns that fan-out to $247$\,ms.
-The last-line stop is not the decode cut here: the winner already ends inside $D$, so emitted tokens stay near $2500$--$3800$ against APC's $8192$.
-A batch of $16$ keeps the ratio at $0.72$--$0.73$.
-At $D{=}2048$ the ratio is $0.75$--$0.81$ (DeepSeek MATH-500 $1391/1863$, Qwen3-4B $1521/1937$), end-to-end stays with APC, and ForkServe+ prunes $75$ MATH residuals ($1553$\,ms fan-out vs.\ $2375$\,ms).
+ForkServe+ does not move the peak; at $k{=}8$ it drops $28$ branches and cuts fan-out from $307$ to $179$\,ms on Llama-3-8B, from $349$ to $191$\,ms on Mistral-7B, and from $363$ to $194$\,ms on DeepSeek-R1.
+Prune off returns Llama fan-out to $247$\,ms and DeepSeek fan-out to $271$\,ms.
+The last-line stop is not the decode cut here: the winner already ends inside $D$, so emitted tokens stay near $2500$--$7000$ against APC's $8192$.
+A batch of $16$ keeps the ratio at $0.72$--$0.73$ ($2071/2871$ on Llama-3-8B, $2135/2935$ on Mistral-7B, $2093/2893$ on DeepSeek-R1).
+
+\begin{table}[t]
+\centering
+\caption{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$.
+MATH-500 is $n{=}200$; AIME is $n{=}73$.
+Best storage in green.}
+\label{tab:longcot}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrrr}
+\rowcolor{tblhead}
+\toprule
+ & & peak & / APC & acc. & fan-out \\
+\midrule
+\multirow{3}{*}{R1 MATH}
+ & APC & $1863$ & --- & $0.555$ & $1604$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1391$} & \win{$0.75$} & $0.505$ & $2375$ \\
+ & FS+ & \win{$1391$} & \win{$0.75$} & $0.505$ & $1553$ \\
+\midrule
+\multirow{3}{*}{R1 AIME}
+ & APC & $2118$ & --- & $0.068$ & $613$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1646$} & \win{$0.78$} & $0.096$ & $988$ \\
+ & FS+ & \win{$1646$} & \win{$0.78$} & $0.055$ & $670$ \\
+\midrule
+\multirow{3}{*}{4B MATH}
+ & APC & $1937$ & --- & $0.635$ & $1178$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1521$} & \win{$0.79$} & $0.615$ & $1750$ \\
+ & FS+ & \win{$1521$} & \win{$0.79$} & $0.635$ & $1223$ \\
+\midrule
+\multirow{3}{*}{4B AIME}
+ & APC & $2150$ & --- & $0.014$ & $462$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1734$} & \win{$0.81$} & $0.068$ & $748$ \\
+ & FS+ & \win{$1734$} & \win{$0.81$} & $0.055$ & $501$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At $D{=}2048$ the ratio is $0.75$--$0.81$ (\Cref{tab:longcot}).
+End-to-end stays with APC on MATH-500 ($433$\,s vs.\ $433$\,s on DeepSeek-R1, $322$\,s vs.\ $328$\,s on Qwen3-4B).
+ForkServe+ prunes $75$ MATH-500 residuals on both models and cuts fan-out from $2375$ to $1553$\,ms on DeepSeek-R1 and from $1750$ to $1223$\,ms on Qwen3-4B, against APC at $1604$ and $1178$\,ms.
+Qwen3-4B ForkServe+ recovers the APC MATH-500 score ($127/200$).
