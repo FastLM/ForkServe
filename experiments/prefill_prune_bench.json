@@ -221,19 +221,19 @@
       "sessions": 10,
       "branching": 4,
       "trunk_tokens": 256,
-      "prefill_tokens": 2912,
-      "skipped_prefill_tokens": 928,
-      "prefill_ms": 34.944,
+      "prefill_tokens": 2592,
+      "skipped_prefill_tokens": 1248,
+      "prefill_ms": 31.104,
       "cow_ms": 0.2,
       "abort_ms": 0.0,
-      "transfer_tokens": 352,
-      "transfer_ms": 0.704,
-      "fanout_ms": 35.848000000000006,
+      "transfer_tokens": 32,
+      "transfer_ms": 0.064,
+      "fanout_ms": 31.368,
       "live_pages": 96,
       "peak_kv_tokens": 2880,
-      "hash_hits": 658,
+      "hash_hits": 178,
       "hash_skips": 9,
-      "pruned": 20,
+      "pruned": 30,
       "early_aborts": 0,
       "fork_aliases": 640,
       "kv_saving": 0.75,
@@ -274,14 +274,14 @@
       "forkserve": 46.08,
       "hash_prefill": 138.24,
       "disagg_prefill": 138.24,
-      "app": 34.944
+      "app": 31.104
     },
     "fanout_ms": {
       "apc": 139.04000000000002,
       "forkserve": 47.08,
       "hash_prefill": 139.04000000000002,
       "disagg_prefill": 162.08,
-      "app": 35.848000000000006
+      "app": 31.368
     },
     "peak_kv": {
       "apc": 11520,
@@ -290,11 +290,11 @@
       "disagg_prefill": 11520,
       "app": 2880
     },
-    "app_vs_apc_prefill": 0.7472222222222222,
-    "app_vs_apc_fanout": 0.7421749136939011,
+    "app_vs_apc_prefill": 0.775,
+    "app_vs_apc_fanout": 0.7743958573072498,
     "app_vs_apc_peak_kv": 0.75,
     "fs_vs_apc_peak_kv": 0.6666666666666667,
-    "app_pruned": 20,
+    "app_pruned": 30,
     "app_early_aborts": 0
   },
   "decode_curve": {

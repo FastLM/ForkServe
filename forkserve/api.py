@@ -562,14 +562,24 @@ class Engine:
         gen = getattr(self.backend, "generate_committed_many", None)
         if not callable(gen):
             return [self.generate(session, n_tokens, seed=seed) for session in sessions]
-        outs = gen(
-            seqs,
-            n_tokens,
+        mode = (self.config.answer_stop or "").strip()
+        hints = tuple(self.config.answer_stop_hints or ())
+        gen_kwargs: dict[str, Any] = dict(
             seed=seed,
             node_ids=node_ids,
             parent_nodes=parents,
             sessions=sess_ids,
         )
+        if mode and mode != "auto":
+            gen_kwargs["stop_modes"] = [mode] * len(seqs)
+            if hints:
+                gen_kwargs["stop_hints"] = list(hints)
+        try:
+            outs = gen(seqs, n_tokens, **gen_kwargs)
+        except TypeError:
+            gen_kwargs.pop("stop_modes", None)
+            gen_kwargs.pop("stop_hints", None)
+            outs = gen(seqs, n_tokens, **gen_kwargs)
         result: list[TokenSeq] = []
         for (tree, tip), out in zip(tips, outs, strict=True):
             tokens = tuple(out)

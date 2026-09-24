@@ -430,12 +430,12 @@ def numeric_math_trunk(item: MathItem) -> str:
 
 def contest_math_trunk(item: MathItem) -> str:
     system = (
-        "You are a contest mathematician. Write a short solution. "
+        "You are a contest mathematician. Reason carefully, then give the answer. "
         "The last line must contain the final answer in \\boxed{}."
     )
     user = (
         f"{item.question}\n\n"
-        "Put the final answer in \\boxed{}. Do not list alternate plans."
+        "Work through the solution, then put the final answer in \\boxed{}."
         f"{_think_tail()}"
     )
     return _chat(system, user)

@@ -67,6 +67,13 @@ class ForkServeConfig:
     early_prune_frac: float = 0.20
     spec_pool_frac: float = 0.0
     decode_stop: tuple[str, ...] = ()
+    # "gsm" | "math" | "game24" | "code" | "auto" | "". Stops only after the
+    # answer is complete (#### number, boxed, =24, or a code boundary).
+    answer_stop: str = ""
+    # Per-request hints (Game24 gold strings), aligned with the decode batch.
+    answer_stop_hints: tuple[str, ...] = ()
+    # Harness already picked the winner: do not prefill the other residuals.
+    skip_known_losers: bool = False
     hash_prune: bool = False
     disagg_prefill: bool = False
     disagg_transfer_us_per_token: float = 2.0

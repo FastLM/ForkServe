@@ -1139,10 +1139,18 @@ def run_tot_forest_forkserve(
         _select_winner(eng, h.id, kids, winner=0)
     t_ab1 = _now()
     peak = _resident_kv(eng, handles)
-    if hasattr(eng, "generate_many"):
-        outs = eng.generate_many([h.id for h in handles], decode_n)
-    else:
-        outs = [eng.generate(h.id, decode_n) for h in handles]
+    from forkserve.answer_stop import stop_mode_for
+
+    prev_mode = str(getattr(eng.config, "answer_stop", "") or "")
+    mode = stop_mode_for(workload, prev_mode)
+    eng.config.answer_stop = mode
+    try:
+        if hasattr(eng, "generate_many"):
+            outs = eng.generate_many([h.id for h in handles], decode_n)
+        else:
+            outs = [eng.generate(h.id, decode_n) for h in handles]
+    finally:
+        eng.config.answer_stop = prev_mode
     n_out = sum(len(o) for o in outs)
     t1 = _now()
     cow, clone, saving = _peak_memory(cfg, trunk_n * len(handles), residuals, len(handles) * k)
@@ -1455,10 +1463,12 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
         trunks = [game24_trunk(item) for item in batch]
+        eng.config.answer_stop_hints = tuple(p.question for p in batch)
         row = run_tot_forest_forkserve(
             eng, cfg, trunks, thoughts,
             decode_n=args.decode, idle_ms=0.0, workload="game24",
         )
+        eng.config.answer_stop_hints = ()
         _set_golds(row, [p.question for p in batch], _fs_texts(eng, row.decode_ids))
         row.item_ids = [p.item_id for p in batch]
         parts.append(row)

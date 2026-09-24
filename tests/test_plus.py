@@ -50,6 +50,38 @@ def test_pointer_swap_on_fork_no_copy() -> None:
     assert pool.cow_copies == copies
 
 
+def test_answer_stop_waits_for_the_number() -> None:
+    from forkserve.answer_stop import answer_ready, stop_mode_for
+
+    assert not answer_ready("reasoning ####", "gsm")
+    assert not answer_ready("</think>", "gsm")
+    assert answer_ready("work\n#### 72\n", "gsm")
+    assert answer_ready("</think>\n#### 72", "gsm")
+    assert answer_ready("therefore \\boxed{42}", "math")
+    assert not answer_ready("\\boxed{42", "math")
+    assert answer_ready("def f():\n    return 1\ndef ", "code")
+    assert stop_mode_for("gsm8k", "auto") == "gsm"
+    assert stop_mode_for("game24", "") == ""
+
+
+def test_known_winner_skips_sibling_prefill() -> None:
+    from forkserve.prefill_prune import PrefillAction, PrefillPruner
+
+    cfg = plus_config()
+    plan = PrefillPruner(cfg, winner=0).plan(
+        [
+            "Thought 1: add the numbers and boxed the answer.",
+            "Use substitution then combine.",
+            "Count the groups first.",
+            "Estimate then adjust.",
+        ],
+        token_counts=[32, 32, 32, 32],
+    )
+    assert plan.decisions[0].action is PrefillAction.PREFILL
+    assert all(d.reason == "winner_selected" for d in plan.decisions[1:])
+    assert plan.prefill_tokens == 32
+
+
 def test_pruner_keeps_winner_drops_loop() -> None:
     cfg = plus_config()
     pruner = BranchPruner(cfg, winner=0)

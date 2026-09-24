@@ -147,6 +147,10 @@ class VllmBackend:
             # Pass the AsyncScheduler subclass, not the factory — vLLM's
             # issubclass check otherwise falls back to sync Scheduler.
             llm_kwargs["scheduler_cls"] = get_two_class_scheduler()
+        if (self.config.answer_stop or "").strip():
+            from forkserve.answer_stop import AnswerStopLogitsProcessor
+
+            llm_kwargs["logits_processors"] = [AnswerStopLogitsProcessor]
         self._llm = LLM(**llm_kwargs)
         self.pool = PagePool(self.config, TokenKvStore())
         self._tokenizer = self._llm.get_tokenizer()
@@ -170,21 +174,29 @@ class VllmBackend:
         parent_node: NodeId | None = None,
         seed: int | None = None,
         session: str | None = None,
+        stop_mode: str = "",
+        stop_hint: str = "",
     ) -> Any:
+        extra = forkserve_extra(
+            speculative=speculative,
+            node_id=int(node_id) if node_id is not None else None,
+            parent_node=int(parent_node) if parent_node is not None else None,
+            session=session,
+        )
+        if stop_mode and not speculative:
+            extra["fs_stop"] = stop_mode
+            if stop_hint:
+                extra["fs_stop_hint"] = stop_hint
         kwargs: dict[str, Any] = dict(
             max_tokens=max_tokens,
             temperature=0.0,
             seed=seed,
-            extra_args=forkserve_extra(
-                speculative=speculative,
-                node_id=int(node_id) if node_id is not None else None,
-                parent_node=int(parent_node) if parent_node is not None else None,
-                session=session,
-            ),
+            extra_args=extra,
         )
         stops = tuple(self.config.decode_stop or ())
         if stops and not speculative:
             kwargs["stop"] = list(stops)
+            kwargs["include_stop_str_in_output"] = True
         return self._SamplingParams(**kwargs)
 
     def _generate(
@@ -197,6 +209,8 @@ class VllmBackend:
         parent_nodes: Sequence[NodeId | None] | None = None,
         sessions: Sequence[str | None] | None = None,
         seed: int | None = None,
+        stop_modes: Sequence[str] | None = None,
+        stop_hints: Sequence[str] | None = None,
     ) -> list[list[int]]:
         if not seqs:
             return []
@@ -218,6 +232,8 @@ class VllmBackend:
                 parent_node=parents[i],
                 seed=seed,
                 session=sess[i] if i < len(sess) else None,
+                stop_mode=(stop_modes[i] if stop_modes and i < len(stop_modes) else ""),
+                stop_hint=(stop_hints[i] if stop_hints and i < len(stop_hints) else ""),
             )
             for i in range(n)
         ]
@@ -300,6 +316,8 @@ class VllmBackend:
         node_ids: Sequence[NodeId | None] | None = None,
         parent_nodes: Sequence[NodeId | None] | None = None,
         sessions: Sequence[str | None] | None = None,
+        stop_modes: Sequence[str] | None = None,
+        stop_hints: Sequence[str] | None = None,
     ) -> list[list[TokenId]]:
         fused, committed_rest, dropped = split_pending_for_decode(self._pending, seqs)
         # Known-suffix / commit-tail / covered trunks ride this generate.
@@ -317,6 +335,8 @@ class VllmBackend:
             parent_nodes=parent_nodes,
             sessions=sessions,
             seed=seed,
+            stop_modes=stop_modes,
+            stop_hints=stop_hints,
         )
 
     def shutdown(self) -> None:

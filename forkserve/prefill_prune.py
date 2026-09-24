@@ -215,6 +215,20 @@ class PrefillPruner:
         prompt: TokenSeq,
         residual: str | TokenSeq,
     ) -> PrefillDecision:
+        if (
+            self.config.skip_known_losers
+            and self.winner >= 0
+            and row.index != self.winner
+        ):
+            return PrefillDecision(
+                index=row.index,
+                action=PrefillAction.DRAFT_SKIP,
+                keep=False,
+                score=row.score,
+                reason="winner_selected",
+                residual_tokens=n_tok,
+                work_tokens=0,
+            )
         matched = 0
         if self.config.hash_prune and self.hash_index is not None and prompt:
             matched = self.hash_index.lookup(prompt)

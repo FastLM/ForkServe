@@ -97,7 +97,11 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     cfg.prune_enabled = True
     cfg.hash_prune = True
     cfg.disagg_prefill = True
+    cfg.skip_known_losers = True
     cfg.spec_pool_frac = 0.25 if cfg.spec_pool_frac <= 0 else cfg.spec_pool_frac
-    if not cfg.decode_stop:
-        cfg.decode_stop = ("####", "\\boxed", "</think>")
+    # Marker strings cut the answer off (#### before the number, </think>
+    # before the R1 reply). Answer-complete stop replaces them.
+    cfg.decode_stop = ()
+    if not cfg.answer_stop:
+        cfg.answer_stop = "auto"
     return cfg

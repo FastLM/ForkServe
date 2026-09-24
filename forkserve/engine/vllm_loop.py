@@ -376,9 +376,8 @@ def _alias_parent_blocks(mgr: Any, request: Any) -> tuple[Any, int] | None:
     ids = [b.block_id for g in groups for b in g]
     table.pin_ro(ids)
     table.note_fork(len(ids))
-    # vLLM 0.18 scheduler unpacks (blocks, n_hit). Later trees added a third
-    # shared_prefix_boundary field; keep the 2-tuple that this engine expects.
-    return mgr.create_kv_cache_blocks(tuple(groups)), n_tokens
+    # Scheduler unpacks (blocks, n_hit, shared_prefix_boundary).
+    return mgr.create_kv_cache_blocks(tuple(groups)), n_tokens, 0
 
 
 def TwoClassVllmScheduler(*args: Any, **kwargs: Any):  # noqa: N802
