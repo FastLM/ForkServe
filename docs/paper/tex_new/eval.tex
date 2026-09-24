@@ -169,21 +169,17 @@ $D^{+}$ and e2e are GSM8K; Game24 / HumanEval peaks stay with the spine.}
 \midrule
 APC $\mathrm{tp}{=}2$ & $1582$ & $40960$ & $36.0$ & $0.900$ & --- & $1289$ & $1970$ \\
 \rowcolor{tblalt}
-\sys $\mathrm{tp}{=}2$ & $1182$ & $21235$ & $36.0$ & $0.887$ & $1.00\times$ & $793$ & $1882$ \\
-FS+ $\mathrm{tp}{=}2$ & $1182$ & $13356$ & $28.2$ & $0.863$ & \win{$0.78\times$} & $793$ & $1882$ \\
-\rowcolor{tblalt}
+\sys $\mathrm{tp}{=}2$ & $1182$ & $13356$ & $28.2$ & $0.863$ & \win{$0.78\times$} & $793$ & $1882$ \\
 APC $\mathrm{tp}{=}4$ & $1582$ & $40960$ & $22.7$ & $0.938$ & --- & $1289$ & $1970$ \\
-\sys $\mathrm{tp}{=}4$ & $1182$ & $20997$ & $23.3$ & $0.925$ & $1.03\times$ & $793$ & $1882$ \\
 \rowcolor{tblalt}
-FS+ $\mathrm{tp}{=}4$ & $1182$ & \win{$12826$} & \win{$16.9$} & $0.925$ & \win{$0.75\times$} & $793$ & $1882$ \\
+\sys $\mathrm{tp}{=}4$ & $1182$ & \win{$12826$} & \win{$16.9$} & $0.925$ & \win{$0.75\times$} & $793$ & $1882$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Decode stop is the GPU latency term.}
 APC always emits $nD{=}40960$ tokens.
-\sys already stops on EOS ($0.52\times$).
-ForkServe+ with the marker list emits $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, and e2e falls to $0.78\times$ and $0.75\times$ APC.
+\sys with the marker list emits $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, and e2e falls to $0.78\times$ and $0.75\times$ APC.
 Accuracy at four GPUs is $74/80$ vs.\ APC $75/80$.
 Fan-out is still slower than APC ($1048$ vs.\ $438$\,ms at $\mathrm{tp}{=}4$): real GSM8K thoughts do not fail the draft heuristic (\texttt{pruned\_branches}${=}0$), so expand remains CoW of every residual.
 The $75\%$ prefill cut of \Cref{tab:app} is the illegal-residual case; the GPU latency win on this forest is $D^{+}$.
