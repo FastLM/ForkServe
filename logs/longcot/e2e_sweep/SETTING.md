@@ -37,3 +37,30 @@ trace, so e2e stayed 52.9s vs 52.1s.
 Models: DeepSeek-R1-Distill-Llama-8B, Qwen3-4B.
 Pilot before the full run: Qwen3-4B, math500, n=32, APC vs ForkServe+ only
 (`qwen3-4b_n32_thr045.json`).
+
+## Full run (2026-09-24, exit 0)
+
+`deepseek_thr045.json`, `qwen3-4b_thr045.json`. e2e is seconds.
+
+| model | workload | APC e2e / peak / acc | FS | FS+ |
+|---|---|---|---|---|
+| R1 | MATH-500 | 429 / 1863 / 112/200 | 432 / 1391 / 102/200 | **247 / 1599 / 109/200** |
+| R1 | AIME | 178 / 2118 / 4/73 | 178 / 1646 / 9/73 | **165 / 1662 / 7/73** |
+| 4B | MATH-500 | 329 / 1937 / 119/200 | 246 / 1770 / 122/200 | **230 / 1770 / 126/200** |
+| 4B | AIME | 136 / 2150 / 2/73 | 135 / 1794 / 3/73 | **133 / 1794 / 4/73** |
+
+Answer stop is what moved e2e: APC still emits `n * 2048` tokens.
+FS+ prune still reports `pruned_branches=3`; R1 MATH peak rose 1391 → 1599.
+
+## Qwen3-4B n=32 pilot, current answer stop (2026-09-24)
+
+`qwen3-4b_n32_stop512.json`. Same knobs as the pilot above.
+Stop window is the last 512 tokens, checked every 8th step
+(`answer_stop.py`). APC vs ForkServe+ only.
+
+| system | e2e | fan-out | peak | acc |
+|---|---:|---:|---:|---:|
+| APC | 53.0 s | 202 ms | 1797 | 18/32 |
+| FS+ | **37.7 s** | 186 ms | 1558 | 18/32 |
+
+Previous pilot (`qwen3-4b_n32_thr045.json`) was 52.9 s vs 52.1 s.

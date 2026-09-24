@@ -261,9 +261,9 @@ When the residuals have similar length, the ratio simplifies to $(L+\ell)/(L+k\e
 Relative to recompute, which stores the cloned occupancy $M_{\mathrm{clone}}$, the spine is $0.25\times$.
 ForkServe+ matches that ratio.
 Accuracy remains at the APC level, which indicates that the lower peak is a storage effect on the same committed answer.
+\Cref{fig:eval-hist} shows the per-item decode-length distribution on GSM8K and Game24.
 % DeepSeek-R1 ForkServe+ on the last-line slice is $18/32$ against APC $16/32$ on the same $32$ items.
 
-\iffalse
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{tex_new/fig_eval_hist}}
@@ -274,7 +274,6 @@ GSM8K (top) and Game24 (bottom) overlay APC, \sys, and ForkServe+.
 Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead.}
 \label{fig:eval-hist}
 \end{figure*}
-\fi
 
 \begin{table}[t]
 \centering
@@ -353,21 +352,21 @@ Model/ratio & Method & $k{=}2$ & $k{=}4$ & $k{=}8$ & depth $2$ \\
 \multirow{-2}{*}{L8B}
  & FS & \win{$550$} & \win{$550$} & \win{$550$} & \win{$614$} \\
 \rowcolor{tblbot}
-\multicolumn{2}{l}{\textcolor{fsred}{\textbf{ratio $=../..$}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.73$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.75$}} \\
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{FS/APC}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.73$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.75$}} \\
 \midrule
  & APC & $629$ & $769$ & $1033$ & $841$ \\
 \rowcolor{tblalt}
 \multirow{-2}{*}{M7B}
  & FS & \win{$569$} & \win{$569$} & \win{$569$} & \win{$641$} \\
 \rowcolor{tblbot}
-\multicolumn{2}{l}{\textcolor{fsred}{\textbf{ratio $=../..$}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{FS/APC}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
 \midrule
  & APC & $629$ & $761$ & $1053$ & $841$ \\
 \rowcolor{tblalt}
 \multirow{-2}{*}{R1-8B}
  & FS & \win{$561$} & \win{$561$} & \win{$561$} & \win{$641$} \\
 \rowcolor{tblbot}
-\multicolumn{2}{l}{\textcolor{fsred}{\textbf{ratio $=../..$}}} & \textcolor{fsred}{\textbf{$0.89$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.53$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{FS/APC}}} & \textcolor{fsred}{\textbf{$0.89$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.53$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -405,34 +404,35 @@ Best storage in green.}
 \toprule
 Model & Method & peak & / APC & acc. & e2e (s) \\
 \midrule
- & APC & $1863$ & --- & $0.555$ & $433$ \\
+ & APC & $1863$ & --- & $0.560$ & $429$ \\
 \rowcolor{tblalt}
- & FS & \win{$1391$} & \win{$0.75$} & $0.505$ & $431$ \\
+ & FS & \win{$1391$} & \win{$0.75$} & $0.510$ & $432$ \\
 \multirow{-3}{*}{R1 MATH}
- & FS+ & \win{$1391$} & \win{$0.75$} & $0.505$ & $433$ \\
+ & FS+ & $1599$ & $0.86$ & $0.545$ & $247$ \\
 \midrule
- & APC & $2118$ & --- & $0.068$ & $178$ \\
+ & APC & $2118$ & --- & $0.055$ & $178$ \\
 \rowcolor{tblalt}
- & FS & \win{$1646$} & \win{$0.78$} & $0.096$ & $178$ \\
+ & FS & \win{$1646$} & \win{$0.78$} & $0.123$ & $178$ \\
 \multirow{-3}{*}{R1 AIME}
- & FS+ & \win{$1646$} & \win{$0.78$} & $0.055$ & $200$ \\
+ & FS+ & $1662$ & $0.78$ & $0.096$ & $165$ \\
 \midrule
- & APC & $1937$ & --- & $0.635$ & $328$ \\
+ & APC & $1937$ & --- & $0.595$ & $329$ \\
 \rowcolor{tblalt}
- & FS & \win{$1521$} & \win{$0.79$} & $0.615$ & $326$ \\
+ & FS & \win{$1770$} & \win{$0.91$} & $0.610$ & $246$ \\
 \multirow{-3}{*}{4B MATH}
- & FS+ & \win{$1521$} & \win{$0.79$} & $0.635$ & $322$ \\
+ & FS+ & \win{$1770$} & \win{$0.91$} & $0.630$ & $230$ \\
 \midrule
- & APC & $2150$ & --- & $0.014$ & $135$ \\
+ & APC & $2150$ & --- & $0.027$ & $136$ \\
 \rowcolor{tblalt}
- & FS & \win{$1734$} & \win{$0.81$} & $0.068$ & $135$ \\
+ & FS & \win{$1794$} & \win{$0.83$} & $0.041$ & $135$ \\
 \multirow{-3}{*}{4B AIME}
- & FS+ & \win{$1734$} & \win{$0.81$} & $0.055$ & $138$ \\
+ & FS+ & \win{$1794$} & \win{$0.83$} & $0.055$ & $133$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-At $D{=}2048$ the ratio is $0.75$--$0.81$ (\Cref{tab:longcot}).
-On MATH-500, end-to-end latency matches APC ($433$\,s vs.\ $433$\,s on DeepSeek-R1, $322$\,s vs.\ $328$\,s on Qwen3-4B).
-ForkServe+ prunes $75$ MATH-500 residuals on both models and cuts fan-out from $2375$ to $1553$\,ms on DeepSeek-R1 and from $1750$ to $1223$\,ms on Qwen3-4B, against APC at $1604$ and $1178$\,ms.
-Qwen3-4B ForkServe+ recovers the APC MATH-500 score ($127/200$).
+At $D{=}2048$ the ratio is $0.75$--$0.91$ (\Cref{tab:longcot}).
+On MATH-500, ForkServe matches APC ($432$\,s vs.\ $429$\,s on DeepSeek-R1).
+ForkServe+ cuts DeepSeek-R1 from $429$\,s to $247$\,s and Qwen3-4B from $329$\,s to $230$\,s; the Qwen3-4B $n{=}32$ slice is $38$\,s versus $53$\,s.
+ForkServe+ cuts MATH-500 fan-out from $2406$ to $1284$\,ms on DeepSeek-R1 and from $2747$ to $1140$\,ms on Qwen3-4B, against APC at $1593$ and $1188$\,ms.
+Qwen3-4B ForkServe+ scores $126/200$ on MATH-500 (APC $119/200$).
