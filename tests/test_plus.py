@@ -61,6 +61,7 @@ def test_answer_stop_waits_for_the_number() -> None:
     assert answer_ready("</think>\n#### 72\nnext", "gsm")
     assert not answer_ready("therefore \\boxed{42}", "math")
     assert answer_ready("therefore \\boxed{42}\n", "math")
+    assert answer_ready("therefore \\boxed{42} and then more", "math")
     assert not answer_ready("\\boxed{42", "math")
     assert answer_ready("def f():\n    return 1\ndef ", "code")
     assert stop_mode_for("gsm8k", "auto") == "gsm"

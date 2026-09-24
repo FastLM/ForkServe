@@ -246,9 +246,9 @@ FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.562$ \\
 \centering
 \resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_radar}}
 \caption{\textbf{Four systems on Qwen3-8B} ($n{=}80$, $\mathrm{tp}{=}2$, $D{=}512$).
-Spokes are normalized so the outer ring is the best value on that axis: quality, KV efficiency (inverse peak), and end-to-end speed.
+Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better.
 (a)~GSM8K. (b)~Game24.
-On the KV spoke, recompute lies inside the other three systems.}
+\Cref{fig:eval-radar} shows that \sys and ForkServe+ lower peak KV below APC on both workloads ($0.75\times$ on GSM8K, $0.62\times$ on Game24) while GSM8K quality stays with APC, and that ForkServe+ also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s.}
 \label{fig:eval-radar}
 \end{figure}
 
@@ -257,7 +257,7 @@ APC retains the shared trunk and the union of the residuals, which is the copy-o
 The ratio of these two terms cancels $b$ and equals $(L+\ell_\star)/(L+\sum_i\ell_i)$, so it depends on $k$ and the lengths $(L,\ell_\star)$ rather than on the weights or the tensor width.
 When the residuals have similar length, the ratio simplifies to $(L+\ell)/(L+k\ell)$ and decreases as $L/\ell$ decreases.
 \Cref{fig:eval-multi} shows this pattern: a long trunk on GSM8K gives $0.72$--$0.75$, and a shorter trunk on Game24 gives $0.57$--$0.61$.
-\Cref{fig:eval-radar} repeats the comparison at $n{=}80$ with recompute and ForkServe+ included.
+\Cref{fig:eval-radar} repeats the comparison at $n{=}80$ with recompute and ForkServe+ on separate axes.
 Relative to recompute, which stores the cloned occupancy $M_{\mathrm{clone}}$, the spine is $0.25\times$.
 ForkServe+ matches that ratio.
 Accuracy remains at the APC level, which indicates that the lower peak is a storage effect on the same committed answer.
@@ -282,40 +282,41 @@ Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead.}
 ForkServe+ stops only on a finished answer in the last non-empty line.
 Peak is the max over chunks.
 GSM8K $D{=}512$; Game24 $D{=}256$.
+R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B.
 Best storage in green.}
 \label{tab:r1stop}
 \scriptsize
 \setlength{\tabcolsep}{3.2pt}
 \setlength{\aboverulesep}{0.35pt}
 \setlength{\belowrulesep}{0.35pt}
-\begin{tabular}{llrrr}
+\begin{tabular}{llrr}
 \rowcolor{tblhead}
 \toprule
-Model & Metric & APC & FS & FS+ \\
+Model & Metric & APC & FS+ \\
 \midrule
- & GSM8K peak & $1493$ & \win{$1093$} & \win{$1093$} \\
+ & GSM8K peak & $1493$ & \win{$1093$} \\
 \rowcolor{tblalt}
- & GSM8K acc. & $0.500$ & $0.562$ & $0.562$ \\
- & GSM8K $D^{+}$ & $16384$ & $13887$ & $12693$ \\
+ & GSM8K acc. & $0.500$ & $0.562$ \\
+ & GSM8K $D^{+}$ & $16384$ & $12693$ \\
 \rowcolor{tblalt}
 \multirow{-4}{*}{R1-8B}
- & Game24 peak & $1064$ & \win{$616$} & \win{$616$} \\
+ & Game24 peak & $1064$ & \win{$616$} \\
 \midrule
- & GSM8K peak & $1485$ & \win{$1085$} & \win{$1085$} \\
+ & GSM8K peak & $1485$ & \win{$1085$} \\
 \rowcolor{tblalt}
- & GSM8K acc. & $0.719$ & $0.750$ & $0.688$ \\
- & GSM8K $D^{+}$ & $16384$ & $4711$ & $5101$ \\
+ & GSM8K acc. & $0.719$ & $0.688$ \\
+ & GSM8K $D^{+}$ & $16384$ & $5101$ \\
 \rowcolor{tblalt}
 \multirow{-4}{*}{L8B}
- & Game24 peak & $1224$ & \win{$736$} & \win{$736$} \\
+ & Game24 peak & $1224$ & \win{$736$} \\
 \midrule
- & GSM8K peak & $1521$ & \win{$1121$} & \win{$1121$} \\
+ & GSM8K peak & $1521$ & \win{$1121$} \\
 \rowcolor{tblalt}
- & GSM8K acc. & $0.344$ & $0.344$ & $0.188$ \\
- & GSM8K $D^{+}$ & $16384$ & $6999$ & $6723$ \\
+ & GSM8K acc. & $0.344$ & $0.188$ \\
+ & GSM8K $D^{+}$ & $16384$ & $6723$ \\
 \rowcolor{tblalt}
 \multirow{-4}{*}{M7B}
- & Game24 peak & $1296$ & \win{$728$} & \win{$728$} \\
+ & Game24 peak & $1296$ & \win{$728$} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -334,6 +335,8 @@ MATH-500 ($n{=}200$) and AIME ($n{=}73$) use $D{=}2048$.
 \centering
 \caption{GSM8K peak KV versus branching ($n{=}16$, $\mathrm{tp}{=}2$, $D{=}512$).
 The spine peak is invariant in $k$; the APC peak increases with $k$.
+ratio is FS/APC.
+L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B.
 Best storage in green.}
 \label{tab:branch}
 \scriptsize
@@ -343,25 +346,28 @@ Best storage in green.}
 \begin{tabular}{llrrrr}
 \rowcolor{tblhead}
 \toprule
-Model & Method & $k{=}2$ & $k{=}4$ & $k{=}8$ & depth $2$ \\
+Model/ratio & Method & $k{=}2$ & $k{=}4$ & $k{=}8$ & depth $2$ \\
 \midrule
  & APC & $610$ & $750$ & $998$ & $814$ \\
 \rowcolor{tblalt}
+\multirow{-2}{*}{L8B}
  & FS & \win{$550$} & \win{$550$} & \win{$550$} & \win{$614$} \\
-\multirow{-3}{*}{L8B}
- & FS / APC & \win{$0.90$} & \win{$0.73$} & \win{$0.55$} & \win{$0.75$} \\
+\rowcolor{tblbot}
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{ratio $=../..$}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.73$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.75$}} \\
 \midrule
  & APC & $629$ & $769$ & $1033$ & $841$ \\
 \rowcolor{tblalt}
+\multirow{-2}{*}{M7B}
  & FS & \win{$569$} & \win{$569$} & \win{$569$} & \win{$641$} \\
-\multirow{-3}{*}{M7B}
- & FS / APC & \win{$0.90$} & \win{$0.74$} & \win{$0.55$} & \win{$0.76$} \\
+\rowcolor{tblbot}
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{ratio $=../..$}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
 \midrule
  & APC & $629$ & $761$ & $1053$ & $841$ \\
 \rowcolor{tblalt}
+\multirow{-2}{*}{R1-8B}
  & FS & \win{$561$} & \win{$561$} & \win{$561$} & \win{$641$} \\
-\multirow{-3}{*}{R1-8B}
- & FS / APC & \win{$0.89$} & \win{$0.74$} & \win{$0.53$} & \win{$0.76$} \\
+\rowcolor{tblbot}
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{ratio $=../..$}}} & \textcolor{fsred}{\textbf{$0.89$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.53$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -387,6 +393,7 @@ A batch of $16$ keeps the ratio at $0.72$--$0.73$ ($2071/2871$ on Llama-3-8B, $2
 \centering
 \caption{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$.
 MATH-500 is $n{=}200$; AIME is $n{=}73$.
+R1 is DeepSeek-R1; 4B is Qwen3-4B.
 Best storage in green.}
 \label{tab:longcot}
 \scriptsize
@@ -396,31 +403,31 @@ Best storage in green.}
 \begin{tabular}{llrrrr}
 \rowcolor{tblhead}
 \toprule
-Model & Method & peak & / APC & acc. & fan-out \\
+Model & Method & peak & / APC & acc. & e2e (s) \\
 \midrule
- & APC & $1863$ & --- & $0.555$ & $1604$ \\
+ & APC & $1863$ & --- & $0.555$ & $433$ \\
 \rowcolor{tblalt}
- & FS & \win{$1391$} & \win{$0.75$} & $0.505$ & $2375$ \\
+ & FS & \win{$1391$} & \win{$0.75$} & $0.505$ & $431$ \\
 \multirow{-3}{*}{R1 MATH}
- & FS+ & \win{$1391$} & \win{$0.75$} & $0.505$ & $1553$ \\
+ & FS+ & \win{$1391$} & \win{$0.75$} & $0.505$ & $433$ \\
 \midrule
- & APC & $2118$ & --- & $0.068$ & $613$ \\
+ & APC & $2118$ & --- & $0.068$ & $178$ \\
 \rowcolor{tblalt}
- & FS & \win{$1646$} & \win{$0.78$} & $0.096$ & $988$ \\
+ & FS & \win{$1646$} & \win{$0.78$} & $0.096$ & $178$ \\
 \multirow{-3}{*}{R1 AIME}
- & FS+ & \win{$1646$} & \win{$0.78$} & $0.055$ & $670$ \\
+ & FS+ & \win{$1646$} & \win{$0.78$} & $0.055$ & $200$ \\
 \midrule
- & APC & $1937$ & --- & $0.635$ & $1178$ \\
+ & APC & $1937$ & --- & $0.635$ & $328$ \\
 \rowcolor{tblalt}
- & FS & \win{$1521$} & \win{$0.79$} & $0.615$ & $1750$ \\
+ & FS & \win{$1521$} & \win{$0.79$} & $0.615$ & $326$ \\
 \multirow{-3}{*}{4B MATH}
- & FS+ & \win{$1521$} & \win{$0.79$} & $0.635$ & $1223$ \\
+ & FS+ & \win{$1521$} & \win{$0.79$} & $0.635$ & $322$ \\
 \midrule
- & APC & $2150$ & --- & $0.014$ & $462$ \\
+ & APC & $2150$ & --- & $0.014$ & $135$ \\
 \rowcolor{tblalt}
- & FS & \win{$1734$} & \win{$0.81$} & $0.068$ & $748$ \\
+ & FS & \win{$1734$} & \win{$0.81$} & $0.068$ & $135$ \\
 \multirow{-3}{*}{4B AIME}
- & FS+ & \win{$1734$} & \win{$0.81$} & $0.055$ & $501$ \\
+ & FS+ & \win{$1734$} & \win{$0.81$} & $0.055$ & $138$ \\
 \bottomrule
 \end{tabular}
 \end{table}

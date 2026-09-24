@@ -103,6 +103,11 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     # Marker strings cut the answer off (#### before the number, </think>
     # before the R1 reply). Answer-complete stop replaces them.
     cfg.decode_stop = ()
+    # 0.15 only drops illegal loops. Contest fan-out uses a higher bar so
+    # low-mass siblings are skipped before prefill. Override with
+    # FORKSERVE_PRUNE_THRESHOLD.
+    raw_thr = os.environ.get("FORKSERVE_PRUNE_THRESHOLD", "").strip()
+    cfg.prune_threshold = float(raw_thr) if raw_thr else max(cfg.prune_threshold, 0.45)
     flags = os.environ.get("FORKSERVE_PLUS_FLAGS", "").strip()
     if flags:
         want = {p.strip() for p in flags.split(",") if p.strip()}

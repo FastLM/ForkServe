@@ -141,12 +141,12 @@
 \newlabel{sec:eval-multi@cref}{{[subsection][4][4]4.4}{[1][8][]8}{}{}{}}
 \newlabel{fig:eval-multi}{{6}{9}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.6}{}}
 \newlabel{fig:eval-multi@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
-\newlabel{fig:eval-radar}{{7}{9}{\textbf {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm {tp}{=}2$, $D{=}512$). Spokes are normalized so the outer ring is the best value on that axis: quality, KV efficiency (inverse peak), and end-to-end speed. (a)~GSM8K. (b)~Game24. On the KV spoke, recompute lies inside the other three systems}{figure.7}{}}
-\newlabel{fig:eval-radar@cref}{{[figure][7][]7}{[1][8][]9}{}{}{}}
+\newlabel{tab:r1stop}{{7}{9}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green}{table.7}{}}
+\newlabel{tab:r1stop@cref}{{[table][7][]7}{[1][8][]9}{}{}{}}
 \newlabel{sec:eval-sens}{{4.5}{9}{}{subsection.4.5}{}}
 \newlabel{sec:eval-sens@cref}{{[subsection][5][4]4.5}{[1][8][]9}{}{}{}}
-\newlabel{tab:r1stop}{{7}{9}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. Best storage in green}{table.7}{}}
-\newlabel{tab:r1stop@cref}{{[table][7][]7}{[1][8][]9}{}{}{}}
+\newlabel{tab:branch}{{8}{9}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green}{table.8}{}}
+\newlabel{tab:branch@cref}{{[table][8][]8}{[1][9][]9}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
@@ -166,13 +166,13 @@
 \citation{idlespec}
 \citation{speculative,medusa,eagledraft}
 \citation{forkkv}
-\newlabel{tab:branch}{{8}{10}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. Best storage in green}{table.8}{}}
-\newlabel{tab:branch@cref}{{[table][8][]8}{[1][9][]10}{}{}{}}
-\newlabel{fig:eval-branch}{{8}{10}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.8}{}}
-\newlabel{fig:eval-branch@cref}{{[figure][8][]8}{[1][9][]10}{}{}{}}
+\newlabel{fig:eval-radar}{{7}{10}{\textbf {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better. (a)~GSM8K. (b)~Game24. \Cref {fig:eval-radar} shows that \sys and ForkServe+ lower peak KV below APC on both workloads ($0.75\times $ on GSM8K, $0.62\times $ on Game24) while GSM8K quality stays with APC, and that ForkServe+ also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s}{figure.7}{}}
+\newlabel{fig:eval-radar@cref}{{[figure][7][]7}{[1][8][]10}{}{}{}}
 \newlabel{sec:related}{{5}{10}{}{section.5}{}}
 \newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
-\newlabel{tab:longcot}{{9}{10}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. Best storage in green}{table.9}{}}
+\newlabel{fig:eval-branch}{{8}{10}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.8}{}}
+\newlabel{fig:eval-branch@cref}{{[figure][8][]8}{[1][9][]10}{}{}{}}
+\newlabel{tab:longcot}{{9}{10}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage in green}{table.9}{}}
 \newlabel{tab:longcot@cref}{{[table][9][]9}{[1][9][]10}{}{}{}}
 \newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
 \newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}

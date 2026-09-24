@@ -48,7 +48,7 @@ def answer_ready(text: str, mode: str, *, hint: str = "") -> bool:
         # may be revised, and cutting it dropped Llama and Mistral.
         if re.search(r"(?m)^####\s*-?\d+(?:,\d{3})*(?:\.\d+)?[ \t]*\n", body):
             return True
-        if mode == "math" and _boxed_closed(body) and re.search(r"\\boxed\{[^{}]*\}\s*\n", body):
+        if mode == "math" and _boxed_finished(body):
             return True
         return False
     if mode == "game24":
@@ -68,25 +68,42 @@ def answer_ready(text: str, mode: str, *, hint: str = "") -> bool:
     return False
 
 
-def _boxed_closed(text: str) -> bool:
+def _boxed_end(text: str) -> int | None:
+    """Index just after the closing brace of the last complete ``\\boxed``."""
     key = r"\boxed"
     start = text.rfind(key)
     if start < 0:
-        return False
+        return None
     i = start + len(key)
     while i < len(text) and text[i].isspace():
         i += 1
     if i >= len(text) or text[i] != "{":
-        return False
+        return None
     depth = 0
-    for ch in text[i:]:
+    for j, ch in enumerate(text[i:], start=i):
         if ch == "{":
             depth += 1
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                return True
-    return False
+                return j + 1
+    return None
+
+
+def _boxed_finished(text: str) -> bool:
+    """Closed box that the model has already left.
+
+    A box that is still the tail may be revised, so it does not stop.
+    A newline or any later token means the answer is on the tape.
+    """
+    end = _boxed_end(text)
+    if end is None:
+        return False
+    return bool(text[end:].strip()) or text[end:].endswith("\n")
+
+
+def _boxed_closed(text: str) -> bool:
+    return _boxed_end(text) is not None
 
 
 try:
@@ -158,10 +175,12 @@ class AnswerStopLogitsProcessor(_LogitsProcessor):
             return logits
         n = logits.shape[0]
         for index, (ids, mode, hint) in list(self._rows.items()):
-            if index >= n or len(ids) < 4:
+            # Full-string decode every step added tens of seconds on traces
+            # that never stop (AIME). The answer marker is at the tail.
+            if index >= n or len(ids) < 8 or (len(ids) & 7) != 0:
                 continue
             try:
-                text = self._tok.decode(ids, skip_special_tokens=True)
+                text = self._tok.decode(ids[-192:], skip_special_tokens=True)
             except Exception:
                 continue
             if answer_ready(text, mode, hint=hint):
