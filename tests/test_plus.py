@@ -55,6 +55,7 @@ def test_answer_stop_waits_for_the_number() -> None:
 
     assert not answer_ready("reasoning ####", "gsm")
     assert not answer_ready("</think>", "gsm")
+    assert not answer_ready("step #### 5\nthen keep going to the real total", "gsm")
     assert answer_ready("work\n#### 72\n", "gsm")
     assert answer_ready("</think>\n#### 72", "gsm")
     assert answer_ready("therefore \\boxed{42}", "math")

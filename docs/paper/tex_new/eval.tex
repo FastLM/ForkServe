@@ -239,7 +239,7 @@ Game24 / APC & \win{$0.61$} & \win{$0.61$} & \win{$0.61$} & \win{$0.61$} & \win{
 APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
 FS acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
 \rowcolor{tblalt}
-FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.000$ \\
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -251,10 +251,13 @@ The $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ gap is stable across families and tens
 Game24 is lower ($0.57$--$0.61$) because trunks are short.
 ForkServe accuracy tracks APC.
 \Cref{fig:eval-hist} overlays the per-item decode-length histograms that produce those e2e numbers.
-On GSM8K, ForkServe+ left-shifts Qwen3-4B ($\mu{:}\,242{\to}180$) and DeepSeek-R1 ($\mu{:}\,373{\to}161$); Llama-3-8B barely moves ($141{\to}132$).
+On GSM8K, ForkServe+ left-shifts Qwen3-4B ($\mu{:}\,242{\to}180$); Llama-3-8B barely moves ($141{\to}132$).
 Game24 piles at the $512$ budget on every family: the stop list does not fire, matching the e2e plateau.
-ForkServe+ stop is not portable: Llama-3-8B keeps $0.675$ at $0.26\times$ APC tokens; DeepSeek-R1 hits \texttt{</think>} and scores $0$.
-Quality comparisons across families should use \sys without the stop list.
+\Cref{tab:r1stop} stops only when the last non-empty line is a finished \texttt{\#\#\#\#} or a closed \texttt{\textbackslash boxed}.
+On DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$, $\mathrm{tp}{=}2$) GSM8K peak stays $0.73\times$ APC.
+ForkServe+ then scores $18/32$ (APC $16/32$) on DeepSeek-R1 and $22/32$ (APC $23/32$) on Llama-3-8B, and drops to $6/32$ (APC $11/32$) on Mistral-7B.
+Decode tokens fall to $0.77\times$, $0.31\times$, and $0.41\times$ APC.
+Game24 peaks stay $0.56$--$0.60\times$ APC; success stays at most $1/32$ because $D{=}256$ does not finish an equation.
 
 \begin{figure*}[t]
 \centering
@@ -262,11 +265,55 @@ Quality comparisons across families should use \sys without the stop list.
 \caption{\textbf{Per-item decode-length histograms} ($n{=}40$, $\mathrm{tp}{=}2$, $D{=}512$).
 Each panel overlays APC, \sys, and ForkServe+ (bin width $64$).
 Boxes report $\mu$, $\sigma$, and $n$.
-GSM8K (top): ForkServe+ left-shifts Qwen3-4B and DeepSeek-R1; Llama-3-8B stays near APC.
+GSM8K (top): ForkServe+ left-shifts Qwen3-4B; Llama-3-8B stays near APC.
 Game24 (bottom): mass sits at the budget---the marker list does not transfer.
 Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead.}
 \label{fig:eval-hist}
 \end{figure*}
+
+\begin{table}[t]
+\centering
+\caption{Last-line answer stop, $n{=}32$, $\mathrm{tp}{=}2$.
+ForkServe+ stops only on a finished answer in the last non-empty line.
+Peak is the max over chunks.
+GSM8K $D{=}512$; Game24 $D{=}256$.
+Best storage in green.}
+\label{tab:r1stop}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrr}
+\rowcolor{tblhead}
+\toprule
+ & & APC & FS & FS+ \\
+\midrule
+\multirow{4}{*}{R1-8B}
+ & GSM8K peak & $1493$ & \win{$1093$} & \win{$1093$} \\
+\rowcolor{tblalt}
+ & GSM8K acc. & $0.500$ & $0.562$ & $0.562$ \\
+ & GSM8K $D^{+}$ & $16384$ & $13887$ & $12693$ \\
+\rowcolor{tblalt}
+ & Game24 peak & $1064$ & \win{$616$} & \win{$616$} \\
+\midrule
+\multirow{4}{*}{L8B}
+ & GSM8K peak & $1485$ & \win{$1085$} & \win{$1085$} \\
+\rowcolor{tblalt}
+ & GSM8K acc. & $0.719$ & $0.750$ & $0.688$ \\
+ & GSM8K $D^{+}$ & $16384$ & $4711$ & $5101$ \\
+\rowcolor{tblalt}
+ & Game24 peak & $1224$ & \win{$736$} & \win{$736$} \\
+\midrule
+\multirow{4}{*}{M7B}
+ & GSM8K peak & $1521$ & \win{$1121$} & \win{$1121$} \\
+\rowcolor{tblalt}
+ & GSM8K acc. & $0.344$ & $0.344$ & $0.188$ \\
+ & GSM8K $D^{+}$ & $16384$ & $6999$ & $6723$ \\
+\rowcolor{tblalt}
+ & Game24 peak & $1296$ & \win{$728$} & \win{$728$} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 HumanEval wrap+recovery ($k{=}2$) keeps peak $0.90$ / $0.89$ / $0.95$ of APC on Llama-3-8B, Mistral-7B, and Qwen3-14B.
 Mistral-7B pass@1 is $0.350$ ($14/40$) on recompute, APC, and \sys at both tensor widths.

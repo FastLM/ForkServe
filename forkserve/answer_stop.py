@@ -43,11 +43,14 @@ def answer_ready(text: str, mode: str, *, hint: str = "") -> bool:
         body = raw.rsplit("</think>", 1)[-1] if "</think>" in raw else raw
         if not body.strip():
             return False
-        if _HASH_ANS.search(body):
+        # Only the last line. An earlier ``####`` is an intermediate step;
+        # stopping there dropped Llama and Mistral accuracy.
+        last = next((ln.strip() for ln in reversed(body.splitlines()) if ln.strip()), "")
+        if _HASH_ANS.search(last):
             return True
-        if mode == "math" or "\\boxed" in body:
-            boxed = extract_boxed(body)
-            return bool(boxed) and _boxed_closed(body)
+        if (mode == "math" or "\\boxed" in last) and _boxed_closed(last):
+            boxed = extract_boxed(last)
+            return bool(boxed)
         return False
     if mode == "game24":
         if hint and game24_correct(raw, hint):

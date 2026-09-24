@@ -274,7 +274,8 @@ Under the control-plane model of \S\ref{sec:eval-app} ($\ell{\times}12\,\mu\math
 \paragraph{Orthogonal decode-length stop.}
 The cascade changes $\Work$ and $M$.
 End-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}(D)$, so a shorter prefill does not by itself shorten decode.
-ForkServe+ stops committed decode at an answer marker via vLLM \texttt{stop}.
+ForkServe+ stops committed decode only when the last non-empty line is a finished answer (\texttt{\#\#\#\#} or a closed \texttt{\textbackslash boxed}).
+An earlier \texttt{\#\#\#\#} is an intermediate step, and a bare \texttt{</think>} is not an answer.
 If item $j$ hits a marker at $t_j$, emitted tokens are $D^{+}=\sum_j\min(t_j,D)\le nD$, and $T_{\mathrm{dec}}$ scales with $D^{+}$ when decode is memory-bandwidth bound.
 The stop ends a finished answer; it does not draft output tokens, and it does not change which residual was admitted.
 

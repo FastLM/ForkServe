@@ -23,7 +23,6 @@
 \citation{sglang}
 \citation{sarathi}
 \citation{continuum,mori}
-\citation{vllm}
 \newlabel{fig:system}{{1}{2}{\textbf {\sys {} architecture.} (1)~$\sigma _u$ holds one RO trunk; \texttt {fork} aliases it in $O(1)$; LCP binds the winner. (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt {insert}. (3)~Prefill and decode stay separate instances. Trunk tokens $1{:}3$ remain by alias; only keep token $4$ crosses \texttt {insert} ($\Xfer {=}\Work _\star $); dropped tokens never leave prefill. Decode attends $x_\star {=}1{:}4$ and stops at $D^{+}$. After abort the live occupancy is the spine $M_{\mathrm {spine}}$; the same $8$\,GiB pool then admits $37{\to }50$ sessions ($+35\%$ tok/s)}{figure.1}{}}
 \newlabel{fig:system@cref}{{[figure][1][]1}{[1][1][]2}{}{}{}}
 \newlabel{sec:problem}{{2}{2}{}{section.2}{}}
@@ -32,6 +31,7 @@
 \newlabel{sec:model@cref}{{[subsection][2][2]2.2}{[1][2][]2}{}{}{}}
 \newlabel{eq:mem}{{1}{2}{}{equation.1}{}}
 \newlabel{eq:mem@cref}{{[equation][1][]1}{[1][2][]2}{}{}{}}
+\citation{vllm}
 \citation{distserve,splitwise}
 \citation{react,toolformer}
 \citation{autogen,metagpt}
@@ -61,7 +61,7 @@
 \citation{continuum,mori}
 \citation{speculative,medusa}
 \newlabel{tab:notation}{{1}{3}{Notation for one branching step and for \app }{table.1}{}}
-\newlabel{tab:notation@cref}{{[table][1][]1}{[1][2][]3}{}{}{}}
+\newlabel{tab:notation@cref}{{[table][1][]1}{[1][3][]3}{}{}{}}
 \newlabel{eq:xfer-stock}{{2}{3}{}{equation.2}{}}
 \newlabel{eq:xfer-stock@cref}{{[equation][2][]2}{[1][3][]3}{}{}{}}
 \newlabel{ins:prune}{{1}{3}{Prune before prefill}{insight.1}{}}
@@ -164,18 +164,18 @@
 \citation{forkkv}
 \bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
-\newlabel{fig:eval-hist}{{7}{10}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B and DeepSeek-R1; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
-\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
-\newlabel{sec:related}{{5}{10}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
-\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
 \bibcite{spork}{{5}{}{{}}{{}}}
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
 \bibcite{medusa}{{7}{}{{}}{{}}}
 \bibcite{murakkab}{{8}{}{{}}{{}}}
+\newlabel{tab:r1stop}{{8}{10}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. Best storage in green}{table.8}{}}
+\newlabel{tab:r1stop@cref}{{[table][8][]8}{[1][10][]10}{}{}{}}
+\newlabel{sec:related}{{5}{10}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][10][]10}{}{}{}}
+\newlabel{sec:conclusion}{{6}{10}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][10][]10}{}{}{}}
 \bibcite{idlespec}{{9}{}{{}}{{}}}
 \bibcite{contextrot}{{10}{}{{}}{{}}}
 \bibcite{conserve}{{11}{}{{}}{{}}}
@@ -191,6 +191,8 @@
 \bibcite{parrot}{{21}{}{{}}{{}}}
 \bibcite{hermes}{{22}{}{{}}{{}}}
 \bibcite{autellix}{{23}{}{{}}{{}}}
+\newlabel{fig:eval-hist}{{7}{11}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top): ForkServe+ left-shifts Qwen3-4B and DeepSeek-R1; Llama-3-8B stays near APC. Game24 (bottom): mass sits at the budget---the marker list does not transfer. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.7}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][7][]7}{[1][10][]11}{}{}{}}
 \bibcite{hive}{{24}{}{{}}{{}}}
 \bibcite{gaia}{{25}{}{{}}{{}}}
 \bibcite{astraea}{{26}{}{{}}{{}}}
@@ -221,4 +223,4 @@
 \bibcite{distserve}{{51}{}{{}}{{}}}
 \bibcite{webarena}{{52}{}{{}}{{}}}
 \providecommand\NAT@force@numbers{}\NAT@force@numbers
-\gdef \@abspage@last{12}
+\gdef \@abspage@last{13}

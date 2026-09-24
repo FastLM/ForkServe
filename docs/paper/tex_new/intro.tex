@@ -47,3 +47,4 @@ On Qwen3-14B GSM8K, \sys matches APC accuracy at $0.72\times$ median peak KV; fa
 A control-plane study of \app then shows that hash skip, draft prune, and the P/D gate remove most of that prefill on illegal residuals, and that the measured KV gap raises SLO-feasible concurrency by $35\%$.
 A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering and a decode-stop gain ($0.31\times$ decode tokens, $0.75\times$ e2e at $\mathrm{tp}{=}4$).
 A six-model forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC.
+A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$) keeps that peak: ForkServe+ is at or above APC on DeepSeek-R1 and within one problem on Llama-3-8B, and still drops Mistral-7B.

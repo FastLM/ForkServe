@@ -85,7 +85,7 @@ The remaining expand cost is residual prefill that APC and stock disaggregated p
 Advanced prefill pruning (\app) sits between those two mechanisms and decides, per residual, whether a GPU kernel---and later a connector \texttt{insert}---should run at all.
 Four skip layers run cheapest first: a hash index skips published full blocks; a draft score drops illegal or looping siblings before they start; an early-prefix check cancels in-flight chunks; the disaggregated gate inserts only survivors.
 The winner index is always retained, so the committed token sequence is unchanged.
-Decoding acceleration then stops winner generation at an answer marker (\texttt{\#\#\#\#}, \texttt{\textbackslash boxed}, \texttt{</think>}) instead of padding to $D$, and keeps committed decode ahead of speculative prefill in a two-class scheduler.
+Decoding acceleration then stops winner generation only when the last non-empty line is a finished answer (\texttt{\#\#\#\#} or a closed \texttt{\textbackslash boxed}), and keeps committed decode ahead of speculative prefill in a two-class scheduler.
 
 Baselines are \emph{recompute} (prefix cache off) and \emph{APC} (automatic prefix caching).
 
@@ -97,7 +97,9 @@ Control-plane APP (setting L) is the only method that both aliases the trunk and
 A GPU run of the same stack on Qwen3-8B (setting M: $80$ items, $D{=}512$) confirms the KV gap and the decode-stop gain.
 On GSM8K, ForkServe+ emits $13356$ decode tokens vs.\ $40960$ for APC at $\mathrm{tp}{=}2$ ($0.33\times$) and finishes in $28.2$\,s vs.\ $36.0$\,s; at $\mathrm{tp}{=}4$ it is $12826$ vs.\ $40960$ tokens and $16.9$\,s vs.\ $22.7$\,s, with accuracy $0.925$ vs.\ $0.938$.
 Peak KV stays $1182$ vs.\ $1582$ ($0.75\times$ APC) at both widths.
-Setting N repeats the same four-system forest on six models ($n{=}40$): GSM8K peak KV is $0.72$--$0.75\times$ APC on every family, and Game24 is $0.57$--$0.62\times$; answer-marker stop remains model-dependent.
+Setting N repeats the same four-system forest on six models ($n{=}40$): GSM8K peak KV is $0.72$--$0.75\times$ APC on every family, and Game24 is $0.57$--$0.62\times$.
+A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$, $\mathrm{tp}{=}2$) keeps GSM8K peak at $0.73\times$ APC.
+ForkServe+ scores $18/32$ (APC $16/32$) on DeepSeek-R1 and $22/32$ (APC $23/32$) on Llama-3-8B, and drops to $6/32$ (APC $11/32$) on Mistral-7B.
 \end{abstract}
 
 \section{Design}
@@ -2028,20 +2030,21 @@ FS / FS+ peak & $1112$ & $1112$ & $1112$ & $1109$ & $1169$ & $1005$ \\
 ratio vs.\ APC & $0.74$ & $0.74$ & $0.74$ & $0.73$ & $0.75$ & $0.72$ \\
 APC $D^{+}$ & $20480$ & $20480$ & $20480$ & $20480$ & $20480$ & $20480$ \\
 FS $D^{+}$ & $9860$ & $17070$ & $12087$ & $5560$ & $10013$ & $14974$ \\
-FS+ $D^{+}$ & $7206$ & $11704$ & $11162$ & $5262$ & $9660$ & $6422$ \\
+FS+ $D^{+}$ & $7206$ & $11704$ & $11162$ & $5262$ & $9660$ & --- \\
 APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
 FS acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
-FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.000$ \\
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & --- \\
 APC e2e (s) & $14.00$ & $8.31$ & $35.92$ & $11.44$ & $16.14$ & $21.43$ \\
 FS e2e (s) & $14.28$ & $8.63$ & $36.20$ & $11.67$ & $18.33$ & $21.74$ \\
-FS+ e2e (s) & $12.56$ & $8.63$ & $36.10$ & $11.07$ & $18.10$ & $14.70$ \\
+FS+ e2e (s) & $12.56$ & $8.63$ & $36.10$ & $11.07$ & $18.10$ & --- \\
 \bottomrule
 \end{tabular}%
 }
 \caption{Setting N, GSM8K $n{=}40$, $\mathrm{tp}{=}2$.
 Peak KV is $0.72$--$0.75\times$ APC on every family and does not change at $\mathrm{tp}{=}4$.
 ForkServe accuracy stays with APC ($\pm 2$ problems except Math-1.5B, where both are weak).
-ForkServe+ stop is safe on Llama-3-8B, cuts tokens on Qwen without always matching accuracy, and zeros DeepSeek-R1 because \texttt{</think>} fires before the answer.}
+ForkServe+ stop is safe on Llama-3-8B and cuts tokens on Qwen without always matching accuracy.
+DeepSeek-R1 ForkServe+ on this \(n{=}40\) file is omitted; the last-line run is the table below.}
 \end{table}
 
 \begin{figure}[h]
@@ -2105,14 +2108,51 @@ At $\mathrm{tp}{=}4$, Llama is $0.600$ / $0.600$ / $0.575$ and Qwen3-14B is $0.5
 \end{minipage}
 \caption{Setting N GSM8K, $\mathrm{tp}{=}2$.
 Left: APC always emits $nD$; ForkServe already stops on EOS; ForkServe+ stops earlier.
-Right: ForkServe tracks APC accuracy; ForkServe+ matches on Llama-3-8B, drops on Qwen3-4B / Mistral / Qwen3-14B, and fails on DeepSeek-R1 when \texttt{</think>} is a stop string.}
+Right: ForkServe tracks APC accuracy; ForkServe+ matches on Llama-3-8B and drops on Qwen3-4B / Mistral / Qwen3-14B.}
 \end{figure}
 
 The storage identity is the transferable result of setting N.
-Answer-marker stop transfers only when the model actually writes \texttt{\#\#\#\#} or \texttt{\textbackslash boxed} after a complete answer, as on Qwen3-8B in setting M.
-On DeepSeek-R1, \texttt{</think>} is part of the reasoning trace, so FS+ e2e falls ($14.7$\,s vs.\ $21.4$\,s) with accuracy $0$.
 On Llama-3-8B, FS+ keeps accuracy $0.675$ at $0.26\times$ APC decode tokens.
-Use ForkServe (no stop list) when comparing quality across families; use ForkServe+ only on chat templates that emit a dedicated answer marker.
+
+\subsection{Last-line answer stop}
+
+The follow-up stops committed decode only when the last non-empty line is a finished answer (\texttt{\#\#\#\#} with a number, or a closed \texttt{\textbackslash boxed}).
+An earlier \texttt{\#\#\#\#} is treated as an intermediate step, and a bare \texttt{</think>} is not a stop.
+Same weights, $\mathrm{tp}{=}2$, two A100-SXM4 40GB, $n{=}32$.
+APC and ForkServe do not use the stop list; ForkServe+ does.
+Peak is the maximum over chunks.
+GSM8K uses $D{=}512$; Game24 uses $D{=}256$.
+
+\begin{table}[h]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrrrrrrrrr@{}}
+\toprule
+ & & \multicolumn{3}{c}{DeepSeek-R1-8B} & \multicolumn{3}{c}{Llama-3-8B} & \multicolumn{3}{c}{Mistral-7B} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+ & & APC & FS & FS+ & APC & FS & FS+ & APC & FS & FS+ \\
+\midrule
+GSM8K & peak & $1493$ & $1093$ & $1093$ & $1485$ & $1085$ & $1085$ & $1521$ & $1121$ & $1121$ \\
+ & accuracy & $0.500$ & $0.562$ & $0.562$ & $0.719$ & $0.750$ & $0.688$ & $0.344$ & $0.344$ & $0.188$ \\
+ & correct & $16/32$ & $18/32$ & $18/32$ & $23/32$ & $24/32$ & $22/32$ & $11/32$ & $11/32$ & $6/32$ \\
+ & decode tokens & $16384$ & $13887$ & $12693$ & $16384$ & $4711$ & $5101$ & $16384$ & $6999$ & $6723$ \\
+ & e2e (s) & $17.64$ & $17.66$ & $17.61$ & $12.87$ & $10.13$ & $12.98$ & $11.27$ & $13.88$ & $13.46$ \\
+Game24 & peak & $1064$ & $616$ & $616$ & $1224$ & $736$ & $736$ & $1296$ & $728$ & $728$ \\
+ & success & $1/32$ & $0/32$ & $1/32$ & $0/32$ & $0/32$ & $0/32$ & $0/32$ & $0/32$ & $0/32$ \\
+ & e2e (s) & $9.00$ & $8.91$ & $8.82$ & $0.50$ & $0.43$ & $0.32$ & $8.57$ & $8.55$ & $8.36$ \\
+\bottomrule
+\end{tabular}%
+}
+\caption{Last-line answer stop, $n{=}32$, $\mathrm{tp}{=}2$.
+GSM8K peak is $1093/1493{=}0.73$, $1085/1485{=}0.73$, and $1121/1521{=}0.74$ of APC.
+ForkServe+ decode tokens are $0.77\times$, $0.31\times$, and $0.41\times$ APC.
+DeepSeek-R1 ForkServe+ scores $18/32$, above APC.
+Llama-3-8B stays within one problem of APC; Mistral-7B loses five problems.
+Game24 peaks are $0.58\times$, $0.60\times$, and $0.56\times$ APC.
+Success stays at most $1/32$ because $D{=}256$ does not finish an equation.
+Llama-3-8B Game24 emits $32$ decode tokens on every system (immediate EOS).}
+\end{table}
 
 At $\mathrm{tp}{=}4$, peak KV is unchanged and wall-clock scales by $0.60$--$0.72$ vs.\ $\mathrm{tp}{=}2$ on GSM8K for APC and ForkServe, the same decode-bound scaling as settings E--J.
 
@@ -2130,7 +2170,9 @@ Settings I and J repeat it on DeepSeek-R1-Distill-Llama-8B with $D{=}2048$: peak
 Setting K plugs those GSM8K peaks into \eqref{eq:conc}: $35\%$ more concurrent trees, $35\%$ more saturated tok/s, and SLO-feasible QPS $256$ vs.\ $192$.
 Setting L places APP against hash prefill and disaggregated prefill on a fan-out with illegal residuals: hash prefill does not help until blocks are published, disaggregated prefill adds a transfer, and APP is the method whose modeled fan-out is below APC.
 Setting M runs the same ForkServe+ stack on A100s for Qwen3-8B: KV still $0.62$--$0.75\times$ APC on ToT, GSM8K decode tokens $0.33\times$ APC, GSM8K e2e $0.75$--$0.78\times$ APC, and Game24/HumanEval e2e matched because those traces do not hit the stop list.
-Setting N repeats the forest on six models ($n{=}40$): GSM8K peak $0.72$--$0.75\times$ APC and Game24 $0.57$--$0.62\times$ on every family; ForkServe accuracy tracks APC; ForkServe+ stop is not portable (DeepSeek-R1 accuracy $0$ when \texttt{</think>} is a stop string).
+Setting N repeats the forest on six models ($n{=}40$): GSM8K peak $0.72$--$0.75\times$ APC and Game24 $0.57$--$0.62\times$ on every family; ForkServe accuracy tracks APC.
+The last-line rerun ($n{=}32$) keeps GSM8K peak at $0.73$--$0.74\times$ APC.
+ForkServe+ scores $18/32$ on DeepSeek-R1 (APC $16/32$) and $22/32$ on Llama-3-8B (APC $23/32$); Mistral-7B falls to $6/32$ from $11/32$.
 HumanEval pass@1 on Mistral-7B is $0.350$ for every system, with peak $0.89\times$ APC.
 
 \section{Conclusion}
@@ -2163,7 +2205,8 @@ Setting M confirms two GPU facts on Qwen3-8B ($n{=}80$).
 First, real ToT thoughts do not trip the draft heuristic, so expand is still CoW of every residual and still slower than APC.
 Second, GSM8K answer-marker stop is a real latency win: $0.33\times$ decode tokens and $0.75\times$ e2e at $\mathrm{tp}{=}4$ with accuracy $0.925$ vs.\ $0.938$.
 Game24 and HumanEval keep APC-level e2e because those traces do not hit the stop list, while peak KV remains below APC ($0.62\times$ and $0.96\times$).
-Setting N extends that storage claim to six families at $n{=}40$: GSM8K peak $0.72$--$0.75\times$ APC, Game24 $0.57$--$0.62\times$, ForkServe accuracy with APC, and ForkServe+ stop not portable (DeepSeek-R1 accuracy $0$).
+Setting N extends that storage claim to six families at $n{=}40$: GSM8K peak $0.72$--$0.75\times$ APC, Game24 $0.57$--$0.62\times$, ForkServe accuracy with APC.
+The last-line rerun at $n{=}32$ scores $18/32$ on DeepSeek-R1 (APC $16/32$), $22/32$ on Llama-3-8B (APC $23/32$), and $6/32$ on Mistral-7B (APC $11/32$), with GSM8K peak $0.73$--$0.74\times$ APC.
 Mistral-7B HumanEval pass@1 is $0.350$ ($14/40$) on recompute, APC, and ForkServe.
 
 The remaining full-set runs are Tree-of-Thoughts on Game24 ($n{=}1362$) and ReAct on HumanEval ($n{=}164$) for ForkServe; vLLM recompute and APC already finished those files.

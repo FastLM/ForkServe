@@ -192,7 +192,7 @@ APC peak & $1512$ & $1512$ & $1512$ & $1509$ & $1569$ & $1405$ \\
 ratio & $0.74$ & $0.74$ & $0.74$ & $0.73$ & $0.75$ & $0.72$ \\
 APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
 \sys{} acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
-FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.000$ \\
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -211,7 +211,7 @@ Labels: Qwen3-4B, Math-1.5B, Qwen3-14B, Llama-3-8B, Mistral-7B, DeepSeek-R1.}
 The $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ gap is stable across families and tensor width, as \eqref{eq:mem} requires: it depends on $k$ and residual length, not on the checkpoint.
 Game24 is lower ($0.57$--$0.62$) because trunks are short.
 ForkServe accuracy tracks APC.
-ForkServe+ stop is not portable: Llama-3-8B keeps $0.675$ accuracy at $0.26\times$ APC tokens; DeepSeek-R1 hits \texttt{</think>} and scores $0$.
+ForkServe+ stop is not portable: Llama-3-8B keeps $0.675$ accuracy at $0.26\times$ APC tokens.
 Quality comparisons across families should use \sys without the stop list.
 
 HumanEval wrap+recovery ($k{=}2$) keeps peak $0.90$ / $0.89$ / $0.95$ of APC on Llama-3-8B, Mistral-7B, and Qwen3-14B.
