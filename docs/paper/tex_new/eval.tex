@@ -316,12 +316,9 @@ HumanEval ($k{=}2$) leaves less to share, so $M_{\mathrm{spine}}$ stays near $M_
 \label{sec:eval-sens}
 
 \paragraph{Setup.}
-GSM8K, $n{=}16$, $D{=}512$, $\mathrm{tp}{=}2$, batches of four, on Llama-3-8B-Instruct, Mistral-7B-Instruct, and DeepSeek-R1-Distill-Llama-8B.
-The default tree is $k{=}4$.
-The sweep changes only $k\in\{2,8\}$, or stacks a second ToT level at $k{=}4$.
-ForkServe+ is also rerun with draft prune off, and with the last-line stop off.
-A batch-width pair runs the same $16$ items as $16$ steps of one and as one step of $16$.
-The contest forest is MATH-500 ($n{=}200$) and AIME ($n{=}73$) at $D{=}2048$, $k{=}4$, batches of eight.
+GSM8K, $n{=}16$, $D{=}512$, $\mathrm{tp}{=}2$, on Llama-3-8B, Mistral-7B, and DeepSeek-R1-8B.
+The sweep changes $k$ or adds a second ToT level.
+MATH-500 ($n{=}200$) and AIME ($n{=}73$) use $D{=}2048$.
 
 \begin{table}[t]
 \centering
@@ -360,18 +357,10 @@ Best storage in green.}
 \end{table}
 
 \paragraph{The ratio falls with $k$.}
-\Cref{tab:branch} is $(L+\ell)/(L+k\ell)$ on the GPU.
-The spine stays at $550$ tokens on Llama-3-8B and $569$ on Mistral-7B from $k{=}2$ to $k{=}8$, while APC grows, so the ratio moves from $0.90$ to $0.55$.
-DeepSeek-R1 matches at $k{=}2$ and $k{=}4$ ($0.89$, $0.74$).
-Depth $2$ stays in the $k{=}4$ band ($0.75$--$0.76$).
-Accuracy on $16$ items stays within two problems of APC.
-ForkServe+ does not move the peak; at $k{=}8$ it drops $28$ draft branches and cuts fan-out from $307$\,ms to $179$\,ms on Llama-3-8B and from $349$\,ms to $191$\,ms on Mistral-7B.
-With prune off, fan-out returns to $247$\,ms and $248$\,ms.
-With the last-line stop off, decode stays near $2500$--$3800$ tokens rather than APC's $8192$: only the winner is decoded, and it already ends inside $D$.
-A batch of $16$ keeps the ratio ($0.72$ and $0.73$).
-
-\paragraph{A long budget does not erase the spine.}
-MATH-500 ($n{=}200$) and AIME ($n{=}73$) at $D{=}2048$ keep the same ratio: DeepSeek-R1 is $1391/1863{=}0.75$ and $1646/2118{=}0.78$; Qwen3-4B is $1521/1937{=}0.79$ and $1734/2150{=}0.81$.
-End-to-end stays with APC ($433$\,s vs.\ $433$\,s on DeepSeek MATH-500; $326$\,s vs.\ $328$\,s on Qwen3-4B) because the trace spends the budget.
-DeepSeek MATH-500 is $101/200$ against APC $111/200$.
-ForkServe+ does not move that peak; it prunes $75$ MATH residuals and cuts fan-out from $2375$\,ms to $1553$\,ms.
+\Cref{tab:branch} is $(L+\ell)/(L+k\ell)$ on the GPU: the spine stays flat while APC grows, so the ratio moves from $0.90$ to $0.55$.
+Depth $2$ stays at $0.75$--$0.76$.
+ForkServe+ does not move the peak; at $k{=}8$ it drops $28$ branches and cuts Llama fan-out from $307$\,ms to $179$\,ms.
+Prune off returns that fan-out to $247$\,ms.
+The last-line stop is not the decode cut here: the winner already ends inside $D$, so emitted tokens stay near $2500$--$3800$ against APC's $8192$.
+A batch of $16$ keeps the ratio at $0.72$--$0.73$.
+At $D{=}2048$ the ratio is $0.75$--$0.81$ (DeepSeek MATH-500 $1391/1863$, Qwen3-4B $1521/1937$), end-to-end stays with APC, and ForkServe+ prunes $75$ MATH residuals ($1553$\,ms fan-out vs.\ $2375$\,ms).
