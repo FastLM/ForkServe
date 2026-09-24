@@ -81,10 +81,15 @@ class Engine:
         )
         self.ngrams = NGramResidual(self.config.ngram_order, self.config.ngram_prefix)
         self.hash_index = None
+        self._disagg = None
         if self.config.hash_prune:
             from forkserve.prefill_prune import PrefillHashIndex
 
             self.hash_index = PrefillHashIndex(self.config.page_size)
+        if self.config.disagg_prefill:
+            from forkserve.disagg import DisaggPrefillConnector
+
+            self._disagg = DisaggPrefillConnector(self.config)
 
     # ----- verbs -------------------------------------------------------------
 
@@ -445,9 +450,22 @@ class Engine:
                 bd.pruned += 1
                 self.metrics[sid].pruned_branches += 1
         if self.config.disagg_prefill and app_on and plan is not None:
-            xfer = DisaggPrefillConnector(self.config).gate(plan)
+            if self._disagg is None:
+                from forkserve.disagg import DisaggPrefillConnector
+
+                self._disagg = DisaggPrefillConnector(self.config)
+            xfer = self._disagg.gate(plan)
             bd.transfer_tokens = xfer.shipped_tokens
             bd.transfer_ms = xfer.transfer_ms
+        # Draft-skipped residuals were never submitted. Free their pages now
+        # so lazy abort does not hold loser KV across the winner decode.
+        for row in decisions:
+            if row.index >= len(kids):
+                continue
+            if row.keep:
+                continue
+            if row.action in (PrefillAction.DRAFT_SKIP, PrefillAction.EARLY_ABORT):
+                self.abort(sid, kids[row.index], lazy=False)
         self.last_fanout = bd
         return bd
 

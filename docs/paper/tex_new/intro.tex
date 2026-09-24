@@ -20,7 +20,7 @@ Once KV retention has removed trunk recompute~\cite{continuum,mori}, the remaini
 \caption{\textbf{\sys{} architecture.}
 (1)~$\sigma_u$ holds one RO trunk; \texttt{fork} aliases it in $O(1)$; LCP binds the winner.
 (2)~Cost-ordered prefill pruning admits work by $G/C$, then rejects each residual at the first decisive stage: block-hash probe, draft score, kernel prefix, miss-tail prefill, and a gated \texttt{insert}.
-(3)~Prefill and decode run as separate instances. Pruning removes blocks at arbitrary positions (dashed), rather than as a suffix; only surviving KV is inserted, so fan-out time falls from $162$\,ms under stock ship-all P/D to $35.9$\,ms.
+(3)~Prefill and decode run as separate instances. Pruning removes blocks at arbitrary positions (dashed), rather than as a suffix; only surviving KV is inserted, so fan-out time falls from $162$\,ms under stock ship-all P/D to $31.4$\,ms.
 After abort the live occupancy is the spine $M_{\mathrm{spine}}$; the same $8$\,GiB pool then admits $76{\to}103$ sessions ($+35.5\%$ tok/s).}
 \label{fig:system}
 \end{figure*}

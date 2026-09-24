@@ -265,7 +265,7 @@ Fan-out time is
 T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
 \end{equation}
 with $T_{\mathrm{CoW}}$ a pointer swap (no KV memcpy) and $T_{\mathrm{abort}}$ deferrable when \texttt{abort} is lazy.
-Under the control-plane model of \S\ref{sec:eval-app} ($\ell{\times}12\,\mu\mathrm{s}$, $\mu{=}2\,\mu\mathrm{s}$), \eqref{eq:tfan} is $139$\,ms for APC, $162$\,ms for stock P/D, $47$\,ms for CoW, and $35.9$\,ms for \app.
+Under the control-plane model of \S\ref{sec:eval-app} ($\ell{\times}12\,\mu\mathrm{s}$, $\mu{=}2\,\mu\mathrm{s}$), \eqref{eq:tfan} is $139$\,ms for APC, $162$\,ms for stock P/D, $47$\,ms for CoW, and $31.4$\,ms for \app.
 
 \iffalse
 \paragraph{Orthogonal decode-length stop.}

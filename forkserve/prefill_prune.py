@@ -29,7 +29,7 @@ from typing import Sequence
 from forkserve.config import ForkServeConfig
 from forkserve.hash_forkserve import BlockHash, hash_block
 from forkserve.prune import BranchPruner, BranchScore
-from forkserve.types import TokenSeq, as_tokens
+from forkserve.types import TokenSeq, as_tokens, lcp_len
 
 
 class PrefillAction(str, Enum):
@@ -53,6 +53,10 @@ class PrefillDecision:
     matched_tokens: int = 0
     work_tokens: int = 0  # tokens that still need GPU prefill
     transfer_tokens: int = 0  # tokens that would ship under disagg
+    # Miss tail actually prefilled. ``prompt_tokens`` is the full sequence
+    # so the connector can hash blocks on the same parent chain.
+    span: TokenSeq = ()
+    prompt_tokens: TokenSeq = ()
 
     @property
     def prefill(self) -> bool:
@@ -173,6 +177,7 @@ class PrefillPruner:
         ship = self.config.disagg_prefill if disagg is None else disagg
         scores = self._draft.rank(residuals, threshold=threshold)
         out = PrefillPlan()
+        prompts: list[TokenSeq] = []
         for row in scores:
             residual = residuals[row.index]
             n_tok = (
@@ -186,15 +191,27 @@ class PrefillPruner:
                 else _as_tokenish(residual)
             )
             dec = self._decide(row, n_tok, prompt, residual)
-            if ship and dec.keep:
-                dec.transfer_tokens = dec.work_tokens if dec.action != PrefillAction.HASH_SKIP else 0
-                if dec.action is PrefillAction.HASH_PARTIAL:
-                    dec.transfer_tokens = dec.work_tokens
-                elif dec.action is PrefillAction.PREFILL:
-                    dec.transfer_tokens = n_tok
-            elif not ship:
-                dec.transfer_tokens = 0
+            while len(prompts) <= row.index:
+                prompts.append(())
+            prompts[row.index] = prompt
+            dec.prompt_tokens = prompt
+            dec.span = _miss_span(prompt, dec.matched_tokens, dec.work_tokens)
             out.decisions.append(dec)
+        self._share_prefixes(out.decisions, prompts)
+        self._admit_by_gc(out.decisions)
+        for dec in out.decisions:
+            n_tok = dec.residual_tokens
+            if ship and dec.keep and dec.action is not PrefillAction.HASH_SKIP:
+                dec.transfer_tokens = dec.work_tokens
+                dec.span = _miss_span(
+                    prompts[dec.index] if dec.index < len(prompts) else (),
+                    dec.matched_tokens,
+                    dec.work_tokens,
+                )
+            else:
+                dec.transfer_tokens = 0
+                if not dec.keep:
+                    dec.span = ()
             out.prefill_tokens += dec.work_tokens
             out.skipped_tokens += max(0, n_tok - dec.work_tokens)
             out.transfer_tokens += dec.transfer_tokens
@@ -207,6 +224,65 @@ class PrefillPruner:
             elif dec.action is PrefillAction.EARLY_ABORT:
                 out.early_aborts += 1
         return out
+
+    def _share_prefixes(self, decisions: list[PrefillDecision], prompts: list[TokenSeq]) -> None:
+        """Page-align the LCP of kept prompts and prefill each page once."""
+        if not self.config.share_prefixes:
+            return
+        page = max(1, self.config.page_size)
+        admitted: list[TokenSeq] = []
+        order = sorted(
+            decisions,
+            key=lambda d: (d.index == self.winner, d.score, -d.index),
+            reverse=True,
+        )
+        for dec in order:
+            if not dec.keep or dec.action is PrefillAction.HASH_SKIP:
+                if dec.keep and dec.action is PrefillAction.HASH_SKIP:
+                    prompt = prompts[dec.index] if dec.index < len(prompts) else ()
+                    if prompt:
+                        admitted.append(prompt)
+                continue
+            prompt = prompts[dec.index] if dec.index < len(prompts) else ()
+            if not prompt:
+                continue
+            best = dec.matched_tokens
+            for prev in admitted:
+                best = max(best, lcp_len(prompt, prev))
+            shared = (best // page) * page
+            if shared > dec.matched_tokens:
+                dec.matched_tokens = shared
+                miss = max(0, len(prompt) - shared)
+                if miss <= 0:
+                    dec.action = PrefillAction.HASH_SKIP
+                    dec.work_tokens = 0
+                    dec.reason = "sibling_prefix"
+                    dec.span = ()
+                else:
+                    dec.action = PrefillAction.HASH_PARTIAL
+                    dec.reason = "sibling_prefix"
+                    dec.work_tokens = miss
+                    dec.span = prompt[shared:]
+            if dec.keep:
+                admitted.append(prompt)
+
+    def _admit_by_gc(self, decisions: list[PrefillDecision]) -> None:
+        """Keep the winner and the next best G/C residuals. The rest never start."""
+        cap = self.config.prefill_keep_m
+        if not self.config.gc_admit or cap <= 0:
+            return
+        ranked = sorted(
+            (d for d in decisions if d.keep and d.index != self.winner),
+            key=lambda d: d.score / max(d.work_tokens, 1),
+            reverse=True,
+        )
+        for dec in ranked[max(0, cap - 1) :]:
+            dec.keep = False
+            dec.action = PrefillAction.DRAFT_SKIP
+            dec.reason = "marginal_gc"
+            dec.work_tokens = 0
+            dec.transfer_tokens = 0
+            dec.span = ()
 
     def _decide(
         self,
@@ -294,6 +370,13 @@ class PrefillPruner:
             matched_tokens=matched,
             work_tokens=n_tok,
         )
+
+
+def _miss_span(prompt: TokenSeq, matched: int, work: int) -> TokenSeq:
+    if not prompt or work <= 0:
+        return ()
+    start = min(len(prompt), max(0, matched))
+    return prompt[start : start + work]
 
 
 def _residual_len(residual: str | TokenSeq) -> int:

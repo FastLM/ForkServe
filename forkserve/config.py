@@ -75,6 +75,11 @@ class ForkServeConfig:
     # Harness already picked the winner: do not prefill the other residuals.
     skip_known_losers: bool = False
     hash_prune: bool = False
+    # Share a page-aligned residual prefix across siblings (prefill and ship once).
+    share_prefixes: bool = False
+    # Admit non-winners by G/C, capped at prefill_keep_m (0 = no cap).
+    gc_admit: bool = False
+    prefill_keep_m: int = 0
     disagg_prefill: bool = False
     disagg_transfer_us_per_token: float = 2.0
 

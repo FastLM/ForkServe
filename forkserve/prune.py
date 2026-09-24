@@ -99,6 +99,10 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     cfg.hash_prune = True
     cfg.disagg_prefill = True
     cfg.skip_known_losers = True
+    cfg.share_prefixes = True
+    cfg.gc_admit = True
+    # Winner plus one alternate. Wider fan-outs are draft-skipped, not prefilled.
+    cfg.prefill_keep_m = 2
     cfg.spec_pool_frac = 0.25 if cfg.spec_pool_frac <= 0 else cfg.spec_pool_frac
     # Marker strings cut the answer off (#### before the number, </think>
     # before the R1 reply). Answer-complete stop replaces them.

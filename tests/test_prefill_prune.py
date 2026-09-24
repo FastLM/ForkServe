@@ -137,6 +137,54 @@ def test_suite_writes_summary() -> None:
     assert curve["app_tokens_to_target"] < curve["apc_tokens_to_target"]
 
 
+def test_shared_prefix_prefills_the_tail_once() -> None:
+    cfg = ForkServeConfig(
+        page_size=8,
+        prune_enabled=True,
+        hash_prune=True,
+        disagg_prefill=True,
+        share_prefixes=True,
+        gc_admit=False,
+        skip_known_losers=False,
+        prune_threshold=0.15,
+    )
+    trunk = tuple(range(16))
+    shared = tuple(range(100, 116))
+    a = trunk + shared + (1, 2, 3, 4)
+    b = trunk + shared + (9, 8, 7, 6)
+    plan = PrefillPruner(cfg, winner=0).plan(
+        [a, b],
+        full_prompts=[a, b],
+        token_counts=[len(a) - len(trunk), len(b) - len(trunk)],
+    )
+    assert plan.decisions[0].work_tokens == len(a) - len(trunk)
+    assert plan.decisions[1].action is PrefillAction.HASH_PARTIAL
+    assert plan.decisions[1].work_tokens == 4
+    assert plan.prefill_tokens == (len(a) - len(trunk)) + 4
+    xfer = DisaggPrefillConnector(cfg).gate(plan)
+    assert xfer.shipped_tokens == plan.prefill_tokens
+    assert xfer.shipped_tokens < 2 * (len(a) - len(trunk))
+
+
+def test_gc_admit_drops_low_value_siblings() -> None:
+    cfg = plus_config(ForkServeConfig(page_size=8, bytes_per_token=1.0))
+    cfg.skip_known_losers = False
+    cfg.prefill_keep_m = 2
+    plan = PrefillPruner(cfg, winner=0).plan(
+        [
+            "Thought 1: add the numbers and boxed the answer.",
+            "Use substitution then combine.",
+            "Count the groups first.",
+            "Estimate then adjust.",
+        ],
+        token_counts=[32, 32, 32, 32],
+    )
+    assert plan.decisions[0].keep
+    assert sum(1 for d in plan.decisions if d.keep) == 2
+    assert any(d.reason == "marginal_gc" for d in plan.decisions)
+    assert plan.prefill_tokens == 64
+
+
 def test_app_config_enables_layers() -> None:
     cfg = app_config()
     assert cfg.lazy_abort

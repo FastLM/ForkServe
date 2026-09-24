@@ -91,9 +91,9 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
  & stock P/D & \botn{$11520$} & \botn{$162.1$} & \botn{$11520$} & $11520$ & $0$ & $0$ \\
 \rowcolor{tblalt}
  & FS & $3840$ & $47.1$ & $0$ & $3840$ & $0$ & $0$ \\
- & ForkServe+ & \win{$2912$} & \win{$35.9$} & \win{$352$} & \win{$2880$} & $9$ & $20$ \\
+ & ForkServe+ & \win{$2592$} & \win{$31.4$} & \win{$32$} & \win{$2880$} & $9$ & $30$ \\
 \midrule
- & ForkServe+ / APC & \win{$-75\%$} & \win{$-74\%$} & --- & \win{$-75\%$} & --- & --- \\
+ & ForkServe+ / APC & \win{$-77.5\%$} & \win{$-77.4\%$} & --- & \win{$-75\%$} & --- & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -104,7 +104,7 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
 On the first expand, hash prefill matches APC: the blocks are unpublished, so the hash probe does not remove the cloned trunks.
 Stock P/D exceeds APC ($162$ vs.\ $139$\,ms) because it transfers that clone.
 \sys removes the clone by aliasing the trunk ($3840$ prefill tokens, $47$\,ms).
-\app then withholds prefill from $20$ residuals below the draft threshold, which reduces $T_{\mathrm{fan}}$ to $35.9$\,ms and the connector payload from $11520$ tokens to $352$.
+\app then withholds prefill from $30$ of the $40$ residuals, which reduces $T_{\mathrm{fan}}$ to $31.4$\,ms and the connector payload from $11520$ tokens to $32$.
 
 % Temporarily omitted from the paper (Figure 4, stacked KV occupancy).
 \iffalse
@@ -185,7 +185,7 @@ APC always emits $nD{=}40960$ tokens.
 \sys with the marker list emits $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, and e2e falls to $0.78\times$ and $0.75\times$ APC.
 Accuracy at four GPUs is $74/80$ vs.\ APC $75/80$.
 Fan-out remains above APC ($1048$ vs.\ $438$\,ms at $\mathrm{tp}{=}4$). On this GSM8K trace the draft score admits the issued residuals (\texttt{pruned\_branches}${=}0$), so the expand path still prefills them under copy-on-write.
-The $75\%$ prefill cut of \Cref{tab:app} is the illegal-residual case; the GPU latency win on this forest is $D^{+}$.
+The $77.5\%$ prefill cut of \Cref{tab:app} is the pruned-residual case; the GPU latency win on this forest is $D^{+}$.
 Game24 and HumanEval almost never hit the stop list, so their e2e stays within $1\%$ of APC, while peak KV remains below APC ($0.62\times$ and $0.96\times$).
 \Cref{fig:eval-hist} shows the same split as a per-item length distribution across four families.
 \fi

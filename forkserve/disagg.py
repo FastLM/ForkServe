@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from forkserve.config import ForkServeConfig
+from forkserve.hash_forkserve import BlockHash, hash_block
 from forkserve.prefill_prune import PrefillAction, PrefillDecision, PrefillPlan
 from forkserve.types import TokenSeq, as_tokens
 
@@ -61,6 +62,9 @@ class DisaggPrefillConnector:
     def __init__(self, config: ForkServeConfig | None = None) -> None:
         self.cfg = config or ForkServeConfig()
         self._buf: dict[str, KvEnvelope] = {}
+        # Blocks already inserted for this decode instance. A later sibling
+        # or session that repeats the prefix does not cross the connector.
+        self._shipped: set[BlockHash] = set()
 
     def insert(
         self,
@@ -84,9 +88,24 @@ class DisaggPrefillConnector:
         """Insert only APP survivors. Returns transfer accounting."""
         result = TransferResult()
         us = self.cfg.disagg_transfer_us_per_token
+        page = max(1, self.cfg.page_size)
         for dec in plan.decisions:
             rid = f"{request_prefix}{dec.index}"
             ship, reason, n = _should_ship(dec)
+            if ship and dec.prompt_tokens:
+                begin = dec.matched_tokens
+                if begin <= 0:
+                    begin = max(0, len(dec.prompt_tokens) - dec.work_tokens)
+                n = _novel_tokens(
+                    dec.prompt_tokens,
+                    begin,
+                    dec.work_tokens,
+                    page,
+                    self._shipped,
+                )
+                ship = n > 0
+                if not ship:
+                    reason = "prefix_dedup"
             env = self.insert(rid, n, ship=ship, reason=reason)
             result.envelopes.append(env)
             if ship:
@@ -119,6 +138,48 @@ def _should_ship(dec: PrefillDecision) -> tuple[bool, str, int]:
         return False, dec.reason, 0
     n = dec.transfer_tokens or dec.work_tokens or dec.residual_tokens
     return True, dec.action.value, n
+
+
+def _novel_tokens(
+    prompt: TokenSeq,
+    matched: int,
+    work: int,
+    page_size: int,
+    shipped: set[BlockHash],
+) -> int:
+    """Tokens in ``[matched, matched+work)`` whose block is not yet inserted.
+
+    Blocks are hashed on the parent chain of the full prompt, so a sibling
+    that repeats a prefix does not cross the connector again.
+    """
+    tokens = as_tokens(prompt)
+    if not tokens or work <= 0:
+        return 0
+    begin = min(len(tokens), max(0, matched))
+    end = min(len(tokens), begin + work)
+    n = 0
+    parent: BlockHash | None = None
+    i = 0
+    while i + page_size <= len(tokens):
+        chunk = tokens[i : i + page_size]
+        bh = hash_block(parent, chunk)
+        parent = bh
+        block_end = i + page_size
+        overlaps = block_end > begin and i < end
+        if bh not in shipped and overlaps:
+            left = max(i, begin)
+            right = min(block_end, end)
+            n += max(0, right - left)
+            shipped.add(bh)
+        elif bh not in shipped and block_end <= begin:
+            shipped.add(bh)
+        i += page_size
+    if i < len(tokens):
+        bh = hash_block(parent, tokens[i:], extra=b"tail")
+        if bh not in shipped and len(tokens) > begin and i < end:
+            n += max(0, min(len(tokens), end) - max(i, begin))
+            shipped.add(bh)
+    return n
 
 
 def transfer_ms(tokens: int, us_per_token: float) -> float:
