@@ -10,6 +10,7 @@ async scheduling (the 2/4-GPU decode tax).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any, Sequence
