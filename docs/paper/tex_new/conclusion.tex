@@ -15,5 +15,5 @@ Contest traces at a $2048$-token budget keep the ratio in $0.75$--$0.81\times$ w
 Future directions include: draft scores that reject model-generated continuations rather than only illegal or looping residuals, answer stops that preserve accuracy on families where a finished line is ambiguous, closed-loop QPS sweeps that confirm the analytical concurrency gain under a live scheduler, full-set Game24 and HumanEval forests, deeper trees and $32$K-context windows, and multi-tenant admission with explicit latency margins on a shared frame pool.
 
 \sys shows that branch cost is incurred only for the residual that is committed, and only at the minimum-cost stage in the rejection cascade.
-Co-designing the context tree with prefill admission and decode termination yields a spine whose occupancy is determined by $k$ and residual length, independent of tensor-parallel width.
-As agentic workloads scale, serving systems that fork by reference, prune before prefill, and terminate on a completed answer retain KV capacity on the committed path.
+Co-designing the context tree with prefill admission yields a spine whose occupancy is determined by $k$ and residual length, independent of tensor-parallel width.
+As agentic workloads scale, serving systems that fork by reference and prune before prefill retain KV capacity on the committed path.
