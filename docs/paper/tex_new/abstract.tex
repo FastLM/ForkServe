@@ -1,7 +1,7 @@
 Agentic LLM serving forks a shared trunk into short residuals and then keeps one committed path.
 Prefix caches can reuse that trunk only after the tokens exist and a hash hits, so the first fan-out still copies the trunk once per child.
 Prefill/decode disaggregation separates time-to-first-token from decode latency, yet the connector ships every page the prefiller computed, including residuals that will be aborted.
-The cost of a branch should be paid only for the residual that survives, and only at the cheapest stage that can reject it.
+Branch cost should be incurred only for the residual that is committed, and only at the minimum-cost stage at which rejection is admissible.
 
 \sys makes the branch a serving object.
 A copy-on-write context tree turns \texttt{fork} into an alias of the parent's KV pages and allocates frames only for the residual.

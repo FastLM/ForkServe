@@ -1,12 +1,19 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-Agentic serving forks a shared trunk into short residuals and then keeps one of them.
-\sys represents that fork as a copy-on-write context tree and filters each residual with advanced prefill pruning: hash hits skip published blocks, low-score siblings are dropped before GPU prefill, and a P/D connector inserts only the retained miss tail.
-The first-fan-out spans are $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with live occupancy $M_{\mathrm{spine}}=b(L+\ell_\star)$ after abort.
-On Qwen3-14B GSM8K the tree matches APC accuracy at $0.72\times$ median peak KV.
-The control-plane comparison shows \app cutting modeled fan-out by $75\%$ versus APC when residuals fail the draft score.
-On Qwen3-8B, answer-marker stop cuts GSM8K decode tokens to $0.31\times$ APC and e2e to $0.75\times$ at four GPUs.
-On six model families GSM8K peak KV stays $0.72$--$0.75\times$ APC; the measured KV gap raises modeled SLO-feasible concurrency by $35\%$.
-A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$) keeps GSM8K peak at $0.73\times$ APC.
-ForkServe+ scores $18/32$ against APC $16/32$ on DeepSeek-R1 and $22/32$ against $23/32$ on Llama-3-8B; Mistral-7B falls to $6/32$ from $11/32$.
+The KV retained for aborted branches fundamentally limits the throughput and memory cost of agentic LLM serving.
+A Tree-of-Thoughts fan-out shares one trunk, yet a prefix cache retains every residual after the first expand, and a disaggregated connector transfers those pages even when the harness will abort them.
+We introduced \sys, which makes the branch a serving object: a copy-on-write context tree, a cascade that rejects a residual at the minimum-cost stage at which rejection is admissible, and a decode path that attends only the committed spine.
+
+Our evaluation demonstrates a $0.72\times$ median peak KV on Qwen3-14B GSM8K at matched accuracy ($0.845$ vs.\ $0.844$), a $74.72\%$ cut in modeled fan-out prefill against that cache, and a $35.14\%$ increase in the concurrency a fixed pool can sustain.
+On Qwen3-8B the same stack emits $0.31\times$ the GSM8K decode tokens of the prefix cache and finishes in $0.75\times$ the time at four GPUs.
+Across six model families the GSM8K spine stays at $0.72$--$0.75\times$ the prefix-cache peak, and the ratio falls to $0.55\times$ when the fan-out grows from $k{=}2$ to $k{=}8$.
+Contest traces at a $2048$-token budget keep the ratio in $0.75$--$0.81\times$ with end-to-end time matched to the cache, because the spine, not the hashed union, is what remains live.
+
+\sys's key innovations include: (i)~a copy-on-write context tree that turns \texttt{fork} into an alias of the parent's KV pages and frees only the residual on abort, so live occupancy is the spine $b(L+\ell_\star)$; (ii)~advanced prefill pruning, a cascade of block-hash reuse, draft-score rejection, early abort, and a transfer gate that inserts only the miss tail of a residual that is kept; (iii)~longest-common-prefix commit, which keeps speculative tokens out of the sampler so the committed sequence matches a prefill of committed tokens only; and (iv)~a last-line answer stop together with a two-class scheduler that admits speculative prefill only from the slack left by committed requests.
+
+Future directions include: draft scores that reject model-generated continuations rather than only illegal or looping residuals, answer stops that preserve accuracy on families where a finished line is ambiguous, closed-loop QPS sweeps that confirm the analytical concurrency gain under a live scheduler, full-set Game24 and HumanEval forests, deeper trees and $32$K-context windows, and multi-tenant admission with explicit latency margins on a shared frame pool.
+
+\sys shows that branch cost is incurred only for the residual that is committed, and only at the minimum-cost stage in the rejection cascade.
+Co-designing the context tree with prefill admission and decode termination yields a spine whose occupancy is determined by $k$ and residual length, independent of tensor-parallel width.
+As agentic workloads scale, serving systems that fork by reference, prune before prefill, and terminate on a completed answer retain KV capacity on the committed path.
