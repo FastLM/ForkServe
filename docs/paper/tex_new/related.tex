@@ -1,0 +1,21 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Request-level serving.}
+Orca~\cite{orca} introduced iteration-level scheduling; vLLM~\cite{vllm} paged the KV cache and hashes full blocks for APC; SGLang~\cite{sglang} added radix prefix sharing; Sarathi~\cite{sarathi,sarathisplit} chunked prefills; DistServe and Splitwise~\cite{distserve,splitwise} disaggregated prefill from decode.
+Prefix caching discovers sharing after tokens exist.
+Stock P/D isolates \ttft{} from ITL; it does not choose which branch to compute, and it transfers every page the prefiller produced.
+\app uses both mechanisms as filters: the hash as a skip, the connector as a gate.
+
+\paragraph{Program- and SLO-aware scheduling.}
+Autellix~\cite{autellix} schedules by program-level attained service; JITServe~\cite{jitserve} allocates just-enough bandwidth under heterogeneous SLOs.
+Hermes~\cite{hermes}, ThunderAgent~\cite{thunderagent}, and SAGA~\cite{saga} raise the atom to the program or workflow.
+These systems leave KV unforked and unissued children unprefilled.
+
+\paragraph{KV retention and overlap.}
+InferCept~\cite{infercept}, Continuum~\cite{continuum}, MORI~\cite{mori}, and ConServe~\cite{conserve} keep the \emph{current} context alive or placed.
+Sutradhara~\cite{sutradhara} overlaps tool execution with prefill of one linear tool-independent prefix.
+SmoothAgent~\cite{smoothagent} lookahead-transforms context; IdleSpec~\cite{idlespec} drafts plans for accuracy, not KV.
+Classical speculative decoding~\cite{speculative,medusa,eagledraft} drafts \emph{output} tokens.
+ForkKV~\cite{forkkv} CoW-splits LoRA residuals.
+We represent the future as a \emph{set} of CoW children, speculate several known suffixes, commit by LCP, prune losers before prefill, and gate P/D \texttt{insert}.

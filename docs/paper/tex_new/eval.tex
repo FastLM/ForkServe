@@ -1,0 +1,200 @@
+\section{Evaluation}
+\label{sec:eval}
+
+We separate four measurements.
+\S\ref{sec:eval-gpu} is a GPU forest on Qwen3-14B.
+\S\ref{sec:eval-app} is a control-plane cost model of \app against APC, hash prefill, stock P/D, and \sys.
+\S\ref{sec:eval-plus} is a GPU run of ForkServe+ on Qwen3-8B.
+\S\ref{sec:eval-multi} repeats the forest on six model families.
+
+\subsection{GPU forest}
+\label{sec:eval-gpu}
+
+\paragraph{Setup.}
+Qwen3-14B, \texttt{bfloat16}, $\mathrm{tp}{=}2$ on two A100-SXM4 40GB GPUs.
+GSM8K test ($n{=}1319$) is Tree-of-Thoughts with $k{=}4$ and a $512$-token decode budget, scored by the official \texttt{\#\#\#\#} extractor.
+Requests run in batches of eight ($165$ batches).
+Recompute disables the prefix cache.
+APC hashes full blocks after tokens exist.
+\sys forks the trunk by reference, prefills residuals, aborts non-winners, and decodes the committed path.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K test, Qwen3-14B, $\mathrm{tp}{=}2$, $n{=}1319$.
+Median over $165$ batches of eight.}
+\label{tab:gsm}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrr}
+\toprule
+ & recompute & APC & \sys \\
+\midrule
+Accuracy & $0.847$ & $0.844$ & $0.845$ \\
+Peak KV, median (tok) & $4136$ & $1430$ & \gain{$1030$} \\
+Peak KV, max (tok) & $4944$ & $1632$ & \gain{$1232$} \\
+Fan-out, median (ms) & $326$ & $87$ & $140$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Storage, not expand.}
+\Cref{tab:gsm} is the storage result and the latency gap \app is built to close.
+Median peak KV is $0.72\times$ APC and $0.25\times$ recompute; accuracy stays within one point of both.
+Fan-out does not follow the storage ordering: \sys is $140$\,ms against APC's $87$\,ms, because CoW and abort sit on the expand path while APC's hash hit does not.
+End-to-end generation stays within $2\%$ of APC ($18.9$ vs.\ $18.6$ minutes).
+The same peak ordering, $0.58$--$0.80\times$ APC, holds on seven math sets for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
+Peak does not change when the tensor width doubles; it tracks the committed path, as \eqref{eq:mem} requires.
+
+\subsection{Prefill pruning}
+\label{sec:eval-app}
+
+\paragraph{Setup.}
+Control plane, no GPU.
+Ten sessions, $k{=}4$, $L{=}256$, $\ell{=}32$.
+Two of four residuals fail the draft score; the winner is index $0$.
+Prefill time is $\ell\times 12\,\mu\mathrm{s}/\mathrm{token}$; P/D transfer is $2\,\mu\mathrm{s}/\mathrm{token}$.
+APC and hash prefill publish blocks only after a request materializes them, so the first fan-out clones $k$ trunks.
+Stock P/D uses that same prefill and then ships every live token.
+\sys shares the trunk by pointer swap and prefills every residual.
+\app adds hash skip, draft prune, early abort, lazy abort, and a connector that inserts only retained residuals.
+
+\begin{table}[t]
+\centering
+\caption{Control-plane first fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$).
+Improvement versus APC in green.
+Not GPU wall-clock.}
+\label{tab:app}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrr}
+\toprule
+ & $\Work$ (tok) & $T_{\mathrm{fan}}$ (ms) & $\Xfer$ (tok) & peak KV \\
+\midrule
+APC & $11520$ & $139.0$ & $0$ & $11520$ \\
+hash prefill & $11520$ & $139.0$ & $0$ & $11520$ \\
+stock P/D & $11520$ & $162.1$ & $11520$ & $11520$ \\
+\sys & $3840$ & $47.1$ & $0$ & $3840$ \\
+\app & \gain{$2912$} & \gain{$35.9$} & \gain{$352$} & \gain{$2880$} \\
+\midrule
+\app{} / APC & \gain{$-75\%$} & \gain{$-74\%$} & --- & \gain{$-75\%$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Fan-out.}
+\Cref{tab:app} is the comparison the GPU gap motivates, and \Cref{fig:eval-kv} shows the occupancy timeline of one session.
+Hash prefill matches APC on the first expand: blocks are unpublished, so the hash walk does not remove the clone.
+Stock P/D is slower than APC ($162$ vs.\ $139$\,ms) because it ships the full clone.
+\sys already drops the clone ($3840$ prefill tokens, $47$\,ms) by aliasing the trunk.
+\app goes further: $20$ low-score residuals are not prefilled, $T_{\mathrm{fan}}$ falls to $35.9$\,ms, and the connector ships $352$ tokens rather than $11520$.
+Replay of the published winner is a full hash hit for APC, hash prefill, and \app (zero additional $\Work$).
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_kv}}
+\caption{\textbf{Normalized KV occupancy} of one $k{=}4$ step ($L{=}256$, $\ell{=}32$).
+APC clones the trunk and retains hashed residuals.
+CoW aliases $L$ and collapses to the spine at abort.
+\app prefills only kept residuals.}
+\label{fig:eval-kv}
+\end{figure}
+
+\paragraph{Concurrency from measured KV.}
+Substituting DeepSeek-R1 GSM8K peaks ($1563$ APC tokens, $1163$ \sys tokens) into an $8$\,GiB pool in \eqref{eq:theta} gives $37$ concurrent trees for APC and $50$ for \sys.
+\Cref{fig:eval-slo} sweeps offered QPS: under a $1$\,s P99 \ttft{} constraint the same model admits $192$ QPS for APC and $256$ for the pruned tree, and saturated decode throughput rises from $23680$ to $32000$ tokens/s (\gain{$+35\%$}).
+This uses measured $M$, not the control-plane peak of \Cref{tab:app}.
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_slo}}
+\caption{\textbf{SLO sweep} from measured DeepSeek GSM8K peaks.
+Left: saturated tok/s plateaus at $C{\times}$decode-rate ($37$ vs.\ $50$ slots).
+Right: APC crosses the $1$\,s P99 line at $256$ QPS; \app{} stays under it.}
+\label{fig:eval-slo}
+\end{figure}
+
+\subsection{GPU ForkServe+}
+\label{sec:eval-plus}
+
+\paragraph{Setup.}
+Qwen3-8B, \texttt{bfloat16}, $n{=}80$, $D{=}512$, $\mathrm{tp}{=}2$ and $4$ on four A100-SXM4 40GB GPUs.
+ForkServe+ enables lazy abort, pointer swap, hash skip, draft prune, the P/D gate, and \texttt{decode\_stop}.
+GSM8K and Game24 are ToT ($k{=}4$); HumanEval is ReAct wrap+recovery ($k{=}2$).
+
+\begin{table}[t]
+\centering
+\caption{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$.
+Peak KV is independent of $\mathrm{tp}$.
+$D^{+}$ and e2e are GSM8K.}
+\label{tab:plus}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrr}
+\toprule
+ & peak KV & $D^{+}$ & e2e (s) & acc. & vs.\ APC e2e \\
+\midrule
+APC $\mathrm{tp}{=}2$ & $1582$ & $40960$ & $36.0$ & $0.900$ & --- \\
+\sys $\mathrm{tp}{=}2$ & $1182$ & $21235$ & $36.0$ & $0.887$ & $1.00\times$ \\
+FS+ $\mathrm{tp}{=}2$ & $1182$ & $13356$ & $28.2$ & $0.863$ & \gain{$0.78\times$} \\
+APC $\mathrm{tp}{=}4$ & $1582$ & $40960$ & $22.7$ & $0.938$ & --- \\
+\sys $\mathrm{tp}{=}4$ & $1182$ & $20997$ & $23.3$ & $0.925$ & $1.03\times$ \\
+FS+ $\mathrm{tp}{=}4$ & $1182$ & $12826$ & $16.9$ & $0.925$ & \gain{$0.75\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Decode stop is the GPU latency term.}
+APC always emits $nD{=}40960$ tokens.
+\sys already stops on EOS ($0.52\times$).
+ForkServe+ with the marker list emits $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, and e2e falls to $0.78\times$ and $0.75\times$ APC.
+Accuracy at four GPUs is $74/80$ vs.\ APC $75/80$.
+Fan-out is still slower than APC ($1048$ vs.\ $438$\,ms at $\mathrm{tp}{=}4$): real GSM8K thoughts do not fail the draft heuristic (\texttt{pruned\_branches}${=}0$), so expand remains CoW of every residual.
+The $75\%$ prefill cut of \Cref{tab:app} is the illegal-residual case; the GPU latency win on this forest is $D^{+}$.
+Game24 and HumanEval almost never hit the stop list, so their e2e stays within $1\%$ of APC, while peak KV remains below APC ($0.62\times$ and $0.96\times$).
+
+\subsection{Cross-model forest}
+\label{sec:eval-multi}
+
+\paragraph{Setup.}
+Same four systems, $n{=}40$, $D{=}512$, $\mathrm{tp}{=}2$ and $4$, on Qwen3-4B, Qwen2.5-Math-1.5B, Qwen3-14B, Llama-3-8B-Instruct, Mistral-7B-Instruct, and DeepSeek-R1-Distill-Llama-8B.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K $n{=}40$, $\mathrm{tp}{=}2$.
+Peak KV is unchanged at $\mathrm{tp}{=}4$.
+APC decode tokens are always $nD{=}20480$.}
+\label{tab:multi}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular}{lrrrrrr}
+\toprule
+ & 4B & 1.5B & 14B & L8B & M7B & R1 \\
+\midrule
+APC peak & $1512$ & $1512$ & $1512$ & $1509$ & $1569$ & $1405$ \\
+\sys{} peak & $1112$ & $1112$ & $1112$ & $1109$ & $1169$ & $1005$ \\
+ratio & \gain{$0.74$} & \gain{$0.74$} & \gain{$0.74$} & \gain{$0.73$} & \gain{$0.75$} & \gain{$0.72$} \\
+APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
+\sys{} acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.000$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_bars}}
+\caption{\textbf{GSM8K peak KV} on six models ($n{=}40$).
+\sys{} is $0.72$--$0.75\times$ APC on every family; the ratio is independent of checkpoint size, as \eqref{eq:mem} predicts.}
+\label{fig:eval-multi}
+\end{figure}
+
+\paragraph{What transfers.}
+\Cref{tab:multi,fig:eval-multi} separate storage from stop.
+The $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ gap is stable across families and tensor width: it depends on $k$ and residual length, not on the weights.
+Game24 is lower ($0.57$--$0.62$) because trunks are short.
+ForkServe accuracy tracks APC.
+ForkServe+ stop is not portable: Llama-3-8B keeps $0.675$ at $0.26\times$ APC tokens; DeepSeek-R1 hits \texttt{</think>} and scores $0$.
+Quality comparisons across families should use \sys without the stop list.
+
+HumanEval wrap+recovery ($k{=}2$) keeps peak $0.90$ / $0.89$ / $0.95$ of APC on Llama-3-8B, Mistral-7B, and Qwen3-14B.
+Mistral-7B pass@1 is $0.350$ ($14/40$) on recompute, APC, and \sys at both tensor widths.

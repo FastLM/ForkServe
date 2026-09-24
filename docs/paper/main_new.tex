@@ -1,0 +1,59 @@
+\documentclass{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+\usepackage[accepted]{mlsys2026}
+\makeatletter
+\renewcommand{\mlsys@appearing}{%
+  \textit{Working draft in the MLSys 2026 format.}}
+\makeatother
+\setcitestyle{numbers,square,comma}
+
+\input{tex_new/preamble}
+
+\mlsystitlerunning{ForkServe: Prefill Pruning and P/D Gating}
+
+\begin{document}
+
+\twocolumn[
+\mlsystitle{ForkServe: Branch-Aware Prefill Pruning\\
+and Disaggregated KV for Agentic LLM Serving}
+
+\begin{mlsysauthorlist}
+\mlsysauthor{Dong Liu}{hku}
+\mlsysauthor{Hao Wu}{hku}
+\mlsysauthor{Chuan Wu}{hku}
+\end{mlsysauthorlist}
+
+\mlsysaffiliation{hku}{The University of Hong Kong}
+
+\mlsyscorrespondingauthor{Chuan Wu}{cwu@cs.hku.hk}
+
+\mlsyskeywords{LLM serving, KV cache, agentic inference, prefill pruning, prefill-decode disaggregation}
+
+\vskip 0.3in
+
+\begin{abstract}
+\input{tex_new/abstract}
+\end{abstract}
+]
+
+\printAffiliationsAndNotice{}
+
+\input{tex_new/intro}
+\input{tex_new/problem}
+\input{tex_new/design}
+\input{tex_new/eval}
+\input{tex_new/related}
+\input{tex_new/conclusion}
+
+{\small
+\input{main_new.bbl}
+}
+
+\end{document}

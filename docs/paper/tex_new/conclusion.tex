@@ -1,0 +1,10 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+Agentic serving forks a shared trunk into short residuals and then keeps one of them.
+\sys represents that fork as a copy-on-write context tree and filters each residual with advanced prefill pruning: hash hits skip published blocks, low-score siblings are dropped before GPU prefill, and a P/D connector inserts only the retained miss tail.
+The first-fan-out spans are $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with live occupancy $M_{\mathrm{spine}}=b(L+\ell_\star)$ after abort.
+On Qwen3-14B GSM8K the tree matches APC accuracy at $0.72\times$ median peak KV.
+The control-plane comparison shows \app cutting modeled fan-out by $75\%$ versus APC when residuals fail the draft score.
+On Qwen3-8B, answer-marker stop cuts GSM8K decode tokens to $0.31\times$ APC and e2e to $0.75\times$ at four GPUs.
+On six model families GSM8K peak KV stays $0.72$--$0.75\times$ APC; the measured KV gap raises modeled SLO-feasible concurrency by $35\%$.

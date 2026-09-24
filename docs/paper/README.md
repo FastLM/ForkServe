@@ -4,10 +4,13 @@ Working draft in the MLSys 2026 style (`mlsys2026.sty`).
 Body covers the copy-on-write context tree, advanced prefill pruning (hash skip, draft prune, early abort, disaggregated-prefill gate), and the GSM8K GPU forest plus the control-plane prefill comparison.
 
 ```bash
-cd docs/paper && make
+cd docs/paper && make        # original draft → main.pdf
+cd docs/paper && make new    # revised draft → main_new.pdf
 ```
 
-Produces `main.pdf`. The bibliography is the checked-in `main.bbl` (numeric citations). Do not run `bibtex` unless `refs.bib` is restored.
+Produces `main.pdf` or `main_new.pdf`. The bibliography is the checked-in `*.bbl` (numeric citations). Do not run `bibtex` unless `refs.bib` is restored.
+
+`main_new.tex` is the condensed (≤12pp) revision: richer Figure 1 panel 2, a pipeline-style Figure 2 for APP+P/D, formal work/transfer spans, and the control-plane / GPU / cross-model numbers.
 
 ## Structure
 

@@ -1,0 +1,341 @@
+\begin{thebibliography}{10}
+
+\bibitem{infercept}
+Reyna Abhyankar, Zijian He, Vikranth Srivatsa, Hao Zhang, and Yiying Zhang.
+\newblock {InferCept: Efficient Intercept Support for {LLM} Serving}.
+\newblock In {\em ICML}, 2024.
+
+\bibitem{sarathi}
+Amey Agrawal, Nitin Kedia, Ashish Panwar, Jayashree Mohan, Nipun Kwatra,
+  Bhargav Gulavani, Ramachandran Ramjee, and Alexey Tumanov.
+\newblock {Taming Throughput-Latency Tradeoff in {LLM} Inference with
+  {Sarathi-Serve}}.
+\newblock In {\em OSDI}, 2024.
+
+\bibitem{sarathisplit}
+Amey Agrawal, Ashish Panwar, Jayashree Mohan, Nipun Kwatra, Bhargav~S.
+  Gulavani, and Ramachandran Ramjee.
+\newblock {Sarathi: Efficient {LLM} Inference using Chunked-Prefills}.
+\newblock In {\em arXiv:2308.16369}, 2023.
+
+\bibitem{claude_code}
+{Anthropic}.
+\newblock {Claude Code}.
+\newblock {\em https://docs.anthropic.com/en/docs/claude-code}, 2025.
+
+\bibitem{spork}
+Huajun Bai, Weiwei Lv, Huichuan Zheng, Youyou Lu, and Jiwu Shu.
+\newblock {SPORK: Self-Speculative Forking to Accelerate Agentic {LLM}
+  Inference}.
+\newblock {\em arXiv:2607.03333}, 2026.
+
+\bibitem{sutradhara}
+Anish Biswas, Kanishk Goel, Srivarshinee S, Jayashree Mohan, Alind Khare,
+  Anjaly Parayil, Chetan Bansal, and Ram Ramjee.
+\newblock {Sutradhara: An Intelligent Orchestrator-Engine Co-design for
+  Tool-based Agentic Inference}.
+\newblock {\em arXiv:2601.12967}, 2026.
+
+\bibitem{medusa}
+Tianle Cai, Yuhong Li, Zhengyang Geng, Hongwu Peng, Jason~D. Lee, Deming Chen,
+  and Tri Dao.
+\newblock {Medusa: Simple {LLM} Inference Acceleration Framework with Multiple
+  Decoding Heads}.
+\newblock In {\em ICML}, 2024.
+
+\bibitem{murakkab}
+Gohar~Irfan Chaudhry, Esha Choukse, Haoran Qiu, {\'I}{\~n}igo Goiri, Rodrigo
+  Fonseca, Adam Belay, and Ricardo Bianchini.
+\newblock {Murakkab: Resource-Efficient Agentic Workflow Orchestration in Cloud
+  Platforms}.
+\newblock In {\em OSDI}, 2026.
+
+\bibitem{idlespec}
+Daewon Choi, Kyunghyun Park, Woomin Song, Saket Dingliwal, Sai~Muralidhar
+  Jayanthi, Jinwoo Shin, and Aram Galstyan.
+\newblock {IdleSpec: Exploiting Idle Time via Speculative Planning for {LLM}
+  Agents}.
+\newblock {\em arXiv:2605.22154}, 2026.
+
+\bibitem{contextrot}
+{Chroma Research}.
+\newblock {Context Rot: How Increasing Input Tokens Impacts {LLM} Performance}.
+\newblock {\em https://research.trychroma.com/context-rot}, 2025.
+
+\bibitem{conserve}
+Jianru Ding, Ryien Hosseini, Pouya~Mahdi Gholami, Mingyuan Xiang, and Henry
+  Hoffmann.
+\newblock {Observation, Not Prediction: Conversation-Level Disaggregated
+  Scheduling for Agentic Serving}.
+\newblock {\em arXiv:2606.01839}, 2026.
+
+\bibitem{pie}
+In~Gim, Zhiyao Ma, Seung-seob Lee, and Lin Zhong.
+\newblock {Pie: A Programmable Serving System for Emerging {LLM} Applications}.
+\newblock In {\em SOSP}, 2025.
+
+\bibitem{saga}
+Dongxin Guo, Jikun Wu, and Siu-Ming Yiu.
+\newblock {SAGA: Workflow-Atomic Scheduling for {AI} Agent Inference on {GPU}
+  Clusters}.
+\newblock In {\em HPDC}, 2026.
+
+\bibitem{metagpt}
+Sirui Hong, Mingchen Zhuge, Jonathan Chen, Xiawu Zheng, Yuheng Cheng, Jinlin
+  Wang, Ceyao Zhang, Zili Wang, Steven Ka~Shing Yau, Zijuan Lin, Liyang Zhou,
+  Chenyu Ran, Lingfeng Xiao, Chenglin Wu, and J{\"u}rgen Schmidhuber.
+\newblock {MetaGPT: Meta Programming for A Multi-Agent Collaborative
+  Framework}.
+\newblock {\em ICLR}, 2024.
+
+\bibitem{swebench}
+Carlos~E. Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir
+  Press, and Karthik Narasimhan.
+\newblock {SWE-bench: Can Language Models Resolve Real-World {GitHub} Issues?}
+\newblock {\em ICLR}, 2024.
+
+\bibitem{thunderagent}
+Hao Kang, Ziyang Li, Weili Xu, Xinyu Yang, Yinfang Chen, Junxiong Wang, Beidi
+  Chen, Tushar Krishna, Chenfeng Xu, and Simran Arora.
+\newblock {ThunderAgent: A Simple, Fast and Program-Aware Agentic Inference
+  System}.
+\newblock {\em arXiv:2602.13692}, 2026.
+
+\bibitem{vllm}
+Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody~Hao Yu,
+  Joseph Gonzalez, Hao Zhang, and Ion Stoica.
+\newblock {Efficient Memory Management for Large Language Model Serving with
+  {PagedAttention}}.
+\newblock In {\em SOSP}, 2023.
+
+\bibitem{speculative}
+Yaniv Leviathan, Matan Kalman, and Yossi Matias.
+\newblock {Fast Inference from Transformers via Speculative Decoding}.
+\newblock {\em ICML}, 2023.
+
+\bibitem{continuum}
+Hanchen Li, Runyuan He, Qiuyang Mang, Qizheng Zhang, Huanzhi Mao, Xiaokun Chen,
+  Hangrui Zhou, Alvin Cheung, Joseph Gonzalez, and Ion Stoica.
+\newblock {Continuum: Efficient and Robust Multi-Turn {LLM} Agent Scheduling
+  with {KV} Cache Time-to-Live}.
+\newblock {\em arXiv:2511.02230}, 2025.
+
+\bibitem{eagledraft}
+Yuhong Li, Fangyun Wei, Chao Zhang, and Hongyang Zhang.
+\newblock {EAGLE: Speculative Sampling Requires Rethinking Feature
+  Uncertainty}.
+\newblock In {\em ICML}, 2024.
+
+\bibitem{parrot}
+Chaofan Lin, Zhenhua Han, Chengruidong Zhang, Yuqing Yang, Fan Yang, Chen Chen,
+  and Lili Huang.
+\newblock {Parrot: Efficient Serving of {LLM}-based Applications with Semantic
+  Variable}.
+\newblock In {\em OSDI}, 2024.
+
+\bibitem{hermes}
+Yifei Liu, Zuo Gan, Zhenghao Gan, Weiye Wang, Chen Chen, Yizhou Shan, Xusheng
+  Chen, Zhenhua Han, Yifei Zhu, Shixuan Sun, and Minyi Guo.
+\newblock {Efficient Serving of {LLM} Applications with Probabilistic Demand
+  Modeling}.
+\newblock {\em arXiv:2506.14851}, 2025.
+
+\bibitem{autellix}
+Michael Luo, Xiaoxiang Shi, Colin Cai, Tianjun Zhang, Justin Wong, Yichuan
+  Wang, Chi Wang, Yanping Huang, Zhifeng Chen, Joseph~E. Gonzalez, and Ion
+  Stoica.
+\newblock {Autellix: An Efficient Serving Engine for {LLM} Agents as General
+  Programs}.
+\newblock In {\em NSDI}, 2026.
+
+\bibitem{hive}
+Zizhang Luo, Yuhao Luo, Youwei Xiao, Yansong Xu, Runlin Guo, and Yun Liang.
+\newblock {Hive: A Multi-Agent Infrastructure for Algorithm- and Task-Level
+  Scaling}.
+\newblock {\em arXiv:2604.17353}, 2026.
+
+\bibitem{gaia}
+Gr{\'e}goire Mialon, Cl{\'e}mentine Fourrier, Craig Swift, Thomas Wolf, Yann
+  LeCun, and Thomas Scialom.
+\newblock {GAIA: a Benchmark for General {AI} Assistants}.
+\newblock {\em arXiv:2311.12983}, 2023.
+
+\bibitem{astraea}
+Hongqiu Ni, Jiabao Zhang, Guopeng Li, Zilong Wang, Ruiqi Wu, Chi Zhang, and
+  Haisheng Tan.
+\newblock {Astraea: A State-Aware Scheduling Engine for {LLM}-Powered Agents}.
+\newblock {\em arXiv:2512.14142}, 2025.
+
+\bibitem{memgpt}
+Charles Packer, Vivian Fang, Shishir~G. Patil, Kevin Lin, Sarah Wooders, and
+  Joseph~E. Gonzalez.
+\newblock {MemGPT: Towards {LLMs} as Operating Systems}.
+\newblock {\em arXiv:2310.08560}, 2023.
+
+\bibitem{smoothagent}
+Zaifeng Pan, Qianxu Wang, Zhengding Hu, Chang Chen, Yue Guan, Yanbo Zhou,
+  Steven Swanson, and Yufei Ding.
+\newblock {SmoothAgent: Efficient Long-Horizon {LLM}-Based Agent Serving with
+  Lookahead Context Engineering}.
+\newblock {\em arXiv:2607.00151}, 2026.
+
+\bibitem{splitwise}
+Pratyush Patel, Esha Choukse, Chaojie Zhang, Aashaka Shah, {\'I}{\~n}igo Goiri,
+  Saeed Maleki, and Ricardo Bianchini.
+\newblock {Splitwise: Efficient Generative {LLM} Inference Using Phase
+  Splitting}.
+\newblock In {\em ISCA}, 2024.
+
+\bibitem{gorilla}
+Shishir~G. Patil, Tianjun Zhang, Xin Wang, and Joseph~E. Gonzalez.
+\newblock {Gorilla: Large Language Model Connected with Massive {APIs}}.
+\newblock {\em NeurIPS}, 2023.
+
+\bibitem{osfork}
+Dennis~M. Ritchie and Ken Thompson.
+\newblock {The UNIX Time-Sharing System}.
+\newblock {\em CACM}, 17(7), 1974.
+
+\bibitem{toolformer}
+Timo Schick, Jane Dwivedi-Yu, Roberto Dess{\`i}, Roberta Raileanu, Maria
+  Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom.
+\newblock {Toolformer: Language Models Can Teach Themselves to Use Tools}.
+\newblock {\em NeurIPS}, 2023.
+
+\bibitem{ayo}
+Xin Tan, Yimin Jiang, Yitao Yang, and Hong Xu.
+\newblock {Towards End-to-End Optimization of {LLM}-based Applications with
+  {Ayo}}.
+\newblock In {\em ASPLOS}, 2025.
+
+\bibitem{tanenbaumos}
+Andrew~S. Tanenbaum and Herbert Bos.
+\newblock {\em {Modern Operating Systems}}.
+\newblock Pearson, 4 edition, 2015.
+
+\bibitem{forkkv}
+Shao Wang, Rui Ren, and Lin Gui.
+\newblock {ForkKV: Scaling Multi-{LoRA} Agent Serving via Copy-on-Write
+  Disaggregated {KV} Cache}.
+\newblock {\em arXiv:2604.06370}, 2026.
+
+\bibitem{openhands}
+Xingyao Wang, Boxuan Li, Yufan Song, Frank~F. Xu, Xiangru Tang, Mingchen Zhuge,
+  Jiayi Pan, Yueqi Song, Bowen Li, Jaskirat Singh, Hoang~H. Tran, Fuqiang Li,
+  Ren Ma, Mingzhang Zheng, Bill Qian, Yanjun Shao, Niklas Muennighoff, Yizhe
+  Zhang, Binyuan Hui, Junyang Lin, Robert Brennan, Hao Peng, Heng Ji, and
+  Graham Neubig.
+\newblock {OpenHands: An Open Platform for {AI} Software Developers as
+  Generalist Agents}.
+\newblock {\em ICLR}, 2025.
+
+\bibitem{selfconsistency}
+Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed~Chi, Sharan Narang,
+  Aakanksha Chowdhery, and Denny Zhou.
+\newblock {Self-Consistency Improves Chain of Thought Reasoning in Language
+  Models}.
+\newblock {\em ICLR}, 2023.
+
+\bibitem{augserve}
+Ying Wang, Zhen Jin, Zhenqian Chen, Jiexiong Xu, Wenhai Lin, Yiquan Chen, and
+  Wenzhi Chen.
+\newblock {AugServe: Adaptive Request Scheduling for Augmented Large Language
+  Model Inference Serving}.
+\newblock In {\em ICML}, 2026.
+
+\bibitem{autogen}
+Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu,
+  Li~Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, Ahmed~Hassan Awadallah,
+  Ryen~W. White, Doug Burger, and Chi Wang.
+\newblock {AutoGen: Enabling Next-Gen {LLM} Applications via Multi-Agent
+  Conversation}.
+\newblock {\em arXiv:2308.08155}, 2023.
+
+\bibitem{mori}
+Tian Xia, Hanchen Li, Zhifei Li, Xiaokun Chen, Hao Kang, Yifan Qiao, Yi~Xu, and
+  Ion Stoica.
+\newblock {Idleness is Relative: Exploiting Tool-Call Idle Windows for
+  Offloading in Agentic Systems with {MORI}}.
+\newblock {\em arXiv:2606.00866}, 2026.
+
+\bibitem{sweagent}
+John Yang, Carlos~E. Jimenez, Alexander Wettig, Kilian Lieret, Shunyu Yao,
+  Karthik Narasimhan, and Ofir Press.
+\newblock {SWE-agent: Agent-Computer Interfaces Enable Automated Software
+  Engineering}.
+\newblock {\em NeurIPS}, 2024.
+
+\bibitem{tot}
+Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas~L. Griffiths, Yuan
+  Cao, and Karthik Narasimhan.
+\newblock {Tree of Thoughts: Deliberate Problem Solving with Large Language
+  Models}.
+\newblock {\em NeurIPS}, 2023.
+
+\bibitem{react}
+Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan,
+  and Yuan Cao.
+\newblock {ReAct: Synergizing Reasoning and Acting in Language Models}.
+\newblock {\em ICLR}, 2023.
+
+\bibitem{orca}
+Gyeong-In Yu, Joo~Seong Jeong, Geon-Woo Kim, Soojeong Kim, and Byung-Gon Chun.
+\newblock {Orca: A Distributed Serving System for {Transformer-Based}
+  Generative Models}.
+\newblock In {\em OSDI}, 2022.
+
+\bibitem{pythia}
+Shan Yu, Junyi Shu, Yuanjiang Ni, Kun Qian, Xue Li, Yang Wang, Jinyuan Zhang,
+  Ziyi Xu, Shuo Yang, Lingjun Zhu, Ennan Zhai, Qingda Lu, Jiarong Xing, Youyou
+  Lu, Xin Jin, Xuanzhe Liu, and Harry Xu.
+\newblock {Pythia: Exploiting Workflow Predictability for Efficient
+  Agent-Native {LLM} Serving}.
+\newblock {\em arXiv:2604.25899}, 2026.
+
+\bibitem{kairospower}
+Yichao Yuan, Mosharaf Chowdhury, and Nishil Talati.
+\newblock {KAIROS: Stateful, Context-Aware Power-Efficient Agentic Inference
+  Serving}.
+\newblock {\em arXiv:2604.16682}, 2026.
+
+\bibitem{compoundai}
+Matei Zaharia, Omar Khattab, Lingjiao Chen, Jared McCauley, et~al.
+\newblock {The Shift from Models to Compound {AI} Systems}.
+\newblock {\em Berkeley AI Research Blog}, 2024.
+
+\bibitem{mctsllm}
+Di~Zhang et~al.
+\newblock {Accessing GPT-4 Level Mathematical Olympiad Solutions via Monte
+  Carlo Tree Self-refine}.
+\newblock {\em arXiv:2312.11324}, 2023.
+
+\bibitem{jitserve}
+Wei Zhang, Zhiyu Wu, Yi~Mu, Rui Ning, Banruo Liu, Nikhil Sarda, Myungjin Lee,
+  and Fan Lai.
+\newblock {JITServe: {SLO}-aware {LLM} Serving with Imprecise Request
+  Information}.
+\newblock In {\em NSDI}, 2026.
+
+\bibitem{sglang}
+Lianmin Zheng, Liangsheng Yin, Zhiqiang Xie, Chuyue Sun, Jeff Huang, Cody~Hao
+  Yu, Shiyi Cao, Christos Kozyrakis, Ion Stoica, Joseph~E. Gonzalez, Clark
+  Barrett, and Ying Sheng.
+\newblock {SGLang: Efficient Execution of Structured Language Model Programs}.
+\newblock In {\em NeurIPS}, 2024.
+
+\bibitem{distserve}
+Yinmin Zhong, Shengyu Liu, Junda Chen, Jianbo Hu, Yibo Zhu, Xuanzhe Liu, Xin
+  Jin, and Hao Zhang.
+\newblock {DistServe: Disaggregating Prefill and Decoding for Goodput-optimized
+  Large Language Model Serving}.
+\newblock In {\em OSDI}, 2024.
+
+\bibitem{webarena}
+Shuyan Zhou, Frank~F. Xu, Hao Zhu, Xuhui Zhou, Robert Lo, Abhijit Sridhar,
+  Xianyi Cheng, Tianyue Ou, Yonatan Bisk, Daniel Fried, Uri Alon, and Graham
+  Neubig.
+\newblock {WebArena: A Realistic Web Environment for Building Autonomous
+  Agents}.
+\newblock {\em ICLR}, 2024.
+
+\end{thebibliography}

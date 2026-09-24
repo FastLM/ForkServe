@@ -1,0 +1,65 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  >=Latex,
+]
+\definecolor{Tr}{HTML}{88CCEE}
+\definecolor{Res}{HTML}{EE7733}
+\definecolor{Sp}{HTML}{009988}
+
+% Scale: 1000 tokens -> 1.55cm. One session, k=4, L=256, ell=32.
+% APC live: 4*256+128=1152 through abort (hashed residuals kept).
+% CoW: 256+128=384 during prefill; 256+32=288 after abort.
+% APP: 256+64=320 during prefill (2 kept); 288 after abort.
+
+% (a) APC
+\begin{scope}[shift={(0,0)}]
+  \foreach \y in {0,400,800,1200} {
+    \draw[black!12] (0,\y*0.00155) -- (3.55,\y*0.00155);
+    \node[font=\tiny, text=black!55, anchor=east] at (-0.08,\y*0.00155) {\y};
+  }
+  \fill[Tr] (0.20,0) rectangle (3.40,1024*0.00155);
+  \fill[Res] (0.85,1024*0.00155) rectangle (3.40,1152*0.00155);
+  \node[font=\tiny] at (1.80, 1152*0.00155+0.18) {$k$ clones};
+  \foreach \x/\lab in {0.20/fork, 0.85/prefill, 2.05/abort, 3.40/dec} {
+    \node[font=\tiny, text=black!55, rotate=30, anchor=east] at (\x,-0.08) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (1.80,2.10) {(a) APC};
+\end{scope}
+
+% (b) FS CoW
+\begin{scope}[shift={(4.05,0)}]
+  \foreach \y in {0,400,800,1200} {
+    \draw[black!12] (0,\y*0.00155) -- (3.55,\y*0.00155);
+  }
+  \fill[Tr] (0.20,0) rectangle (3.40,256*0.00155);
+  \fill[Res] (0.85,256*0.00155) rectangle (2.05,384*0.00155);
+  \fill[Sp] (2.05,256*0.00155) rectangle (3.40,288*0.00155);
+  \node[font=\tiny, text=fsgain] at (2.70, 384*0.00155+0.20) {spine};
+  \foreach \x/\lab in {0.20/fork, 0.85/prefill, 2.05/abort, 3.40/dec} {
+    \node[font=\tiny, text=black!55, rotate=30, anchor=east] at (\x,-0.08) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (1.80,2.10) {(b) \sys{} CoW};
+\end{scope}
+
+% (c) APP
+\begin{scope}[shift={(8.10,0)}]
+  \foreach \y in {0,400,800,1200} {
+    \draw[black!12] (0,\y*0.00155) -- (3.55,\y*0.00155);
+  }
+  \fill[Tr] (0.20,0) rectangle (3.40,256*0.00155);
+  \fill[Res] (0.85,256*0.00155) rectangle (2.05,320*0.00155);
+  \fill[Sp] (2.05,256*0.00155) rectangle (3.40,288*0.00155);
+  \node[font=\tiny, text=fsgain] at (1.45, 320*0.00155+0.20) {$2/4$ kept};
+  \foreach \x/\lab in {0.20/fork, 0.85/prefill, 2.05/abort, 3.40/dec} {
+    \node[font=\tiny, text=black!55, rotate=30, anchor=east] at (\x,-0.08) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (1.80,2.10) {(c) \app};
+\end{scope}
+
+\fill[Tr] (0.2,-0.72) rectangle (0.42,-0.60);
+\node[font=\tiny, anchor=west] at (0.48,-0.66) {trunk};
+\fill[Res] (1.55,-0.72) rectangle (1.77,-0.60);
+\node[font=\tiny, anchor=west] at (1.83,-0.66) {residuals};
+\fill[Sp] (3.15,-0.72) rectangle (3.37,-0.60);
+\node[font=\tiny, anchor=west] at (3.43,-0.66) {committed spine};
+\end{tikzpicture}

@@ -1,0 +1,13 @@
+Agentic serving forks a shared trunk into short residuals and then keeps one committed path.
+Prefix caches reuse a trunk only after tokens exist and a hash hits; stock prefill/decode (P/D) disaggregation ships every page the prefiller computed.
+\sys makes the branch a serving object: a copy-on-write context tree aliases the trunk at \texttt{fork}, and advanced prefill pruning (\app) decides, per residual $\rho_i$, whether GPU work $\Work_i$ and connector transfer $\Xfer_i$ run at all.
+A four-layer filter---hash skip, draft prune, early abort, then a P/D gate---inserts only retained miss tails; decode attends solely to the committed spine $L{+}\ell_\star$.
+We give the work, transfer, and occupancy spans
+$\Work{=}L+\sum_{i\in\Keep}\ell_i$,
+$\Xfer{=}\sum_{i\in\Keep}\Work_i$,
+$M_{\mathrm{spine}}=b(L+\ell_\star)$,
+and prove output identity under longest-common-prefix commit.
+On Qwen3-14B GSM8K ($n{=}1319$, two A100s) \sys matches APC accuracy ($0.845$ vs.\ $0.844$) at $0.72\times$ median peak KV.
+A control-plane comparison shows \app cutting modeled fan-out prefill by $75\%$ versus APC ($35.9$ vs.\ $139$\,ms; $2880$ vs.\ $11520$ tokens).
+On Qwen3-8B ($n{=}80$, $\mathrm{tp}{=}4$) ForkServe+ keeps that KV gap and, with answer-marker stop, emits $0.31\times$ APC decode tokens and $0.75\times$ e2e ($16.9$ vs.\ $22.7$\,s) at accuracy $0.925$ vs.\ $0.938$.
+The same $0.72$--$0.75\times$ GSM8K peak holds on six model families; an $8$\,GiB pool raises SLO-feasible concurrency by $35\%$ ($192{\to}256$ QPS, $23680{\to}32000$ tok/s).

@@ -1,0 +1,131 @@
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  box/.style={draw=fsblue!55, rounded corners=1.2pt, fill=white, inner sep=2.2pt,
+              align=center, font=\tiny\sffamily, line width=0.45pt, minimum height=0.72cm},
+  op/.style={circle, draw=fsblue!70, fill=fslight, inner sep=0.4pt,
+             font=\tiny\sffamily\bfseries, minimum size=0.38cm, line width=0.45pt},
+  lab/.style={font=\tiny\sffamily, text=fsgray, align=center},
+  arr/.style={-{Latex[length=1.5mm,width=1.15mm]}, line width=0.45pt, draw=fsblue!70},
+  sarr/.style={-{Latex[length=1.2mm,width=0.9mm]}, densely dashed, draw=fsgray, line width=0.35pt},
+]
+\path (0,-0.15) rectangle (16.50,7.15);
+
+% ===== legend =====
+\node[font=\tiny\sffamily, anchor=west, text=fsblue] at (0.05,6.95)
+  {$\rho_i$: $i$-th residual\quad
+   $h_i$: block hash\quad
+   $s_i$: draft score\quad
+   $\alpha$: early-abort fraction\quad
+   $\kappa$: chunk\quad
+   $\Work_i$: GPU miss tail\quad
+   $\Xfer_i$: connector tokens\quad
+   $a_i$: action};
+\draw[fsblue!25, line width=0.3pt] (0.05,6.72) -- (16.40,6.72);
+
+% ===== (a) APP+PD pipeline =====
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.05,6.48)
+  {(a) \app{} + P/D pipeline (Alg.~\ref{alg:app})};
+
+\node[box, fill=fslight, minimum width=1.55cm] (r) at (0.95,5.35)
+  {$\{\rho_i\}_{i=1}^{k}$\\[-1pt]{\tiny residuals}};
+\node[op] (o1) at (2.15,5.35) {$\otimes$};
+\node[box, minimum width=1.85cm] (h) at (3.55,5.35)
+  {Hash lookup\\[-1pt]{\tiny $h_i=\mathrm{hash}(\pi,\mathrm{blk})$}};
+\node[op] (o2) at (4.85,5.35) {$\oplus$};
+\node[box, minimum width=1.70cm] (d) at (6.15,5.35)
+  {Draft prune\\[-1pt]{\tiny $s_i\gtrless\tau$}};
+\node[op] (o3) at (7.40,5.35) {$\rhd$};
+\node[box, minimum width=1.70cm] (e) at (8.70,5.35)
+  {Early abort\\[-1pt]{\tiny first $\alpha\ell_i$}};
+\node[op] (o4) at (9.95,5.35) {$\bullet$};
+\node[box, fill=fscommit, minimum width=1.70cm] (g) at (11.30,5.35)
+  {GPU miss tail\\[-1pt]{\tiny $\Work_i$}};
+\node[op] (o5) at (12.55,5.35) {$\triangleright$};
+\node[box, fill=fsspec, minimum width=1.55cm] (x) at (13.80,5.35)
+  {\texttt{insert}\\[-1pt]{\tiny $\Xfer_i$}};
+\node[box, fill=fscommit, minimum width=1.35cm] (dec) at (15.50,5.35)
+  {Decode\\[-1pt]{\tiny $x_\star$}};
+
+\draw[arr] (r) -- (o1);
+\draw[arr] (o1) -- (h);
+\draw[arr] (h) -- (o2);
+\draw[arr] (o2) -- (d);
+\draw[arr] (d) -- (o3);
+\draw[arr] (o3) -- (e);
+\draw[arr] (e) -- (o4);
+\draw[arr] (o4) -- (g);
+\draw[arr] (g) -- (o5);
+\draw[arr] (o5) -- (x);
+\draw[arr] (x) -- (dec);
+
+% side exits
+\node[lab, text=fsblue] at (3.55,4.55) {\texttt{HASH\_SKIP}};
+\node[lab] at (6.15,4.55) {\texttt{DRAFT\_SKIP}};
+\node[lab, text=fsorange!80!black] at (8.70,4.55) {\texttt{EARLY\_ABORT}};
+\draw[sarr] (h.south) -- ++(0,-0.42);
+\draw[sarr] (d.south) -- ++(0,-0.42);
+\draw[sarr] (e.south) -- ++(0,-0.42);
+
+% annotations under (a)
+\node[lab, anchor=west] at (0.10,4.05)
+  {Parallelism: $k$ residuals \quad
+   Layout: location-addressed CoW, not content-addressed APC \quad
+   Winner $i{=}0$ is never dropped \quad
+   Spec pages unpublished};
+\node[lab, anchor=west] at (0.10,3.72)
+  {Work $\Work{=}\sum_i\Work_i$ \quad
+   Transfer $\Xfer{=}\sum_{i\in\Keep}\Work_i$ \quad
+   Occupancy after abort $M_{\mathrm{spine}}=b(L+\ell_\star)$ \quad
+   Replay of $x_\star$: $\Work{=}\Xfer{=}0$};
+
+% ===== (b) four dataflows =====
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.05,3.32)
+  {(b) First-fan-out dataflow (same $k,L,\ell$). Bottleneck in red.};
+
+% row helper coords
+% APC
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fsblue] at (1.55,2.72) {APC};
+\node[box, minimum width=1.35cm, minimum height=0.55cm] (a1) at (2.45,2.72) {$k$ reqs};
+\node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fsmiss] (a2) at (4.35,2.72) {hash miss};
+\node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fsmiss] (a3) at (6.55,2.72) {clone $k$ trunks};
+\node[box, minimum width=1.55cm, minimum height=0.55cm] (a4) at (8.65,2.72) {decode};
+\draw[arr] (a1) -- (a2); \draw[arr] (a2) -- (a3); \draw[arr] (a3) -- (a4);
+\node[lab, anchor=west] at (9.60,2.72)
+  {$\Work{=}kL{+}\sum\ell_i$ \quad $\Xfer{=}0$ \quad $M{=}M_{\mathrm{clone}}$};
+
+% stock PD
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fspurple] at (1.55,2.00) {stock P/D};
+\node[box, minimum width=1.35cm, minimum height=0.55cm] (p1) at (2.45,2.00) {$k$ reqs};
+\node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fsmiss] (p2) at (4.35,2.00) {prefill all};
+\node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fsmiss] (p3) at (6.55,2.00) {\texttt{insert} all};
+\node[box, minimum width=1.55cm, minimum height=0.55cm] (p4) at (8.65,2.00) {\texttt{drop\_select}};
+\draw[arr] (p1) -- (p2); \draw[arr] (p2) -- (p3); \draw[arr] (p3) -- (p4);
+\node[lab, anchor=west] at (9.60,2.00)
+  {$\Work{=}kL{+}\sum\ell_i$ \quad $\Xfer{=}kL{+}\sum\ell_i$ \quad $M{=}M_{\mathrm{clone}}$};
+
+% ForkServe CoW
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fsorange!80!black] at (1.55,1.28) {FS CoW};
+\node[box, minimum width=1.35cm, minimum height=0.55cm, fill=fslight] (f1) at (2.45,1.28) {\texttt{fork}};
+\node[box, minimum width=1.55cm, minimum height=0.55cm] (f2) at (4.35,1.28) {alias $L$};
+\node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fsspec] (f3) at (6.55,1.28) {prefill $k$ $\rho_i$};
+\node[box, minimum width=1.55cm, minimum height=0.55cm] (f4) at (8.65,1.28) {abort};
+\draw[arr] (f1) -- (f2); \draw[arr] (f2) -- (f3); \draw[arr] (f3) -- (f4);
+\node[lab, anchor=west] at (9.60,1.28)
+  {$\Work{=}L{+}\sum\ell_i$ \quad $\Xfer{=}0$ \quad $M{\to}M_{\mathrm{spine}}$};
+
+% APP+PD
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fsgreen!40!black] at (1.55,0.56) {\app{}+P/D};
+\node[box, minimum width=1.35cm, minimum height=0.55cm, fill=fslight] (n1) at (2.45,0.56) {\texttt{fork}};
+\node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fscommit] (n2) at (4.35,0.56) {\app{} filter};
+\node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fscommit] (n3) at (6.55,0.56) {\texttt{insert} $\Keep$};
+\node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fscommit] (n4) at (8.65,0.56) {spine};
+\draw[arr] (n1) -- (n2); \draw[arr] (n2) -- (n3); \draw[arr] (n3) -- (n4);
+\node[lab, anchor=west] at (9.60,0.56)
+  {$\Work{=}L{+}\sum_{\Keep}\ell_i$ \quad $\Xfer{=}\sum_{\Keep}\Work_i$ \quad $M{\to}M_{\mathrm{spine}}$};
+
+\node[lab, anchor=west] at (0.10,0.08)
+  {Takeaway: APC and stock P/D pay the clone on the first expand; CoW removes the clone; \app{} additionally drops $\Work$ and $\Xfer$ of losers before a kernel or \texttt{insert}.};
+\end{tikzpicture}
