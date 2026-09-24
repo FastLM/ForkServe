@@ -139,60 +139,47 @@
 \node[font=\tiny\sffamily, text=fsblue, anchor=west] at (5.82,1.93)
   {$\Work{=}\sum_i \Work_i$ \quad $\Xfer{=}\sum_{i\in\Keep}\Work_i$ \quad winner always kept};
 
-% ---------- 3. two instances; one connector, arrows stop at the card edge ----------
-\draw[panel, rounded corners=1.6pt, fill=white] (11.42,5.28) rectangle (16.32,6.82);
-\node[font=\scriptsize\bfseries\sffamily, text=fsblue, anchor=west] at (11.56,6.58) {Prefill};
-\node[font=\tiny\sffamily, text=fsgray, anchor=east] at (16.16,6.58) {token groups};
-
-\fill[fsblue!14, rounded corners=1pt] (11.58,5.78) rectangle (13.05,6.28);
-\draw[fsblue, rounded corners=1pt, line width=0.4pt] (11.58,5.78) rectangle (13.05,6.28);
-\node[font=\tiny\sffamily, text=fsblue] at (12.32,6.03) {$1{:}3$ trunk};
-\node[font=\tiny\sffamily, text=fsblue] at (12.32,5.52) {alias, stays};
-
-\fill[fsgreen!32, rounded corners=1pt] (13.22,5.78) rectangle (14.55,6.28);
-\draw[fsgreen!55!black, rounded corners=1pt, line width=0.5pt] (13.22,5.78) rectangle (14.55,6.28);
-\node[font=\tiny\sffamily] at (13.88,6.03) {$4$ keep};
-\node[font=\tiny\sffamily, text=fsgreen!30!black] at (13.88,5.52) {miss tail};
-
-\fill[black!4, rounded corners=1pt] (14.72,5.78) rectangle (16.16,6.28);
-\draw[fsgray, densely dashed, rounded corners=1pt, line width=0.4pt] (14.72,5.78) rectangle (16.16,6.28);
-\node[font=\tiny\sffamily, text=fsgray] at (15.44,6.03) {$5{:}6$ drop};
-\node[font=\tiny\sffamily, text=fsgray] at (15.44,5.52) {no transfer};
-
-% connector lives in the gap; it does not enter either card
-\draw[arr, draw=fsgreen!50!black] (13.88,5.28) -- (13.88,4.58);
-\node[chip, draw=fsgreen!55!black, fill=fscommit, inner sep=1.3pt, anchor=west] at (14.08,4.93)
-  {\texttt{insert}\; $\Xfer{=}\Work_\star$};
-
-\draw[panel, rounded corners=1.6pt, fill=fscommit] (11.42,1.68) rectangle (16.32,4.42);
-\node[font=\scriptsize\bfseries\sffamily, text=fsgreen!35!black, anchor=west] at (11.56,4.16) {Decode};
-\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=east] at (16.16,4.16) {\texttt{drop\_select}};
-
-\fill[fsblue!16, rounded corners=1pt] (11.58,3.42) rectangle (13.28,3.88);
-\draw[fsblue, rounded corners=1pt, line width=0.4pt] (11.58,3.42) rectangle (13.28,3.88);
-\node[font=\tiny\sffamily, text=fsblue] at (12.43,3.65) {trunk $1{:}3$};
-\fill[fsgreen!36, rounded corners=1pt] (13.40,3.42) rectangle (14.55,3.88);
-\draw[fsgreen!55!black, rounded corners=1pt, line width=0.5pt] (13.40,3.42) rectangle (14.55,3.88);
-\node[font=\tiny\sffamily] at (13.97,3.65) {keep $4$};
-\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (14.70,3.65) {$x_\star{=}1{:}4$};
-
-\node[chip, draw=fsgreen!55!black, fill=white, inner sep=1.1pt] (samp) at (12.25,2.78) {sampler};
-\draw[arr] (12.43,3.42) -- (samp.north);
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (13.05,2.78) {emit};
-\foreach \i in {0,1,2,3} {
-  \fill[fsgreen!55!black] ({13.55+\i*0.28},2.64) rectangle ({13.76+\i*0.28},2.92);
+% ---------- 3. disaggregated prefill / decode, gated transfer ----------
+\draw[panel, rounded corners=1.4pt, fill=fslight] (11.42,4.55) rectangle (13.42,6.78);
+\node[font=\scriptsize\bfseries\sffamily, text=fsblue, anchor=west] at (11.56,6.52) {Prefill};
+% kept and pruned are interleaved; the last cell stays, so this is not a suffix cut
+\foreach \c/\r in {0/1, 2/1, 0/0, 2/0, 3/0} {
+  \fill[fsblue!40] ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
+  \draw[fsblue, line width=0.35pt] ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
 }
-\fill[fsorange!75] (14.67,2.64) rectangle (14.88,2.92);
-\node[chip, draw=fsorange!70, fill=fsspec, inner sep=0.9pt, anchor=west] at (15.00,2.78)
-  {stop $D^{+}$};
+\foreach \c/\r in {1/1, 3/1, 1/0} {
+  \draw[fsgray, densely dashed, line width=0.45pt]
+    ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
+}
+\node[font=\tiny\sffamily, text=fsgray] at (12.42,5.22) {dashed = pruned};
 
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (11.58,2.12)
-  {dropped tokens never appear \textperiodcentered\ trunk is already local};
+\draw[panel, rounded corners=1.4pt, fill=fscommit] (14.38,4.55) rectangle (16.32,6.78);
+\node[font=\scriptsize\bfseries\sffamily, text=fsgreen!35!black, anchor=west] at (14.52,6.52) {Decode};
+\foreach \i in {0,...,4} {
+  \fill[fsgreen!55!black] ({14.56+\i*0.30},5.92) rectangle ({14.80+\i*0.30},6.22);
+}
+
+\draw[arr, draw=fsgreen!45!black, line width=0.75pt] (13.42,5.85) -- (14.38,5.85);
+\node[chip, draw=fsgreen!55!black, fill=white, inner sep=1.1pt] at (13.90,6.28) {\texttt{insert}};
+\node[font=\tiny\sffamily, text=fsgreen!30!black] at (13.90,5.42) {kept KV};
+
+% fan-out time: stock ship-all vs gated insert (control-plane model)
+\node[font=\tiny\sffamily\bfseries, anchor=west] at (11.46,4.12) {fan-out time};
+\node[font=\tiny\sffamily, text=fsred, anchor=east] at (12.55,3.52) {stock};
+\fill[fsred!55] (12.68,3.34) rectangle (16.18,3.70);
+\node[font=\tiny\sffamily, text=white] at (14.43,3.52) {ship all \textperiodcentered\ $162$\,ms};
+\node[font=\tiny\sffamily, text=fsgain, anchor=east] at (12.55,2.62) {gate};
+\fill[fsgreen!65!black] (12.68,2.44) rectangle ({12.68+3.50*35.9/162},2.80);
+\node[font=\tiny\sffamily, text=fsgain, anchor=west] at ({12.78+3.50*35.9/162},2.62) {$35.9$\,ms};
+\fill[fsblue!6] (11.42,1.66) rectangle (16.32,2.10);
+\draw[fsblue!25, line width=0.3pt] (11.42,1.66) rectangle (16.32,2.10);
+\node[font=\tiny\sffamily, text=fsblue] at (13.87,1.88)
+  {same split \textperiodcentered\ less KV on the wire};
 
 % residuals into APP; kept miss tail stops at the prefill card edge
 \draw[arr] (b2.east) -- ++(0.22,0) |- (5.38,6.58) -- (inr.west);
 \node[font=\tiny\sffamily, text=fsblue, anchor=south] at (4.92,3.80) {$\rho$};
-\draw[arr] (mt.east) -- (11.05,2.58) -- (11.05,6.05) -- (11.42,6.05);
+\draw[arr] (mt.east) -- (11.05,2.58) -- (11.05,5.85) -- (11.42,5.85);
 \node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south] at (9.70,2.66) {kept};
 
 % ---------- HBM (occupancy vs slots) ----------
