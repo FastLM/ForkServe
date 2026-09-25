@@ -1,0 +1,16 @@
+Agentic LLM serving forks a shared trunk into short residuals and then keeps one committed path.
+Prefix caches can reuse that trunk only after the tokens exist and a hash hits, so the first fan-out still copies the trunk once per child.
+Prefill/decode disaggregation separates time-to-first-token from decode latency, yet the connector transfers the pages the prefiller computed, including residuals that the harness later aborts.
+Branch cost should be incurred only for the residual that is committed, and only at the minimum-cost stage at which rejection is admissible.
+
+\sys makes the branch a serving object.
+A copy-on-write context tree turns \texttt{fork} into an alias of the parent's KV pages and allocates frames only for the residual.
+Aborting a sibling releases those frames alone, so live occupancy collapses to the committed spine.
+On that tree, \sys decides for each residual whether GPU prefill runs and whether any KV crosses the disaggregated connector.
+The decision is a cascade of increasing cost: a block-hash probe reuses published pages, a draft score rejects low-value siblings before a kernel starts, an early-abort check rejects a residual whose prefix is below threshold, and a transfer gate inserts only the miss tail of a residual that is kept.
+Decode attends that spine alone.
+Longest-common-prefix commit binds the prompt presented by the harness.
+We prove that speculative tokens never enter the sampler, so committed outputs are identical to a baseline that prefills only committed tokens.
+A two-class scheduler admits speculative prefill only from the budget left after committed requests meet their latency margins, and cancels it when the commit conflicts.
+
+On Qwen3-14B GSM8K, \sys matches prefix-cache accuracy at $0.72\times$ the median peak KV, cuts modeled fan-out prefill by $74.72\%$ relative to that cache, and raises the concurrency a fixed pool can sustain by $35.53\%$.

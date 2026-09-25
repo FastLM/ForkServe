@@ -1,0 +1,18 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+The KV retained for aborted branches limits the throughput and memory cost of agentic LLM serving.
+A Tree-of-Thoughts fan-out shares one trunk, yet a prefix cache retains the residuals of that expand, and a disaggregated connector transfers those pages when the harness later aborts them.
+We introduced \sys, which makes the branch a serving object: a copy-on-write context tree, a cascade that rejects a residual at the minimum-cost stage at which rejection is admissible, and a decode path that attends only the committed spine.
+
+Our evaluation demonstrates a $0.72\times$ median peak KV on Qwen3-14B GSM8K at matched accuracy ($0.845$ vs.\ $0.844$), a $74.72\%$ cut in modeled fan-out prefill, and a $35.53\%$ increase in the concurrency a fixed pool can sustain.
+% On Qwen3-8B the same stack emits $0.31\times$ the GSM8K decode tokens of the prefix cache and finishes in $0.75\times$ the time at four GPUs.
+Across six families the GSM8K spine stays at $0.72$--$0.75\times$ that peak, and the ratio falls from $0.89$--$0.90\times$ at $k{=}2$ to $0.53$--$0.55\times$ at $k{=}8$.
+At a $2048$-token budget the ratio remains $0.75$--$0.91\times$, and ForkServe+ MATH-500 fan-out is $1284$\,ms against the prefix cache at $1593$\,ms on DeepSeek-R1 and $1014$\,ms against $1201$\,ms on Qwen3-4B.
+
+\sys's key innovations include: (i)~a copy-on-write context tree that turns \texttt{fork} into an alias of the parent's KV pages and frees only the residual on abort, so live occupancy is the spine $b(L+\ell_\star)$; (ii)~advanced prefill pruning, a cascade of block-hash reuse, draft-score rejection, early abort, and a transfer gate that inserts only the miss tail of a residual that is kept; (iii)~longest-common-prefix commit, which keeps speculative tokens out of the sampler so the committed sequence matches a prefill of committed tokens only; and (iv)~a two-class scheduler that admits speculative prefill only from the slack left by committed requests.
+
+Future directions include draft scores that reject chain of thoughts at scale rather than only illegal or looping residuals, closed-loop QPS sweeps of the analytical concurrency gain, full-set Game24 and HumanEval forests, deeper trees and $32$K-context windows, and multi-tenant admission with explicit latency margins on a shared frame pool.
+\sys shows that branch cost is incurred only for the residual that is committed, and only at the minimum-cost stage in the rejection cascade: the context tree and prefill admission together yield a spine whose occupancy is set by $k$ and residual length, independent of tensor-parallel width.
+As agentic workloads scale, fan-out width, tree depth, and context length all grow against a fixed KV pool.
+Serving systems that fork by reference and prune before prefill retain capacity on the committed path because each new branch aliases the trunk, a residual is rejected at the first admissible stage, and abort returns only that residual, so the tokens that occupy HBM are the spine the decoder attends.

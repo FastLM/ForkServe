@@ -1,0 +1,126 @@
+\section{Background and Model}
+\label{sec:problem}
+
+\subsection{Prefill, Decode, and Idle}
+Autoregressive inference has two mechanically different phases~\cite{orca,distserve,splitwise}.
+\emph{Prefill} consumes the prompt in parallel and is compute-bound; \emph{decode} emits one token (or a small chunk) per step and is memory-bandwidth bound.
+PagedAttention~\cite{vllm} stores KV in non-contiguous pages; RadixAttention~\cite{sglang} indexes pages by token prefix so concurrent requests that share a system prompt hit a common trunk.
+Two consequences matter for agents.
+First, next-turn \ttft{} is the prefill of tokens that miss the cache, plus queuing.
+Second, a memory-bound decode batch rarely saturates the tensor cores that a concurrent chunked prefill could use~\cite{sarathi}.
+Agent serving adds a third fact: the prompt of turn $i{+}1$ is a \emph{delta} on turn $i$, applied after a tool pause of highly variable length~\cite{continuum,mori}.
+
+\subsection{A Branching Step}
+\label{sec:model}
+We treat one agentic step as a rooted prefix tree, not as $k$ independent completions.
+
+\begin{definition}[Branching step]
+A parent node $u$ holds a committed trunk $x_u$ of length $L$.
+A harness-declared fan-out produces $k$ children with residuals $\rho_i$ of length $\ell_i$, $i\in\{1,\ldots,k\}$.
+After a winner $\star$ is bound, only the spine $x_\star=x_u\Vert\rho_\star$ of length $L+\ell_\star$ remains live.
+\end{definition}
+
+\Cref{tab:notation} is the symbol set used in the rest of the paper.
+Let $b$ be bytes of KV per token (all layers, one sequence) and $P$ the page size in tokens.
+Three occupancies follow immediately:
+\begin{align}
+M_{\mathrm{clone}} &= b\bigl(kL+\textstyle\sum_i\ell_i\bigr), \label{eq:mem}\\
+M_{\mathrm{CoW}} &= b\bigl(L+\textstyle\sum_i\ell_i\bigr), \nonumber\\
+M_{\mathrm{spine}} &= b\bigl(L+\ell_\star\bigr). \nonumber
+\end{align}
+The first-fan-out work of a scheme is the number of tokens sent to a GPU prefill kernel before the winner is known; the transfer span is the number of tokens a P/D connector ships.
+
+\begin{table}[t]
+\centering
+\caption{Notation for one branching step and for \app.}
+\label{tab:notation}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}llp{0.58\columnwidth}@{}}
+\toprule
+Symbol & Domain & Meaning \\
+\midrule
+$L$, $\ell_i$, $\ell_\star$ & $\mathbb{N}$ & trunk; residual $i$; committed residual \\
+$\rho_i$, $x_u$ & tokens & residual of child $i$; committed trunk \\
+$h_i$ & digest & $\mathrm{hash}(\mathrm{parent},\rho_i[0{:}P),\mathrm{extra})$ \\
+$s_i$, $\tau$ & $[0,1]$ & draft score of $\rho_i$; prune threshold \\
+$\alpha$ & $(0,1]$ & early-abort prefix fraction ($0.20$) \\
+$p_i$, $q_i$ & $[0,1]$ & admit probability; residual-prefix hit rate \\
+$a_i\in\Act$ & enum & skip / partial / abort / prefill (Eq.~\ref{eq:action}) \\
+$\Keep$ & $\subseteq[k]$ & residuals that remain after \app \\
+$\Work_i$, $\Xfer_i$ & tokens & GPU miss tail; connector payload \\
+$b$, $P$ & bytes, tok & KV bytes per token; page size \\
+$B_t=B^c_t+B^s_t$ & tokens & two-class batch budget on tick $t$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Why APC misses the first fan-out.}
+APC indexes a \emph{full} block by $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ \emph{after} those tokens exist~\cite{vllm}.
+A same-batch ToT expansion looks up $k$ children before any child has published a hash, so the walk misses and the engine clones $k$ trunks:
+$\Work_{\mathrm{APC}}=kL+\sum_i\ell_i$.
+A later replay of the committed winner is a full hash hit ($\Work{=}0$).
+Hash-only prefill therefore helps the second session, not the first expand.
+
+\paragraph{Why stock P/D does not raise tokens/s.}
+DistServe/Splitwise isolate \ttft{} from ITL by running prefill and decode on different instances and moving KV through a connector ($\texttt{insert}$ non-blocking, $\texttt{drop\_select}$ blocking)~\cite{distserve,splitwise}.
+The stock connector transfers the pages the prefiller computed,
+\begin{equation}
+\label{eq:xfer-stock}
+\Xfer_{\mathrm{PD}}=kL+\textstyle\sum_i\ell_i,
+\end{equation}
+so first-fan-out transfer equals first-fan-out work.
+P/D is a placement, not a branch filter.
+
+\paragraph{Four operators that generate the tree.}
+Tool intercept~\cite{react,toolformer} idles the engine while the environment runs; a known suffix is available immediately and an observation residual arrives later.
+Fan-out/join~\cite{autogen,metagpt} launches $k$ children that share $x_u$ and differ in short role residuals.
+Search~\cite{tot,hive} expands $b$ siblings, scores them, and recurses on a shared spine.
+Context transformation~\cite{smoothagent} forks a summarized child while the original spine stays abortable.
+In all four cases the next call is drawn from a discrete set $\Br(u)$; existing engines observe only the child that is eventually issued.
+
+\begin{insight}[Prune before prefill]
+\label{ins:prune}
+APC reuses a trunk only after a hash hit; stock P/D transfers the span that was computed.
+The missing operation is a per-residual decision $(\Work_i,\Xfer_i,a_i)$, issued \emph{before} a GPU kernel and \emph{before} \texttt{insert}.
+\end{insight}
+
+\begin{insight}[Fork by reference]
+\label{ins:fork}
+On fan-out the trunk is typically several times the per-child residual.
+Materializing $k$ independent KV copies allocates $\Theta(k)$ redundant HBM for tensors that attention reads as identical.
+A location-addressed alias at \texttt{fork} makes a miss residual-only.
+\end{insight}
+
+\begin{table*}[t]
+\centering
+\caption{Comparison of agentic serving systems. \cmark{}~full support; \pmark{}~partial / single-path; \xmark{}~absent.
+\sys{} is the first to combine forkable branch state, multi-child speculative prefill, and a gated P/D insert.}
+\label{tab:landscape}
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{System} & \textbf{Unit} & \textbf{KV across tools} & \textbf{Fork/CoW} & \textbf{Next-turn prefill} & \textbf{Multi-branch} & \textbf{Idle use} \\
+\midrule
+vLLM~\cite{vllm}/SGLang~\cite{sglang} & request & prefix cache & radix share & on arrival & \xmark & \xmark \\
+Autellix~\cite{autellix}/JITServe~\cite{jitserve} & program & \xmark{} / optional & \xmark & on arrival & schedule DAG & \xmark \\
+Ayo~\cite{ayo}/Parrot~\cite{parrot}/Murakkab~\cite{murakkab} & workflow & \pmark & \xmark & graph opt. & static DAG & \xmark \\
+Continuum~\cite{continuum}/InferCept~\cite{infercept} & session & TTL / preserve & \xmark & on arrival & \xmark & retain \\
+MORI~\cite{mori} & session & relative offload & \xmark & on arrival & \xmark & offload \\
+ConServe~\cite{conserve} & conversation & pin decoder & \xmark & turn-1 PD & \xmark & \xmark \\
+SAGA~\cite{saga}/Pythia~\cite{pythia} & workflow & predicted reuse & \xmark & prefetch prefix & graph & scale/prefetch \\
+Sutradhara~\cite{sutradhara} & tool-call & semantic eviction & \xmark & split prefix & \pmark{} linear & overlap \\
+SmoothAgent~\cite{smoothagent} & context xform & lookahead KV & \xmark & transform & \xmark & lookahead \\
+IdleSpec~\cite{idlespec} & plan & n/a & \xmark & n/a & plan samples & plan \\
+Pie~\cite{pie} & inferlet & programmable & app-level & app-level & app-level & app-level \\
+ThunderAgent~\cite{thunderagent} & LLM program & hit-rate aware & \xmark & on arrival & \xmark & env. prep \\
+Hive~\cite{hive} & multi-agent & contribution & \xmark & on arrival & logits reuse & \xmark \\
+DistServe~\cite{distserve}/Splitwise~\cite{splitwise} & request & P/D ship-all & \xmark & isolated prefill & \xmark & stock connector \\
+\midrule
+\textbf{\sys} & \textbf{branch} & \textbf{tree TTL} & \textbf{CoW pages} & \textbf{APP filter} & \textbf{prune, keep winner} & \textbf{disagg gate} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}

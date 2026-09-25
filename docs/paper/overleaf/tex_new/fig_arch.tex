@@ -1,0 +1,228 @@
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  panel/.style={draw=fsblue!35, line width=0.6pt, rounded corners=1.5pt, fill=white},
+  head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
+  tinyL/.style={font=\tiny\sffamily, text=fsgray, align=center},
+  arr/.style={-{Latex[length=1.7mm,width=1.35mm]}, line width=0.55pt, draw=fsblue!75},
+  sarr/.style={-{Latex[length=1.5mm,width=1.15mm]}, line width=0.45pt, draw=fsgray, densely dashed},
+  chip/.style={draw, rounded corners=1pt, inner sep=1.3pt, font=\tiny\sffamily, line width=0.4pt},
+  leaf/.style={draw, rounded corners=1.2pt, inner sep=1.8pt, align=center,
+               font=\tiny\sffamily, line width=0.45pt, minimum width=1.22cm, minimum height=0.64cm},
+  forkline/.style={line width=0.85pt, draw=fsblue!80},
+]
+% ---------- canvas ----------
+\path (0,0) rectangle (16.45,8.20);
+
+% ---------- harness ----------
+\draw[panel, fill=black!3] (0,7.52) rectangle (16.45,8.20);
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.18,7.86) {Agent harness};
+\node[font=\tiny\sffamily, anchor=west, text=fsgray] at (2.55,7.86)
+  {ReAct \textperiodcentered\ ToT \textperiodcentered\ LangGraph \textperiodcentered\ OpenHands};
+\foreach \x/\t in {8.55/open, 9.85/fork, 11.15/speculate, 12.55/commit, 13.95/abort, 15.25/join} {
+  \node[chip, draw=fsblue!50, fill=white] at (\x,7.86) {\texttt{\t}};
+}
+
+% ---------- panel frames ----------
+\draw[panel] (0,1.55) rectangle (5.15,7.28);
+\draw[panel] (5.62,1.55) rectangle (10.82,7.28);
+\draw[panel] (11.28,1.55) rectangle (16.45,7.28);
+\fill[fsblue] (0,6.92) rectangle (5.15,7.28);
+\fill[fsorange!85!black] (5.62,6.92) rectangle (10.82,7.28);
+\fill[fsgreen!75!black] (11.28,6.92) rectangle (16.45,7.28);
+\node[head] at (0.14,7.10) {1\quad Context tree};
+\node[head] at (5.76,7.10) {2\quad Prefill pruning};
+\node[head] at (11.42,7.10) {3\quad P/D handoff};
+
+% ---------- 1. physical frames; k aliases point up; private ρ ----------
+\draw[fsblue!45, line width=0.5pt, rounded corners=1.2pt, fill=fslight]
+  (0.14,6.00) rectangle (5.01,6.86);
+\node[font=\tiny\sffamily\bfseries, text=fsblue, anchor=west] at (0.22,6.74)
+  {$\sigma_u$};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (0.62,6.74)
+  {$(\mathrm{parent},\,\mathrm{alias\_len},\,\rho)$};
+
+\fill[fsblue!78] (0.22,6.50) rectangle (3.36,6.62);
+\node[font=\tiny\sffamily, text=white] at (1.79,6.56) {RO trunk $L$};
+\foreach \i in {0,...,4} {
+  \fill[fsblue!28] ({0.22+\i*0.52},6.18) rectangle ({0.68+\i*0.52},6.50);
+  \draw[fsblue, line width=0.4pt] ({0.22+\i*0.52},6.18) rectangle ({0.68+\i*0.52},6.50);
+  \node[font=\tiny\sffamily, text=fsblue] at ({0.45+\i*0.52},6.34) {\i};
+}
+\fill[white] (2.82,6.18) rectangle (3.36,6.50);
+\fill[fsblue!40] (2.82,6.18) rectangle (3.06,6.50);
+\draw[fsblue, densely dashed, line width=0.4pt] (3.06,6.18) -- (3.06,6.50);
+\draw[fsblue, line width=0.4pt] (2.82,6.18) rectangle (3.36,6.50);
+\node[font=\tiny\sffamily, text=fsblue] at (2.94,6.34) {5};
+\node[chip, draw=fsblue!55, fill=white, inner sep=1.0pt, anchor=west] at (3.48,6.40)
+  {$\mathrm{ref}{=}k$};
+
+% fork(): children gather into the call, then it fans out onto each trunk page.
+\node[chip, draw=fsblue!70, fill=white, inner sep=1.6pt] (forkfn) at (2.52,5.48)
+  {\texttt{fork()}};
+\foreach \i in {0,...,4} {
+  \draw[fsblue!70, line width=0.4pt] (forkfn.north) -- ({0.45+\i*0.52},6.18);
+}
+\draw[fsblue!70, line width=0.4pt] (forkfn.north) -- (3.09,6.18);
+
+% children: ↑ slots are PTEs (not copies); ρ is private
+\node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (bs) at (0.96,3.70) {};
+\node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (b1) at (2.52,3.70) {};
+\node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (b2) at (4.08,3.70) {};
+\draw[fsgreen!65!black, fill=fscommit, rounded corners=1.2pt, line width=0.45pt]
+  (bs.south west) rectangle (bs.north east);
+\draw[fsgray, fill=black!4, densely dashed, rounded corners=1.2pt, line width=0.45pt]
+  (b1.south west) rectangle (b1.north east);
+\draw[fsorange!80!black, fill=fsspec, rounded corners=1.2pt, line width=0.45pt]
+  (b2.south west) rectangle (b2.north east);
+\node[font=\tiny\sffamily] at (0.96,4.10) {$\sigma_\star$};
+\node[font=\tiny\sffamily, text=fsgray] at (2.52,4.10) {$\sigma_1$};
+\node[font=\tiny\sffamily] at (4.08,4.10) {$\sigma_2$};
+\foreach \x in {0.96,2.52,4.08} {
+  \foreach \j in {0,1,2} {
+    \fill[fsblue!10] ({\x-0.64+\j*0.26},3.68) rectangle ({\x-0.42+\j*0.26},3.94);
+    \draw[fsblue!65, densely dashed, line width=0.35pt]
+      ({\x-0.64+\j*0.26},3.68) rectangle ({\x-0.42+\j*0.26},3.94);
+    \node[font=\tiny\sffamily, text=fsblue] at ({\x-0.53+\j*0.26},3.81) {$\uparrow$};
+  }
+  \draw[sarr] ({\x-0.27},3.94) -- (forkfn);
+}
+\fill[fsgreen!55] (1.16,3.68) rectangle (1.54,3.94);
+\fill[black!18] (2.72,3.68) rectangle (3.10,3.94);
+\fill[fsorange!45] (4.28,3.68) rectangle (4.66,3.94);
+\foreach \x in {1.35,2.91,4.47} {
+  \draw[fsblue!35, line width=0.3pt] ({\x-0.19},3.68) rectangle ({\x+0.19},3.94);
+}
+\node[font=\tiny\sffamily] at (1.35,3.81) {$\rho$};
+\node[font=\tiny\sffamily, text=fsgray] at (2.91,3.81) {$\rho$};
+\node[font=\tiny\sffamily] at (4.47,3.81) {$\rho$};
+\node[font=\tiny\sffamily, text=fsgreen!30!black] at (0.96,3.36) {keep};
+\node[font=\tiny\sffamily, text=fsgray] at (2.52,3.36) {drop};
+\node[font=\tiny\sffamily, text=fsorange!80!black] at (4.08,3.36) {prefix};
+
+\node[chip, draw=fsgreen!60!black, fill=fscommit, inner sep=1.5pt, align=center] (lcp) at (2.52,2.48)
+  {LCP $v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)$};
+\draw[arr] (bs.south) -- ++(0,-0.14) -- (lcp.north);
+
+% ---------- 2. richer APP filter ----------
+\node[chip, draw=fsblue!45, fill=fslight, minimum width=2.35cm] (inr) at (7.05,6.58) {$k$ residuals $\rho_i$};
+\node[chip, draw=fsblue!55, fill=white, minimum width=2.35cm, align=center] (gc) at (7.05,5.92)
+  {admit $G/C$\\[-1pt]{\tiny $p{=}1$ known $\succ$ $p{<}1$ residual}};
+\node[chip, draw=fsblue!55, fill=white, minimum width=2.35cm, align=center] (hs) at (7.05,5.12)
+  {hash $h_i$\\[-1pt]{\tiny $\mathrm{hash}(\pi,\mathrm{blk},\mathrm{ex})$}};
+\node[chip, draw=fsorange!70, fill=white, minimum width=2.35cm, align=center] (dr) at (7.05,4.28)
+  {draft $s_i \gtrless \tau$\\[-1pt]{\tiny illegal / loop / entropy}};
+\node[chip, draw=fsorange!70, fill=white, minimum width=2.35cm, align=center] (ea) at (7.05,3.44)
+  {early $\alpha\ell_i$\\[-1pt]{\tiny $\alpha{=}0.20$, cancel $\kappa$}};
+\node[chip, draw=fsgreen!60!black, fill=fscommit, minimum width=2.35cm, align=center] (mt) at (7.05,2.58)
+  {miss tail $\Work_i$\\[-1pt]{\tiny then P/D gate}};
+
+\draw[arr] (inr) -- (gc);
+\draw[arr] (gc) -- (hs);
+\draw[arr] (hs) -- (dr);
+\draw[arr] (dr) -- (ea);
+\draw[arr] (ea) -- (mt);
+
+\node[chip, draw=fsgray, fill=black!4, text=fsgray, anchor=west, align=left] (sk0) at (8.55,5.92) {reject};
+\node[chip, draw=fsblue!50, fill=fslight, anchor=west, align=left] (sk1) at (8.55,5.12) {\texttt{HASH\_SKIP}};
+\node[chip, draw=fsgray, fill=black!4, text=fsgray, anchor=west, align=left] (sk2) at (8.55,4.28) {\texttt{DRAFT\_SKIP}};
+\node[chip, draw=fsorange!70, fill=fsspec, anchor=west, align=left] (sk3) at (8.55,3.44) {\texttt{EARLY\_ABORT}};
+\draw[sarr] (gc.east) -- (sk0.west);
+\draw[sarr] (hs.east) -- (sk1.west);
+\draw[sarr] (dr.east) -- (sk2.west);
+\draw[sarr] (ea.east) -- (sk3.west);
+
+\fill[fsblue!8] (5.74,1.68) rectangle (10.70,2.18);
+\draw[fsblue!30, line width=0.35pt] (5.74,1.68) rectangle (10.70,2.18);
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (5.82,1.93)
+  {$\Work{=}\sum_i \Work_i$ \quad $\Xfer{=}\sum_{i\in\Keep}\Work_i$ \quad winner always kept};
+
+% ---------- 3. disaggregated prefill / decode, gated transfer ----------
+\draw[panel, rounded corners=1.4pt, fill=fslight] (11.42,4.55) rectangle (13.42,6.78);
+\node[font=\scriptsize\bfseries\sffamily, text=fsblue, anchor=west] at (11.56,6.52) {Prefill};
+% kept and pruned are interleaved; the last cell stays, so this is not a suffix cut
+\foreach \c/\r in {0/1, 2/1, 0/0, 2/0, 3/0} {
+  \fill[fsblue!40] ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
+  \draw[fsblue, line width=0.35pt] ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
+}
+\foreach \c/\r in {1/1, 3/1, 1/0} {
+  \draw[fsgray, densely dashed, line width=0.45pt]
+    ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
+}
+\node[font=\tiny\sffamily, text=fsgray] at (12.42,5.22) {dashed = pruned};
+
+\draw[panel, rounded corners=1.4pt, fill=fscommit] (14.38,4.55) rectangle (16.32,6.78);
+\node[font=\scriptsize\bfseries\sffamily, text=fsgreen!35!black, anchor=west] at (14.52,6.52) {Decode};
+\foreach \i in {0,...,4} {
+  \fill[fsgreen!55!black] ({14.56+\i*0.30},5.92) rectangle ({14.80+\i*0.30},6.22);
+}
+
+\draw[arr, draw=fsgreen!45!black, line width=0.75pt] (13.42,5.85) -- (14.38,5.85);
+\node[chip, draw=fsgreen!55!black, fill=white, inner sep=1.1pt] at (13.90,6.28) {\texttt{insert}};
+\node[font=\tiny\sffamily, text=fsgreen!30!black] at (13.90,5.42) {kept KV};
+
+% fan-out time: stock ship-all vs gated insert (control-plane model)
+\node[font=\tiny\sffamily\bfseries, anchor=west] at (11.46,4.12) {fan-out time};
+\node[font=\tiny\sffamily, text=fsred, anchor=east] at (12.55,3.52) {stock};
+\fill[fsred!55] (12.68,3.34) rectangle (16.18,3.70);
+\node[font=\tiny\sffamily, text=white] at (14.43,3.52) {ship all \textperiodcentered\ $162$\,ms};
+\node[font=\tiny\sffamily, text=fsgain, anchor=east] at (12.55,2.62) {gate};
+\fill[fsgreen!65!black] (12.68,2.44) rectangle ({12.68+3.50*31.4/162},2.80);
+\node[font=\tiny\sffamily, text=fsgain, anchor=west] at ({12.78+3.50*31.4/162},2.62) {$31.4$\,ms};
+\fill[fsblue!6] (11.42,1.66) rectangle (16.32,2.10);
+\draw[fsblue!25, line width=0.3pt] (11.42,1.66) rectangle (16.32,2.10);
+\node[font=\tiny\sffamily, text=fsblue] at (13.87,1.88)
+  {same split \textperiodcentered\ less KV on the wire};
+
+% residuals into APP; kept miss tail stops at the prefill card edge
+\draw[arr] (b2.east) -- ++(0.22,0) |- (5.38,6.58) -- (inr.west);
+\node[font=\tiny\sffamily, text=fsblue, anchor=south] at (4.92,3.80) {$\rho$};
+\draw[arr] (mt.east) -- (11.05,2.58) -- (11.05,5.85) -- (11.42,5.85);
+\node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south] at (9.70,2.66) {kept};
+
+% ---------- HBM (occupancy vs slots) ----------
+\draw[panel] (0,0) rectangle (16.45,1.50);
+\fill[fsblue] (0,1.16) rectangle (0.08,1.50);
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.18,1.33) {HBM after abort};
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (3.22,1.33)
+  {DeepSeek-R1 GSM8K, $8$\,GiB pool};
+\node[chip, draw=fsblue!40, fill=fslight] at (8.70,1.33) {$M_{\mathrm{spine}}=b(L+\ell_\star)$};
+\node[chip, draw=fsblue!40, fill=white] at (11.85,1.33) {$C\propto H/M$};
+\node[chip, draw=fsblue!40, fill=white] at (14.15,1.33) {$\Theta\propto C/T_{\mathrm{e2e}}$};
+
+% occupancy: pool 1.70--7.55 (5.85cm). APC full; FS 0.74 of that.
+\node[font=\tiny\sffamily\bfseries, text=fsblue, anchor=south west] at (0.16,0.90) {per-session $M$};
+\node[font=\tiny\sffamily, anchor=east] at (1.58,0.68) {APC};
+\fill[fsblue!50] (1.70,0.52) rectangle (7.55,0.84);
+\draw[fsblue!75, line width=0.4pt] (1.70,0.52) rectangle (7.55,0.84);
+\node[font=\tiny\sffamily, text=white] at (4.62,0.68) {$M_{\mathrm{APC}}$};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (7.65,0.68) {$761$ tok};
+
+\node[font=\tiny\sffamily, anchor=east] at (1.58,0.26) {FS};
+\fill[black!5] (1.70,0.10) rectangle (7.55,0.42);
+\draw[fsgreen!45!black, line width=0.4pt, densely dashed] (1.70,0.10) rectangle (7.55,0.42);
+\fill[fsgreen!60!black] (1.70,0.10) rectangle ({1.70+0.737*5.85},0.42);
+\node[font=\tiny\sffamily, text=white] at ({1.70+0.37*5.85},0.26) {$M_{\mathrm{spine}}$};
+\node[font=\tiny\sffamily, text=fsgreen!30!black] at ({1.70+0.87*5.85},0.26) {free};
+\node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (7.65,0.26) {$561$ tok};
+\draw[fsgray!40, line width=0.4pt] (9.02,0.08) -- (9.02,1.05);
+
+% slots: max bar 103 → width 5.20cm, origin 10.15
+\node[font=\tiny\sffamily\bfseries, text=fsgreen!30!black, anchor=south west] at (9.20,0.90) {SLO slots $C$};
+\node[font=\tiny\sffamily, anchor=east] at (10.05,0.68) {76};
+\fill[fsblue!50] (10.15,0.52) rectangle ({10.15+76/103*5.20},0.84);
+\draw[fsblue!75, line width=0.4pt] (10.15,0.52) rectangle ({10.15+76/103*5.20},0.84);
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at ({10.25+76/103*5.20},0.68) {APC};
+
+\node[font=\tiny\sffamily, anchor=east] at (10.05,0.26) {103};
+\fill[fsgreen!60!black] (10.15,0.10) rectangle ({10.15+5.20},0.42);
+\draw[fsgreen!40!black, line width=0.4pt] (10.15,0.10) rectangle ({10.15+5.20},0.42);
+\fill[fsgreen!25] (10.15+76/103*5.20,0.10) rectangle ({10.15+5.20},0.42);
+\node[font=\tiny\sffamily, text=white] at (12.35,0.26) {FS};
+\node[chip, draw=fsgreen!50!black, fill=fscommit, inner sep=1.1pt] at (15.72,0.26) {$+35.5\%$};
+
+\draw[arr] (2.4,7.52) -- (2.4,7.28);
+\node[font=\tiny\sffamily, text=fsgray, anchor=east] at (2.28,7.40) {\texttt{fork}};
+\end{tikzpicture}

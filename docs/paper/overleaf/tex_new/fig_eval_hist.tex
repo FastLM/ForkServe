@@ -1,0 +1,357 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={draw=black!50, line width=0.12pt},
+]
+\definecolor{APC}{HTML}{6BAED6}
+\definecolor{FS}{HTML}{FDAE6B}
+\definecolor{FSp}{HTML}{74C476}
+
+\fill[APC] (0.55,6.62) rectangle (0.78,6.78);
+\node[font=\tiny, anchor=west] at (0.84,6.70) {APC};
+\fill[FS] (1.85,6.62) rectangle (2.08,6.78);
+\node[font=\tiny, anchor=west] at (2.14,6.70) {\sys};
+\fill[FSp] (3.95,6.62) rectangle (4.18,6.78);
+\node[font=\tiny, anchor=west] at (4.24,6.70) {ForkServe+};
+\node[font=\tiny, text=black!50, anchor=west] at (6.6,6.70)
+  {per-item decode length, $n{=}40$, $\mathrm{tp}{=}2$, bin $64$ tokens};
+
+% --- GSM8K-4B ---
+\begin{scope}[shift={(0.00,3.25)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {GSM8K-4B};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,1.103) -- (3.97,1.103);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.103) {6};
+  \draw[black!12] (0.42,1.887) -- (3.97,1.887);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.887) {12};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {18};
+  \fill[bar, FSp, fill opacity=0.5] (0.420,0.32) rectangle (0.800,0.581);
+  \fill[bar, APC, fill opacity=0.55] (0.820,0.32) rectangle (1.200,1.234);
+  \fill[bar, FS, fill opacity=0.55] (0.820,0.32) rectangle (1.200,1.103);
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,2.409);
+  \fill[bar, APC, fill opacity=0.55] (1.220,0.32) rectangle (1.600,1.495);
+  \fill[bar, FS, fill opacity=0.55] (1.220,0.32) rectangle (1.600,1.626);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,1.756);
+  \fill[bar, APC, fill opacity=0.55] (1.620,0.32) rectangle (2.000,1.495);
+  \fill[bar, FS, fill opacity=0.55] (1.620,0.32) rectangle (2.000,1.626);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,0.581);
+  \fill[bar, APC, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.364);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.234);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,0.712);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.581);
+  \fill[bar, FS, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.451);
+  \fill[bar, FSp, fill opacity=0.5] (2.420,0.32) rectangle (2.800,0.712);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,0.973);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.103);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,0.712);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north east] at (3.93,2.65)
+    {$\mu{=}242$\\$\sigma{=}121$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north east] at (3.93,2.07)
+    {$\mu{=}247$\\$\sigma{=}125$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north east] at (3.93,1.49)
+    {$\mu{=}180$\\$\sigma{=}122$\\$n{=}40$};
+\end{scope}
+
+% --- GSM8K-14B ---
+\begin{scope}[shift={(4.05,3.25)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {GSM8K-14B};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,0.991) -- (3.97,0.991);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.991) {4};
+  \draw[black!12] (0.42,1.663) -- (3.97,1.663);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.663) {8};
+  \draw[black!12] (0.42,2.334) -- (3.97,2.334);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.334) {12};
+  \fill[bar, APC, fill opacity=0.55] (0.820,0.32) rectangle (1.200,1.159);
+  \fill[bar, FS, fill opacity=0.55] (0.820,0.32) rectangle (1.200,0.824);
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,0.991);
+  \fill[bar, APC, fill opacity=0.55] (1.220,0.32) rectangle (1.600,1.999);
+  \fill[bar, FS, fill opacity=0.55] (1.220,0.32) rectangle (1.600,1.831);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,2.166);
+  \fill[bar, APC, fill opacity=0.55] (1.620,0.32) rectangle (2.000,1.159);
+  \fill[bar, FS, fill opacity=0.55] (1.620,0.32) rectangle (2.000,1.495);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,1.495);
+  \fill[bar, APC, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.159);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.327);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,1.159);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,1.327);
+  \fill[bar, FS, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.824);
+  \fill[bar, FSp, fill opacity=0.5] (2.420,0.32) rectangle (2.800,0.991);
+  \fill[bar, FS, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.656);
+  \fill[bar, FSp, fill opacity=0.5] (2.820,0.32) rectangle (3.200,0.656);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.831);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.999);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,1.495);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north west] at (0.50,2.65)
+    {$\mu{=}283$\\$\sigma{=}139$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north west] at (0.50,2.07)
+    {$\mu{=}302$\\$\sigma{=}141$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north west] at (0.50,1.49)
+    {$\mu{=}279$\\$\sigma{=}135$\\$n{=}40$};
+\end{scope}
+
+% --- GSM8K-L8B ---
+\begin{scope}[shift={(8.10,3.25)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {GSM8K-L8B};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,0.907) -- (3.97,0.907);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.907) {5};
+  \draw[black!12] (0.42,1.495) -- (3.97,1.495);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.495) {10};
+  \draw[black!12] (0.42,2.083) -- (3.97,2.083);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.083) {15};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {20};
+  \fill[bar, APC, fill opacity=0.55] (0.420,0.32) rectangle (0.800,0.672);
+  \fill[bar, FS, fill opacity=0.55] (0.420,0.32) rectangle (0.800,0.672);
+  \fill[bar, FSp, fill opacity=0.5] (0.420,0.32) rectangle (0.800,0.907);
+  \fill[bar, APC, fill opacity=0.55] (0.820,0.32) rectangle (1.200,1.965);
+  \fill[bar, FS, fill opacity=0.55] (0.820,0.32) rectangle (1.200,2.435);
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,2.083);
+  \fill[bar, APC, fill opacity=0.55] (1.220,0.32) rectangle (1.600,2.200);
+  \fill[bar, FS, fill opacity=0.55] (1.220,0.32) rectangle (1.600,1.613);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,2.083);
+  \fill[bar, APC, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.907);
+  \fill[bar, FS, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.790);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,0.672);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.672);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,0.438);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.555);
+  \fill[bar, FS, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (2.420,0.32) rectangle (2.800,0.438);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north east] at (3.93,2.65)
+    {$\mu{=}141$\\$\sigma{=}68$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north east] at (3.93,2.07)
+    {$\mu{=}139$\\$\sigma{=}73$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north east] at (3.93,1.49)
+    {$\mu{=}132$\\$\sigma{=}66$\\$n{=}40$};
+\end{scope}
+
+% --- GSM8K-R1 ---
+\begin{scope}[shift={(12.15,3.25)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {GSM8K-R1};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,1.103) -- (3.97,1.103);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.103) {6};
+  \draw[black!12] (0.42,1.887) -- (3.97,1.887);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.887) {12};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {18};
+  \fill[bar, FSp, fill opacity=0.5] (0.420,0.32) rectangle (0.800,0.451);
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,2.278);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,2.278);
+  \fill[bar, APC, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.712);
+  \fill[bar, FS, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.712);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,1.103);
+  \fill[bar, APC, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.626);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.495);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,0.451);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,1.495);
+  \fill[bar, FS, fill opacity=0.55] (2.420,0.32) rectangle (2.800,2.017);
+  \fill[bar, APC, fill opacity=0.55] (2.820,0.32) rectangle (3.200,1.234);
+  \fill[bar, FS, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.842);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.756);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.756);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,0.581);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north] at (2.27,2.65)
+    {$\mu{=}373$\\$\sigma{=}95$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north] at (2.27,2.07)
+    {$\mu{=}374$\\$\sigma{=}92$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north] at (2.27,1.49)
+    {$\mu{=}161$\\$\sigma{=}93$\\$n{=}40$};
+\end{scope}
+
+% --- Game24-4B ---
+\begin{scope}[shift={(0.00,0.10)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {Game24-4B};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,0.907) -- (3.97,0.907);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.907) {10};
+  \draw[black!12] (0.42,1.495) -- (3.97,1.495);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.495) {20};
+  \draw[black!12] (0.42,2.083) -- (3.97,2.083);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.083) {30};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {40};
+  \fill[bar, FSp, fill opacity=0.5] (0.420,0.32) rectangle (0.800,0.379);
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,0.379);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,0.438);
+  \fill[bar, APC, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.438);
+  \fill[bar, FS, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,0.379);
+  \fill[bar, APC, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.496);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,0.438);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.379);
+  \fill[bar, FSp, fill opacity=0.5] (2.420,0.32) rectangle (2.800,0.379);
+  \fill[bar, APC, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.438);
+  \fill[bar, FS, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.379);
+  \fill[bar, FSp, fill opacity=0.5] (2.820,0.32) rectangle (3.200,0.379);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,2.200);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,2.376);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,2.141);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north west] at (0.50,2.65)
+    {$\mu{=}472$\\$\sigma{=}83$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north west] at (0.50,2.07)
+    {$\mu{=}483$\\$\sigma{=}74$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north west] at (0.50,1.49)
+    {$\mu{=}449$\\$\sigma{=}126$\\$n{=}40$};
+\end{scope}
+
+% --- Game24-14B ---
+\begin{scope}[shift={(4.05,0.10)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {Game24-14B};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,0.907) -- (3.97,0.907);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.907) {10};
+  \draw[black!12] (0.42,1.495) -- (3.97,1.495);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.495) {20};
+  \draw[black!12] (0.42,2.083) -- (3.97,2.083);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.083) {30};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {40};
+  \fill[bar, APC, fill opacity=0.55] (0.820,0.32) rectangle (1.200,0.438);
+  \fill[bar, FS, fill opacity=0.55] (0.820,0.32) rectangle (1.200,0.496);
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,0.614);
+  \fill[bar, APC, fill opacity=0.55] (1.220,0.32) rectangle (1.600,0.496);
+  \fill[bar, FS, fill opacity=0.55] (1.220,0.32) rectangle (1.600,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,0.379);
+  \fill[bar, APC, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.379);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,0.438);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,0.379);
+  \fill[bar, FSp, fill opacity=0.5] (2.420,0.32) rectangle (2.800,0.379);
+  \fill[bar, APC, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.672);
+  \fill[bar, FS, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.496);
+  \fill[bar, FSp, fill opacity=0.5] (2.820,0.32) rectangle (3.200,0.379);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.906);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,2.083);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,2.083);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north west] at (0.50,2.65)
+    {$\mu{=}440$\\$\sigma{=}126$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north west] at (0.50,2.07)
+    {$\mu{=}444$\\$\sigma{=}132$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north west] at (0.50,1.49)
+    {$\mu{=}432$\\$\sigma{=}149$\\$n{=}40$};
+\end{scope}
+
+% --- Game24-M7B ---
+\begin{scope}[shift={(8.10,0.10)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {Game24-M7B};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,0.907) -- (3.97,0.907);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.907) {5};
+  \draw[black!12] (0.42,1.495) -- (3.97,1.495);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.495) {10};
+  \draw[black!12] (0.42,2.083) -- (3.97,2.083);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.083) {15};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {20};
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,0.438);
+  \fill[bar, APC, fill opacity=0.55] (1.220,0.32) rectangle (1.600,1.143);
+  \fill[bar, FS, fill opacity=0.55] (1.220,0.32) rectangle (1.600,0.907);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,0.790);
+  \fill[bar, APC, fill opacity=0.55] (1.620,0.32) rectangle (2.000,1.143);
+  \fill[bar, FS, fill opacity=0.55] (1.620,0.32) rectangle (2.000,0.907);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,1.143);
+  \fill[bar, APC, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.907);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,1.143);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,1.378);
+  \fill[bar, APC, fill opacity=0.55] (2.420,0.32) rectangle (2.800,1.025);
+  \fill[bar, FS, fill opacity=0.55] (2.420,0.32) rectangle (2.800,1.025);
+  \fill[bar, FSp, fill opacity=0.5] (2.420,0.32) rectangle (2.800,0.555);
+  \fill[bar, APC, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.555);
+  \fill[bar, FS, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.438);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,1.848);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,2.200);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,2.317);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north west] at (0.50,2.65)
+    {$\mu{=}339$\\$\sigma{=}137$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north west] at (0.50,2.07)
+    {$\mu{=}361$\\$\sigma{=}133$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north west] at (0.50,1.49)
+    {$\mu{=}350$\\$\sigma{=}138$\\$n{=}40$};
+\end{scope}
+
+% --- Game24-R1 ---
+\begin{scope}[shift={(12.15,0.10)}]
+  \node[font=\tiny\bfseries] at (1.92,2.53) {Game24-R1};
+  \draw[black!12] (0.42,0.320) -- (3.97,0.320);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.320) {0};
+  \draw[black!12] (0.42,0.907) -- (3.97,0.907);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,0.907) {10};
+  \draw[black!12] (0.42,1.495) -- (3.97,1.495);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,1.495) {20};
+  \draw[black!12] (0.42,2.083) -- (3.97,2.083);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.083) {30};
+  \draw[black!12] (0.42,2.670) -- (3.97,2.670);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.36,2.670) {40};
+  \fill[bar, FSp, fill opacity=0.5] (0.820,0.32) rectangle (1.200,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (1.220,0.32) rectangle (1.600,0.379);
+  \fill[bar, FSp, fill opacity=0.5] (1.620,0.32) rectangle (2.000,0.379);
+  \fill[bar, FS, fill opacity=0.55] (2.020,0.32) rectangle (2.400,0.438);
+  \fill[bar, FSp, fill opacity=0.5] (2.020,0.32) rectangle (2.400,0.496);
+  \fill[bar, APC, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.496);
+  \fill[bar, FS, fill opacity=0.55] (2.820,0.32) rectangle (3.200,0.496);
+  \fill[bar, APC, fill opacity=0.55] (3.220,0.32) rectangle (3.600,2.494);
+  \fill[bar, FS, fill opacity=0.55] (3.220,0.32) rectangle (3.600,2.376);
+  \fill[bar, FSp, fill opacity=0.5] (3.220,0.32) rectangle (3.600,2.259);
+  \draw[black!55] (0.42,0.32) -- (3.97,0.32);
+  \draw[black!55] (0.42,0.32) -- (0.42,2.67);
+  \node[font=\tiny, text=black!50] at (0.610,0.16) {0};
+  \node[font=\tiny, text=black!50] at (2.210,0.16) {256};
+  \node[font=\tiny, text=black!50] at (3.410,0.16) {512};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=APC!40, draw=APC!75!black, line width=0.2pt, anchor=north west] at (0.50,2.65)
+    {$\mu{=}503$\\$\sigma{=}29$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FS!45, draw=FS!75!black, line width=0.2pt, anchor=north west] at (0.50,2.07)
+    {$\mu{=}495$\\$\sigma{=}49$\\$n{=}40$};
+  \node[font=\tiny, inner sep=1.0pt, align=left, rectangle, fill=FSp!40, draw=FSp!75!black, line width=0.2pt, anchor=north west] at (0.50,1.49)
+    {$\mu{=}458$\\$\sigma{=}119$\\$n{=}40$};
+\end{scope}
+
+\node[font=\tiny, text=black!55, rotate=90] at (-0.22,3.20) {Frequency};
+\node[font=\tiny, text=black!55] at (8.15,-0.12) {Decode tokens};
+\end{tikzpicture}
+

@@ -1,0 +1,133 @@
+% Context-tree page pool. Logical verbs left, physical frames right.
+\tikzset{
+  fmbadge/.style={circle,draw=#1!70!black,fill=#1,text=white,
+    font=\tiny\sffamily\bfseries,inner sep=0pt,minimum size=0.32cm},
+  fmcard/.style={draw=#1!65,fill=#1!8,rounded corners=1.6pt,align=center,
+    inner sep=2pt,font=\tiny\sffamily,line width=0.45pt},
+  pg/.style 2 args={draw=#1,fill=#2,rounded corners=1.3pt,align=center,
+    font=\tiny\sffamily,inner sep=1pt,minimum width=1.05cm,
+    minimum height=0.70cm,line width=0.4pt},
+  fp/.style={draw=fsgray,fill=black!5,rounded corners=1.2pt,align=center,
+    font=\tiny\sffamily,inner sep=1pt,minimum width=0.72cm,
+    minimum height=0.38cm,line width=0.35pt,text=black!70},
+  note/.style={font=\tiny\sffamily,text=black!58},
+  hdr/.style={font=\scriptsize\sffamily\bfseries},
+  fmdata/.style={-{Latex[length=1.4mm]},line width=0.5pt,draw=fsblue!75},
+  fmfeed/.style={densely dashed,-{Latex[length=1.4mm]},line width=0.5pt},
+  flink/.style={{Latex[length=1.1mm,width=0.8mm]}-{Latex[length=1.1mm,width=0.8mm]},
+    line width=0.36pt,draw=fsgray},
+  tbox/.style={draw=#1!70!black,fill=#1!10,rounded corners=1.2pt,align=center,
+    font=\tiny\sffamily,inner sep=1.2pt,line width=0.4pt},
+}
+\begin{tikzpicture}[x=1cm,y=1cm,font=\sffamily,
+  >=Latex,line cap=round,line join=round]
+\path (-0.02,-0.32) rectangle (14.72,5.78);
+% ========================== zones ==========================
+\fill[black!3.5,rounded corners=5pt] (0.04,0.08) rectangle (6.08,5.52);
+\fill[fsblue!5,rounded corners=5pt] (6.24,0.08) rectangle (14.58,5.52);
+\draw[black!22,dashed,dash pattern=on 1.2pt off 1.4pt,line width=0.5pt]
+  (6.16,0.18) -- (6.16,5.38);
+\node[anchor=west,hdr,text=fsgray] at (0.16,5.38) {LOGICAL \(\cdot\) TREE VERBS};
+\node[anchor=west,hdr,text=fsblue] at (6.40,5.38) {PHYSICAL \(\cdot\) FRAME POOL};
+% ===================== 1. request table =====================
+\fill[white,rounded corners=2.5pt] (0.18,4.18) rectangle (5.92,5.28);
+\fill[fsblue!16,rounded corners=2.5pt] (0.18,4.96) rectangle (5.92,5.28);
+\fill[fsblue!16] (0.18,4.96) rectangle (5.92,5.08);
+\draw[fsblue!65,rounded corners=2.5pt,line width=0.5pt] (0.18,4.18) rectangle (5.92,5.28);
+\node[fmbadge=fsblue] at (0.42,5.12) {1};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.64,5.12) {Request table \(\sigma_u\)};
+\node[tbox=fsblue,minimum width=0.64cm,minimum height=0.30cm] (uu) at (1.22,4.74) {\(u\)};
+\node[tbox=fsorange,minimum width=0.70cm,minimum height=0.30cm] (v1) at (0.52,4.40) {\(\rho_1\)};
+\node[tbox=fsgreen,minimum width=0.70cm,minimum height=0.30cm] (vs) at (1.36,4.40) {\(\rho_\star\)};
+\node[tbox=fsgray,minimum width=0.56cm,minimum height=0.30cm] (vk) at (2.12,4.40) {\(\cdots\)};
+\draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (v1.north);
+\draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (vs.north);
+\draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (vk.north);
+\node[fmcard=fsblue,anchor=west,align=left,text width=2.85cm,minimum height=0.62cm]
+  at (2.62,4.56)
+  {\(\sigma_u{=}(\mathrm{parent},\,\mathrm{alias\_len},\,\rho)\)\\[1pt]
+   \(\mathrm{ref}(p){=}\#\) live mappers};
+% ===================== 2. fork =====================
+\fill[white,rounded corners=2.5pt] (0.18,3.02) rectangle (5.92,4.04);
+\fill[fsblue!16,rounded corners=2.5pt] (0.18,3.72) rectangle (5.92,4.04);
+\fill[fsblue!16] (0.18,3.72) rectangle (5.92,3.84);
+\draw[fsblue!65,rounded corners=2.5pt,line width=0.5pt] (0.18,3.02) rectangle (5.92,4.04);
+\node[fmbadge=fsblue] at (0.42,3.88) {2};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.64,3.88)
+  {\texttt{fork}\((u)\): two words, \(O(1)\) in \(L\)};
+\node[fmcard=fsblue,minimum width=1.55cm,minimum height=0.40cm] (cp) at (1.15,3.42)
+  {\(\mathrm{parent}\leftarrow\sigma_u\)};
+\node[fmcard=fsblue,minimum width=1.62cm,minimum height=0.40cm] (ca) at (2.95,3.42)
+  {\(\mathrm{alias\_len}\leftarrow|x_u|\)};
+\node[fmcard=fsorange,minimum width=1.35cm,minimum height=0.40cm] (ci) at (4.85,3.42)
+  {incref trunk};
+\draw[fmdata] (cp) -- (ca);
+\draw[fmdata] (ca) -- (ci);
+\node[note] at (3.05,3.16) {no memcpy of \(L\)};
+% ===================== 6. LCP =====================
+\fill[white,rounded corners=2.5pt] (0.18,1.52) rectangle (5.92,2.88);
+\fill[fsgreen!18,rounded corners=2.5pt] (0.18,2.56) rectangle (5.92,2.88);
+\fill[fsgreen!18] (0.18,2.56) rectangle (5.92,2.68);
+\draw[fsgreen!60!black,rounded corners=2.5pt,line width=0.5pt] (0.18,1.52) rectangle (5.92,2.88);
+\node[fmbadge=fsgreen] at (0.42,2.72) {6};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.64,2.72) {LCP commit};
+\node[fmcard=fsgreen,minimum width=5.35cm,minimum height=0.34cm] at (3.05,2.36)
+  {\(v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)\)};
+\node[fmcard=fsgreen,minimum width=5.35cm,minimum height=0.34cm] at (3.05,1.98)
+  {full blocks \(\rightarrow H\)};
+\node[fmcard=fspurple,minimum width=5.35cm,minimum height=0.34cm] at (3.05,1.66)
+  {\(g\leftarrow g{+}1\) retires in-flight spec};
+% ===================== 7. abort =====================
+\fill[white,rounded corners=2.5pt] (0.18,0.16) rectangle (5.92,1.38);
+\fill[fsorange!18,rounded corners=2.5pt] (0.18,1.06) rectangle (5.92,1.38);
+\fill[fsorange!18] (0.18,1.06) rectangle (5.92,1.18);
+\draw[fsorange!70,rounded corners=2.5pt,line width=0.5pt] (0.18,0.16) rectangle (5.92,1.38);
+\node[fmbadge=fsorange] at (0.42,1.22) {7};
+\node[anchor=west,font=\tiny\sffamily\bfseries] at (0.64,1.22) {\texttt{abort}};
+\node[fmcard=fsorange,minimum width=5.35cm,minimum height=0.46cm] at (3.05,0.62)
+  {\(M_{\mathrm{spine}}{=}b(L{+}\ell_\star)\)\\[1pt] free \(b\ell_i\), not \(b(L{+}\ell_i)\)};
+% ===================== 3. frames =====================
+\fill[fsblue!7,rounded corners=3pt] (6.38,3.02) rectangle (14.44,5.28);
+\draw[fsblue!45,rounded corners=3pt,line width=0.5pt] (6.38,3.02) rectangle (14.44,5.28);
+\node[fmbadge=fsblue] at (6.60,5.08) {3};
+\node[anchor=west,font=\tiny\sffamily] at (6.82,5.08) {\textbf{Shared trunk, private \(\rho\)}};
+\node[pg={fsblue}{fslight},minimum width=2.35cm,minimum height=0.92cm] at (7.75,4.22)
+  {\textbf{shared trunk}\\[-1pt] one copy of \(L\)\\[-1pt] read-only};
+\node[pg={fsorange!80!black}{fsspec},minimum width=2.35cm,minimum height=0.92cm] at (10.35,4.22)
+  {\textbf{private \(\rho\)}\\[-1pt] new frames only\\[-1pt] \(\mathrm{ref}{=}1\), not in \(H\)};
+\node[pg={fsorange!80!black}{fsspec},densely dashed,minimum width=2.35cm,minimum height=0.92cm] at (12.95,4.22)
+  {\textbf{partial tail}\\[-1pt] last page \(n{<}P\)\\[-1pt] not published};
+\node[note] at (10.41,3.42)
+  {child aliases \(L\);\ a write with \(\mathrm{ref}{>}1\) copies that page's valid rows};
+% ===================== 4. hash index =====================
+\fill[fsgreen!8,rounded corners=3pt] (6.38,1.52) rectangle (14.44,2.88);
+\draw[fsgreen!50!black,rounded corners=3pt,line width=0.5pt] (6.38,1.52) rectangle (14.44,2.88);
+\node[fmbadge=fsgreen] at (6.60,2.68) {4};
+\node[anchor=west,font=\tiny\sffamily] at (6.82,2.68) {\textbf{Publish index \(H\)}};
+\node[fmcard=fsgreen,minimum width=3.55cm,minimum height=0.62cm] at (8.40,2.02)
+  {in \(H\): full committed block\\[-1pt] \(h(\mathrm{parent},\mathrm{block})\)};
+\node[fmcard=fsorange,minimum width=3.55cm,minimum height=0.62cm] at (12.35,2.02)
+  {out of \(H\): speculative\\[-1pt] or partial page};
+% ===================== 5. free list =====================
+\fill[black!3,rounded corners=3pt] (6.38,0.16) rectangle (14.44,1.38);
+\draw[fsgray!70,rounded corners=3pt,line width=0.5pt] (6.38,0.16) rectangle (14.44,1.38);
+\node[fmbadge=fsgray] at (6.60,1.18) {5};
+\node[anchor=west,font=\tiny\sffamily] at (6.82,1.18) {\textbf{Free list}\quad \(\mathrm{ref}{=}0\)};
+\node[fmcard=fsblue,minimum width=3.55cm,minimum height=0.58cm] at (8.40,0.58)
+  {\texttt{fork} takes free frames\\[-1pt] for the new \(\rho\)};
+\node[fmcard=fsorange,minimum width=3.55cm,minimum height=0.58cm] at (12.35,0.58)
+  {\texttt{abort} returns those frames\\[-1pt] trunk stays allocated};
+% ===================== cross-boundary =====================
+\draw[fmfeed,draw=fsblue,rounded corners=1.5pt]
+  (5.92,3.42) -- (6.28,3.42) -- (6.28,4.28) -- (6.55,4.28);
+\draw[fmfeed,draw=fsgreen!50!black] (5.92,1.98) -- (6.55,1.98);
+\draw[fmfeed,draw=fsorange!80!black] (5.92,0.62) -- (6.55,0.62);
+% ===================== legend =====================
+\node[anchor=west,font=\tiny\sffamily,text=black!58] at (0.06,-0.14)
+  {\textcolor{fsblue}{trunk}\,\(\cdot\)\,%
+   \textcolor{fsorange}{residual}\,\(\cdot\)\,%
+   \textcolor{fsgreen}{publish}\,\(\cdot\)\,%
+   \textcolor{fspurple}{generation}\,\(\cdot\)\,%
+   \textcolor{fsgray}{free}\qquad
+   dashed edge \(=\) alias};
+\end{tikzpicture}
