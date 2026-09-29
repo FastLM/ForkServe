@@ -165,7 +165,29 @@ GPU work and connector payload are
 A full hit is a retrieval: $m_i=\ell_i$ reads published KV and issues no kernel ($\Work_i=\Xfer_i=0$).
 A proper prefix retrieves $m_i$ tokens and prefills the uncovered tail $\ell_i-m_i$.
 A miss ($m_i=0$) has an empty probe. The draft score runs, and a residual that remains is a prefill of $\ell_i$ on the aliased trunk.
-Speculative pages stay out of $H$ until LCP commit, so the first expand of an unpublished child has $m_i=0$.
+\Cref{fig:dragon} is that rule on the residual ``find the dragon.''
+The dragon head is the radix root on every row.
+A green prefix is a published page and is spliced onto decode; an orange tail is grown by prefill.
+Speculative pages stay out of $H$ until LCP commit, so the first expand of an unpublished child has $m_i=0$ and is the $\mathrm{PF}$ row.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_dragon}}
+\caption{\textbf{Seven cuts of ``find the dragon.''}
+The dragon head is the radix root; the body is one residual.
+Green tokens are full pages in $H$ and are spliced onto decode.
+Orange tokens are absent from $H$ and are grown by prefill.
+Gray tokens are withheld.
+Chips stand in for tokens: a real hit ends on a full page, and each row is a different value of $m_i$.
+(a)~The body is a hit ($\mathrm{HS}$, $m_i=\ell_i$, $\Work_i=0$).
+(b)~The front half ``dra'' is in the tree and ``gon'' grows ($\mathrm{HP}$, $\Work_i=\ell_i-m_i$).
+(c)~The cut falls after ``d''.
+(d)~The cut falls before the last character.
+(e)~A miss grows the body from the neck ($\mathrm{PF}$, $m_i=0$, $\Work_i=\ell_i$); the head stays the alias.
+(f)~The first $\lceil\alpha\ell_i\rceil$ tokens grow and the kernel stops ($\mathrm{EA}$).
+(g)~A draft score below $\tau$ withholds the body ($\mathrm{DS}$, $\Work_i=0$).}
+\label{fig:dragon}
+\end{figure*}
 Hash-local hits stay on the decode instance (the same published blocks are APC-visible there).
 Draft-skipped and early-aborted residuals never enter the buffer.
 \Cref{alg:app} is the per-fan-out plan; \Cref{tab:span} is the first-fan-out span.

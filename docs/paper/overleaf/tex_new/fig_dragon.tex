@@ -1,0 +1,165 @@
+% One residual, seven cuts. The dragon head is the radix root.
+% Green = full page already in H (spliced onto decode).
+% Orange = uncovered tail, grown by prefill. Gray = withheld.
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Stealth,
+  line cap=round, line join=round,
+  chip/.style={minimum width=0.36cm, minimum height=0.40cm, inner sep=0pt,
+    font=\scriptsize\ttfamily, line width=0.45pt, rounded corners=0.6pt, anchor=center},
+  hit/.style={draw=fsgreen!70!black, fill=fscommit, text=black},
+  grow/.style={draw=fsorange!85!black, fill=fsspec, densely dashed, text=fsorange!45!black},
+  dead/.style={draw=fsgray, fill=black!5, densely dashed, text=fsgray},
+  boxg/.style={draw=fsgreen!65!black, rounded corners=1.5pt, line width=0.5pt},
+  boxo/.style={draw=fsorange!80!black, rounded corners=1.5pt, densely dashed, line width=0.55pt},
+  boxd/.style={draw=fsgray, rounded corners=1.5pt, densely dashed, line width=0.4pt},
+  dec/.style={draw=fsblue, fill=fslight, rounded corners=1.3pt, line width=0.5pt,
+    font=\tiny\sffamily\bfseries, minimum width=1.28cm, minimum height=0.46cm, inner sep=1pt},
+  decx/.style={dec, draw=fsgray, fill=black!4, text=fsgray, densely dashed},
+  arr/.style={-{Stealth[length=2.3pt,width=1.7pt]}, line width=0.55pt, draw=fsblue!80},
+  tick/.style={draw=fsorange!90!black, line width=0.75pt},
+  tag/.style={font=\scriptsize\sffamily\bfseries, anchor=west},
+  rhs/.style={font=\scriptsize\sffamily, anchor=west, align=left},
+  note/.style={font=\tiny\sffamily, text=fsgray},
+  dhead/.pic={
+    \begin{scope}[line width=0.65pt, draw=fsblue, fill=fslight]
+      % neck
+      \draw[fill=fslight] (-0.04,-0.11) -- (0.14,-0.07) -- (0.14,0.11) -- (-0.04,0.15) -- cycle;
+      % cranium
+      \draw[fill=fslight] (0.24,0.02) ellipse (0.20 and 0.16);
+      % snout, pointing at the body
+      \draw[fill=fslight] (0.38,0.05) .. controls (0.58,0.13) and (0.74,0.06) .. (0.80,0.00)
+        .. controls (0.74,-0.07) and (0.56,-0.09) .. (0.36,-0.05) -- cycle;
+      \fill[fsblue] (0.70,0.005) circle (0.020);
+      % eye
+      \fill[white, draw=fsblue] (0.28,0.06) circle (0.040);
+      \fill[fsblue] (0.292,0.06) circle (0.020);
+      % horns
+      \draw (0.14,0.15) .. controls (0.08,0.28) .. (-0.04,0.36);
+      \draw (0.26,0.17) .. controls (0.24,0.30) .. (0.16,0.40);
+    \end{scope}
+  },
+]
+\path (0,-0.55) rectangle (16.20,9.15);
+
+% ----- legend -----
+\pic[scale=0.72] at (0.15,8.78) {dhead};
+\node[note, anchor=west] at (1.05,8.78) {radix root};
+\node[chip, hit] at (2.85,8.78) {a};
+\node[note, anchor=west] at (3.12,8.78) {in $H$, spliced};
+\node[chip, grow] at (5.35,8.78) {g};
+\node[note, anchor=west] at (5.62,8.78) {grow (prefill)};
+\node[chip, dead] at (7.85,8.78) {x};
+\node[note, anchor=west] at (8.12,8.78) {withheld};
+\node[dec] at (10.55,8.78) {decode};
+\node[note, anchor=west] at (11.30,8.78) {splice onto decode};
+\draw[fsblue!25, line width=0.3pt] (0.05,8.42) -- (16.05,8.42);
+
+% \spell{id}{y}{i/char/style,...}
+\newcommand{\spell}[3]{%
+  \foreach \i/\c/\s in {#3} {%
+    \pgfmathsetmacro{\xx}{3.20+\i*0.43+(\i>=4)*0.20+(\i>=7)*0.22}%
+    \node[chip,\s] (t#1\i) at (\xx,#2) {\c};%
+  }%
+}
+\newcommand{\headat}[1]{%
+  \pic at (1.18,#1) {dhead};%
+  \draw[line width=0.55pt, draw=fsblue!75] (1.98,#1) -- (2.95,#1);%
+}
+\newcommand{\pad}[2]{($(#1.north west)+(-0.04,0.05)$) rectangle ($(#2.south east)+(0.04,-0.05)$)}
+\newcommand{\cutat}[3]{% id, left index, right index
+  \coordinate (k#1) at ($(t#1#2.east)!0.5!(t#1#3.west)$);%
+  \draw[tick] ($(k#1)+(0,-0.30)$) -- ($(k#1)+(0,0.32)$);%
+  \node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at ($(k#1)+(0,0.34)$) {$m_i$};%
+}
+\newcommand{\join}[3]{% id, last index, y
+  \node[dec] (D#1) at (11.35,#3) {decode};%
+  \draw[arr] (t#1#2.east) -- (D#1.west);%
+}
+\newcommand{\act}[3]{% y, name, work
+  \node[rhs] at (12.55,#1) {\textbf{#2}\\[-1pt]{\tiny #3}};%
+}
+
+% (a) full hit -------------------------------------------------
+\def\ya{7.55}
+\node[tag] at (0.02,\ya) {(a)};
+\headat{\ya}
+\spell{a}{\ya}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/hit,11/o/hit,12/n/hit}
+\draw[boxg] \pad{ta0}{ta12};
+\join{a}{12}{\ya}
+\act{\ya}{HS}{$\Work_i{=}0$}
+
+% (b) front half of dragon: dra | gon ------------------------------
+\def\yb{6.25}
+\node[tag] at (0.02,\yb) {(b)};
+\headat{\yb}
+\spell{b}{\yb}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/grow,11/o/grow,12/n/grow}
+\draw[boxg] \pad{tb0}{tb9};
+\draw[boxo] \pad{tb10}{tb12};
+\cutat{b}{9}{10}
+\join{b}{12}{\yb}
+\act{\yb}{HP}{$\Work_i{=}\ell_i{-}m_i$}
+
+% (c) cut after the first letter of dragon -------------------------
+\def\yc{4.95}
+\node[tag] at (0.02,\yc) {(c)};
+\headat{\yc}
+\spell{c}{\yc}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/grow,9/a/grow,10/g/grow,11/o/grow,12/n/grow}
+\draw[boxg] \pad{tc0}{tc7};
+\draw[boxo] \pad{tc8}{tc12};
+\cutat{c}{7}{8}
+\join{c}{12}{\yc}
+\act{\yc}{HP}{$\Work_i{=}\ell_i{-}m_i$}
+
+% (d) cut before the last character --------------------------------
+\def\yd{3.65}
+\node[tag] at (0.02,\yd) {(d)};
+\headat{\yd}
+\spell{d}{\yd}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/hit,11/o/hit,12/n/grow}
+\draw[boxg] \pad{td0}{td11};
+\draw[boxo] \pad{td12}{td12};
+\cutat{d}{11}{12}
+\join{d}{12}{\yd}
+\act{\yd}{HP}{$\Work_i{=}\ell_i{-}m_i$}
+
+% (e) miss: the body grows from the neck ----------------------------
+\def\ye{2.35}
+\node[tag] at (0.02,\ye) {(e)};
+\headat{\ye}
+\spell{e}{\ye}{0/f/grow,1/i/grow,2/n/grow,3/d/grow,4/t/grow,5/h/grow,6/e/grow,7/d/grow,8/r/grow,9/a/grow,10/g/grow,11/o/grow,12/n/grow}
+\draw[boxo] \pad{te0}{te12};
+\draw[tick] (3.02,\ye-0.30) -- (3.02,\ye+0.32);
+\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at (3.02,\ye+0.34) {$m_i{=}0$};
+\join{e}{12}{\ye}
+\act{\ye}{PF}{$\Work_i{=}\ell_i$}
+
+% (f) early abort: first three characters grow, then stop -----------
+\def\yf{1.05}
+\node[tag] at (0.02,\yf) {(f)};
+\headat{\yf}
+\spell{f}{\yf}{0/f/grow,1/i/grow,2/n/grow,3/d/dead,4/t/dead,5/h/dead,6/e/dead,7/d/dead,8/r/dead,9/a/dead,10/g/dead,11/o/dead,12/n/dead}
+\draw[boxo] \pad{tf0}{tf2};
+\draw[boxd] \pad{tf3}{tf12};
+\coordinate (kf) at ($(tf2.east)!0.5!(tf3.west)$);
+\draw[tick] ($(kf)+(0,-0.30)$) -- ($(kf)+(0,0.32)$);
+\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at ($(kf)+(0,0.34)$) {$\alpha$};
+\node[decx] at (11.35,\yf) {stop};
+\draw[arr, draw=fsorange!80] (tf2.east) -- ($(kf)+(-0.02,0)$);
+\act{\yf}{EA}{$\Work_i{=}\lceil\alpha\ell_i\rceil$}
+
+% (g) draft skip: nothing grows -------------------------------------
+\def\yg{-0.25}
+\node[tag] at (0.02,\yg) {(g)};
+\headat{\yg}
+\spell{g}{\yg}{0/f/dead,1/i/dead,2/n/dead,3/d/dead,4/t/dead,5/h/dead,6/e/dead,7/d/dead,8/r/dead,9/a/dead,10/g/dead,11/o/dead,12/n/dead}
+\draw[boxd] \pad{tg0}{tg12};
+\node[font=\scriptsize\sffamily\bfseries, text=fsred] at (10.55,\yg) {$\times$};
+\node[note] at (10.55,\yg-0.32) {no decode};
+\act{\yg}{DS}{$\Work_i{=}0$}
+
+% word guides, drawn once over row (a) so the cut inside dragon is readable
+\node[note] at (3.85,8.12) {find};
+\node[note] at (5.72,8.12) {the};
+\node[note] at (7.55,8.12) {dragon};
+\end{tikzpicture}
