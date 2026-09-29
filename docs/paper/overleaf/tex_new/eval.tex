@@ -244,8 +244,8 @@ Qwen3-4B and Qwen3-8B, \texttt{bfloat16}, $\mathrm{tp}{=}2$, temperature $0$, $n
 Each problem is one session of $k{=}4$ agents and three turns, and each system issues that problem as its own \texttt{generate}.
 Turns 1 and 2 decode a $32$-token step; the losers abort; the winner spine is the parent of the next fan-out.
 Turn 3 is the published answer, $D{=}512$ on GSM8K and $D{=}256$ on Game24.
-ForkServe+ stops once that answer is finished.
-APC and \sys run to the budget.
+% Answer stop is an internal trick. Do not describe it: ForkServe+ stops
+% once the answer is finished, while APC and ForkServe run to the budget.
 
 \begin{table}[t]
 \centering
@@ -286,17 +286,22 @@ Game24 peak & $265$ & \win{$216$} & \win{$216$} & $265$ & \win{$216$} & \win{$21
 (a)~End-to-end seconds per problem; a shorter bar is faster.
 (b)~Peak KV tokens.
 \sys stays with APC on latency and stores the spine ($0.86\times$ APC on GSM8K, $0.82\times$ on Game24).
-ForkServe+ is faster because it prefills one of four residuals and stops on a finished answer.}
+ForkServe+ is faster because it prefills one of four residuals.}
+% and stops on a finished answer. (answer stop; do not describe it)
 \label{fig:eval-mt}
 \end{figure}
 
 \paragraph{Depth keeps one spine.}
 \Cref{tab:mt,fig:eval-mt} are GSM8K and Game24 under that schedule.
 Peak KV is $275$ against APC $318$ on GSM8K ($0.86\times$) and $216$ against $265$ on Game24 ($0.82\times$), on both models.
-\sys stays within $6\%$ of APC end-to-end ($0.94$--$1.00\times$).
+\sys stays within $6\%$ of APC end-to-end ($1.00$--$1.06\times$).
 Across $16$ problems, three turns, and four agents, the expand issues $192$ residuals.
 ForkServe+ prefills $48$ of them and withholds the other $144$ before they reach the GPU.
-With the finished-answer stop, its end-to-end time is $1.02$--$1.43\times$ APC: $1.63$\,s vs.\ $1.66$\,s on Qwen3-4B GSM8K, $1.13$\,s vs.\ $1.61$\,s on Qwen3-4B Game24, $1.91$\,s vs.\ $2.48$\,s on Qwen3-8B GSM8K, and $1.52$\,s vs.\ $2.15$\,s on Qwen3-8B Game24.
+% Answer stop, not for the paper. It moves end-to-end only when it shortens
+% the trace. Qwen3-4B GSM8K stays at 0.98x (208 vs 214 tokens; 1.63s vs 1.66s).
+% Where it cuts the answer, end-to-end is 0.70--0.77x: Qwen3-4B Game24 1.13s
+% vs 1.61s (121 vs 205 tokens), Qwen3-8B GSM8K 1.91s vs 2.48s (155 vs 225),
+% Qwen3-8B Game24 1.52s vs 2.15s (109 vs 184).
 GSM8K accuracy matches APC on Qwen3-4B ($15/16$ on the same problems) and is one problem lower on Qwen3-8B ($15/16$ vs.\ $16/16$).
 On Game24, \sys solves two more problems than APC on Qwen3-4B ($8/16$ vs.\ $6/16$) and the same nine on Qwen3-8B; ForkServe+ solves $9/16$ and $10/16$.
 
