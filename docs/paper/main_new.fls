@@ -629,6 +629,11 @@ INPUT ./tex_new/fig_eval_radar.tex
 INPUT ./tex_new/fig_eval_radar.tex
 INPUT ./tex_new/fig_eval_radar.tex
 INPUT tex_new/fig_eval_radar.tex
+INPUT ./tex_new/fig_eval_hist.tex
+INPUT ./tex_new/fig_eval_hist.tex
+INPUT ./tex_new/fig_eval_hist.tex
+INPUT ./tex_new/fig_eval_hist.tex
+INPUT tex_new/fig_eval_hist.tex
 INPUT ./fig/branch_peak.pdf
 INPUT ./fig/branch_peak.pdf
 INPUT ./fig/branch_peak.pdf
@@ -668,7 +673,6 @@ INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb
 INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb
 INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb
 INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb
-INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb
 INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/symbols/msam7.pfb
 INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm7.pfb
 INPUT /data/dliu/.TinyTeX/texmf-dist/fonts/type1/urw/courier/ucrb8a.pfb
