@@ -9,7 +9,7 @@
   chip/.style={minimum width=0.36cm, minimum height=0.40cm, inner sep=0pt,
     font=\scriptsize\ttfamily, line width=0.45pt, rounded corners=0.6pt, anchor=center},
   hit/.style={draw=fsgreen!70!black, fill=fscommit, text=black},
-  grow/.style={draw=fsorange!85!black, fill=fsspec, densely dashed, text=fsorange!45!black},
+  sprout/.style={draw=fsorange!85!black, fill=fsspec, densely dashed, text=fsorange!45!black},
   dead/.style={draw=fsgray, fill=black!5, densely dashed, text=fsgray},
   boxg/.style={draw=fsgreen!65!black, rounded corners=1.5pt, line width=0.5pt},
   boxo/.style={draw=fsorange!80!black, rounded corners=1.5pt, densely dashed, line width=0.55pt},
@@ -48,7 +48,7 @@
 \node[note, anchor=west] at (1.05,8.78) {radix root};
 \node[chip, hit] at (2.85,8.78) {a};
 \node[note, anchor=west] at (3.12,8.78) {in $H$, spliced};
-\node[chip, grow] at (5.35,8.78) {g};
+\node[chip, sprout] at (5.35,8.78) {g};
 \node[note, anchor=west] at (5.62,8.78) {grow (prefill)};
 \node[chip, dead] at (7.85,8.78) {x};
 \node[note, anchor=west] at (8.12,8.78) {withheld};
@@ -70,8 +70,8 @@
 \newcommand{\pad}[2]{($(#1.north west)+(-0.04,0.05)$) rectangle ($(#2.south east)+(0.04,-0.05)$)}
 \newcommand{\cutat}[3]{% id, left index, right index
   \coordinate (k#1) at ($(t#1#2.east)!0.5!(t#1#3.west)$);%
-  \draw[tick] ($(k#1)+(0,-0.30)$) -- ($(k#1)+(0,0.32)$);%
-  \node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at ($(k#1)+(0,0.34)$) {$m_i$};%
+  \draw[tick] ($(k#1)+(0,-0.26)$) -- ($(k#1)+(0,0.22)$);%
+  \node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at ($(k#1)+(0,0.40)$) {$m_i$};%
 }
 \newcommand{\join}[3]{% id, last index, y
   \node[dec] (D#1) at (11.35,#3) {decode};%
@@ -94,7 +94,7 @@
 \def\yb{6.25}
 \node[tag] at (0.02,\yb) {(b)};
 \headat{\yb}
-\spell{b}{\yb}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/grow,11/o/grow,12/n/grow}
+\spell{b}{\yb}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/sprout,11/o/sprout,12/n/sprout}
 \draw[boxg] \pad{tb0}{tb9};
 \draw[boxo] \pad{tb10}{tb12};
 \cutat{b}{9}{10}
@@ -105,7 +105,7 @@
 \def\yc{4.95}
 \node[tag] at (0.02,\yc) {(c)};
 \headat{\yc}
-\spell{c}{\yc}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/grow,9/a/grow,10/g/grow,11/o/grow,12/n/grow}
+\spell{c}{\yc}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/sprout,9/a/sprout,10/g/sprout,11/o/sprout,12/n/sprout}
 \draw[boxg] \pad{tc0}{tc7};
 \draw[boxo] \pad{tc8}{tc12};
 \cutat{c}{7}{8}
@@ -116,7 +116,7 @@
 \def\yd{3.65}
 \node[tag] at (0.02,\yd) {(d)};
 \headat{\yd}
-\spell{d}{\yd}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/hit,11/o/hit,12/n/grow}
+\spell{d}{\yd}{0/f/hit,1/i/hit,2/n/hit,3/d/hit,4/t/hit,5/h/hit,6/e/hit,7/d/hit,8/r/hit,9/a/hit,10/g/hit,11/o/hit,12/n/sprout}
 \draw[boxg] \pad{td0}{td11};
 \draw[boxo] \pad{td12}{td12};
 \cutat{d}{11}{12}
@@ -127,10 +127,10 @@
 \def\ye{2.35}
 \node[tag] at (0.02,\ye) {(e)};
 \headat{\ye}
-\spell{e}{\ye}{0/f/grow,1/i/grow,2/n/grow,3/d/grow,4/t/grow,5/h/grow,6/e/grow,7/d/grow,8/r/grow,9/a/grow,10/g/grow,11/o/grow,12/n/grow}
+\spell{e}{\ye}{0/f/sprout,1/i/sprout,2/n/sprout,3/d/sprout,4/t/sprout,5/h/sprout,6/e/sprout,7/d/sprout,8/r/sprout,9/a/sprout,10/g/sprout,11/o/sprout,12/n/sprout}
 \draw[boxo] \pad{te0}{te12};
-\draw[tick] (3.02,\ye-0.30) -- (3.02,\ye+0.32);
-\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at (3.02,\ye+0.34) {$m_i{=}0$};
+\draw[tick] (2.55,\ye-0.26) -- (2.55,\ye+0.22);
+\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=north] at (2.15,\ye-0.30) {$m_i{=}0$};
 \join{e}{12}{\ye}
 \act{\ye}{PF}{$\Work_i{=}\ell_i$}
 
@@ -138,14 +138,14 @@
 \def\yf{1.05}
 \node[tag] at (0.02,\yf) {(f)};
 \headat{\yf}
-\spell{f}{\yf}{0/f/grow,1/i/grow,2/n/grow,3/d/dead,4/t/dead,5/h/dead,6/e/dead,7/d/dead,8/r/dead,9/a/dead,10/g/dead,11/o/dead,12/n/dead}
+\spell{f}{\yf}{0/f/sprout,1/i/sprout,2/n/sprout,3/d/dead,4/t/dead,5/h/dead,6/e/dead,7/d/dead,8/r/dead,9/a/dead,10/g/dead,11/o/dead,12/n/dead}
 \draw[boxo] \pad{tf0}{tf2};
 \draw[boxd] \pad{tf3}{tf12};
 \coordinate (kf) at ($(tf2.east)!0.5!(tf3.west)$);
-\draw[tick] ($(kf)+(0,-0.30)$) -- ($(kf)+(0,0.32)$);
-\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at ($(kf)+(0,0.34)$) {$\alpha$};
-\node[decx] at (11.35,\yf) {stop};
-\draw[arr, draw=fsorange!80] (tf2.east) -- ($(kf)+(-0.02,0)$);
+\draw[tick] ($(kf)+(0,-0.26)$) -- ($(kf)+(0,0.22)$);
+\node[font=\tiny\sffamily, text=fsorange!80!black, anchor=south] at ($(kf)+(0,0.40)$) {$\alpha$};
+\node[decx] (Sf) at (11.35,\yf) {stop};
+\draw[densely dashed, draw=fsgray, line width=0.45pt] ($(kf)+(0.06,0)$) -- (Sf.west);
 \act{\yf}{EA}{$\Work_i{=}\lceil\alpha\ell_i\rceil$}
 
 % (g) draft skip: nothing grows -------------------------------------
@@ -159,7 +159,7 @@
 \act{\yg}{DS}{$\Work_i{=}0$}
 
 % word guides, drawn once over row (a) so the cut inside dragon is readable
-\node[note] at (3.85,8.12) {find};
-\node[note] at (5.72,8.12) {the};
-\node[note] at (7.55,8.12) {dragon};
+\node[note] at (3.85,8.18) {find};
+\node[note] at (5.55,8.18) {the};
+\node[note] at (7.70,8.18) {dragon};
 \end{tikzpicture}
