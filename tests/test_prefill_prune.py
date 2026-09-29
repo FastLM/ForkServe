@@ -191,3 +191,21 @@ def test_app_config_enables_layers() -> None:
     assert cfg.prune_enabled
     assert cfg.hash_prune
     assert cfg.disagg_prefill
+
+
+def test_tot_multiturn_app_beats_apc_as_depth_grows() -> None:
+    from experiments.tot_multiturn_bench import run_method, summarize
+
+    rows = []
+    for method in ("apc", "forkserve", "app"):
+        rows.extend(
+            run_method(method, sessions=4, branching=4, turns=3, trunk_len=64, residual=16, step=8)
+        )
+    summary = summarize(rows)
+    assert summary["app"]["prefill_tokens"] < summary["apc"]["prefill_tokens"]
+    assert summary["forkserve"]["prefill_tokens"] < summary["apc"]["prefill_tokens"]
+    assert summary["app"]["peak_kv_last"] < summary["apc"]["peak_kv_last"]
+    assert summary["forkserve"]["peak_kv_last"] < summary["apc"]["peak_kv_last"]
+    assert summary["app"]["pinned_tokens"] > 0
+    assert summary["app"]["next_miss_tokens"] < summary["forkserve"]["next_miss_tokens"]
+    assert summary["app"]["prefill_cut_vs_apc"] > 0.3

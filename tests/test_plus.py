@@ -150,3 +150,17 @@ def test_time_accuracy_curve_and_concurrency() -> None:
     conc = concurrency_sweep(qps_grid=(8, 64, 256))
     assert conc[0]["slots_fs"] > conc[0]["slots_apc"]
     assert conc[-1]["fs_tok_s"] >= conc[-1]["apc_tok_s"]
+
+
+def test_generate_nodes_four_agents_one_session() -> None:
+    cfg = plus_config(ForkServeConfig(page_size=8, bytes_per_token=1.0, max_batched_tokens=2048))
+    eng = Engine(MockBackend(cfg), cfg)
+    h = eng.open("shared trunk tokens for four agents")
+    kids = [eng.fork(h.id, h.tip, f"thought-{i}", f"agent {i} plan") for i in range(4)]
+    outs = eng.generate_nodes(h.id, kids, 3)
+    assert len(outs) == 4
+    assert all(len(o) == 3 for o in outs)
+    for kid in kids:
+        assert eng.tree(h.id).get(kid).mode is NodeMode.COMMIT
+        assert len(eng.tree(h.id).get(kid).residual) > 0
+    eng.close(h.id)

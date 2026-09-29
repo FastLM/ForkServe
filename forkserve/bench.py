@@ -2497,6 +2497,7 @@ def _orchestrate(args: argparse.Namespace) -> int:
         args,
         f"orchestrating systems={systems} tp={tps} gpus={devices} "
         f"workloads={args.workloads} limit={args.limit} chunk={getattr(args, 'chunk', 4)} "
+        f"turns={_n_turns(args)} branching={args.branching} "
         f"quality_only={bool(getattr(args, 'quality_only', False))} model={args.model} "
         f"progress={progress_log}",
     )

@@ -6,6 +6,7 @@ visible against vLLM recompute / APC.
 
 * ``gsm8k`` — grade-school word problems, Tree-of-Thoughts / self-consistency
   fan-out (same stem, B strategy prefixes). Protocol of Cobbe et al. 2021.
+  ``--turns N`` repeats the fan-out on the winner spine (multiturn ToT).
 * ``svamp`` / ``gsmhard`` — same ToT contract on grade-school variants
   (structure-perturbed / large-number GSM).
 * ``math500`` / ``aime`` / ``amc23`` — contest math, ToT fan-out, boxed gold.

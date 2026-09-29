@@ -255,6 +255,54 @@ def test_chunked_forest_keeps_item_count() -> None:
     assert len(game.item_ids) == 2
 
 
+def test_mock_tot_multiturn_four_agents() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "gsm8k,math500,game24",
+            "--branching", "4", "--turns", "3", "--step-decode", "4",
+            "--limit", "2", "--chunk", "1", "--decode", "4",
+            "--out", "/tmp/forkserve-tot-mt.json",
+        ]
+    )
+    rows = run_mock(args)
+    assert {r.workload for r in rows} == {"gsm8k", "math500", "game24"}
+    for row in rows:
+        assert row.turns == 3
+        assert row.branching == 4
+        assert row.sessions == 2
+        assert row.kv_saving > 0.3
+        assert row.peak_kv_tokens > 0
+        assert row.peak_kv_tokens < row.branching * max(row.trunk_tokens, 1) * row.sessions
+        assert "3-turn" in row.notes
+        assert row.decode_ids
+        assert len(row.decode_ids) == 2
+
+
+def test_parse_turns_default_keeps_single_fanout() -> None:
+    args = parse_args(["--out", "/tmp/forkserve-turns-default.json"])
+    assert args.turns == 1
+    assert args.step_decode >= 1
+    deep = parse_args(["--turns", "3", "--step-decode", "16", "--out", "/tmp/forkserve-turns-3.json"])
+    assert deep.turns == 3
+    assert deep.step_decode == 16
+
+
+def test_tot_turn_thoughts_layers() -> None:
+    from forkserve.bench_tasks import gsm8k_thoughts, tot_family, tot_turn_thoughts
+
+    assert tot_family("gsm8k") == "grade"
+    assert tot_family("math500") == "contest"
+    assert tot_family("game24") == "game24"
+    first = tot_turn_thoughts("grade", 4, 0, 3)
+    assert first == gsm8k_thoughts(4)
+    mid = tot_turn_thoughts("grade", 4, 1, 3)
+    last = tot_turn_thoughts("grade", 4, 2, 3)
+    assert len(mid) == len(last) == 4
+    assert mid != first
+    assert last != mid
+    assert all(t.startswith("Thought ") for t in mid + last)
+
+
 def test_format_table_speedup() -> None:
     rows = [
         {

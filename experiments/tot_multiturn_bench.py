@@ -98,44 +98,47 @@ def run_method(
         index = PrefillHashIndex(cfg.page_size)
         if method == "apc":
             index.publish(spine)
-        pinned_last = 0
         for turn in range(turns):
             texts = THOUGHTS[turn % len(THOUGHTS)][:branching]
             res = [_residual(residual, 100 * turn + j) for j in range(branching)]
             fulls = [spine + r for r in res]
+            clone = branching * len(spine) + branching * residual
+            nxt = _residual(residual, 100 * (turn + 1))
+            grown = spine + res[0] + tuple(range(1, step + 1))
+            next_prompt = grown + nxt
             if method == "apc":
                 # Hash hits the published spine; k residuals still miss.
                 prefill = sum(miss_tokens(index, p) for p in fulls)
                 skipped = branching * len(spine) + branching * residual - prefill
                 peak = len(spine) + branching * residual
-                clone = branching * len(spine) + branching * residual
                 pinned = 0
                 next_miss = 0
                 index.publish(spine + res[0])
+            elif method == "forkserve":
+                prefill = branching * residual
+                skipped = 0
+                peak = len(spine) + residual
+                pinned = 0
+                next_miss = residual
+                index.publish(spine + res[0])
             else:
                 plan = PrefillPruner(
-                    cfg, winner=0, hash_index=index if app else None
+                    cfg, winner=0, hash_index=index
                 ).plan(list(texts), full_prompts=fulls, token_counts=[residual] * branching)
                 prefill = plan.prefill_tokens
                 skipped = plan.skipped_tokens
-                peak = len(spine) + residual  # after abort: winner residual only
-                clone = branching * len(spine) + branching * residual
+                peak = len(spine) + residual
                 pinned = 0
-                nxt = _residual(residual, 100 * (turn + 1))
-                next_prompt = spine + res[0] + tuple(range(1, step + 1)) + nxt
-                if app and turn + 1 < turns:
+                next_miss = residual
+                if turn + 1 < turns:
                     filled = refill(
                         index,
-                        spine + res[0] + tuple(range(1, step + 1)),
+                        grown,
                         [nxt],
                         freed=freed_tokens(plan.decisions),
                     )
                     pinned = filled.pinned_tokens
                     next_miss = miss_tokens(index, next_prompt)
-                else:
-                    next_miss = residual
-                if method == "forkserve":
-                    index.publish(spine + res[0])
             saving = 0.0 if clone <= 0 else 1.0 - (peak / clone)
             rows.append(
                 TurnRow(
@@ -155,9 +158,7 @@ def run_method(
                     notes=f"session {s} turn {turn}",
                 )
             )
-            pinned_last = pinned
-            spine = spine + res[0] + tuple(range(1, step + 1))
-            _ = pinned_last
+            spine = grown
     return rows
 
 
