@@ -34,7 +34,7 @@
 \fill[fsgreen!75!black] (11.28,6.92) rectangle (16.45,7.28);
 \node[head] at (0.14,7.10) {1\quad Context tree};
 \node[head] at (5.76,7.10) {2\quad Prefill pruning};
-\node[head] at (11.42,7.10) {3\quad P/D handoff};
+\node[head] at (11.42,7.10) {3\quad Critical path};
 
 % ---------- 1. physical frames; k aliases point up; private ρ ----------
 \draw[fsblue!45, line width=0.5pt, rounded corners=1.2pt, fill=fslight]
@@ -163,18 +163,18 @@
 \node[chip, draw=fsgreen!55!black, fill=white, inner sep=1.1pt] at (13.90,6.28) {\texttt{insert}};
 \node[font=\tiny\sffamily, text=fsgreen!30!black] at (13.90,5.42) {kept KV};
 
-% fan-out time: stock ship-all vs gated insert (control-plane model)
-\node[font=\tiny\sffamily\bfseries, anchor=west] at (11.46,4.12) {fan-out time};
-\node[font=\tiny\sffamily, text=fsred, anchor=east] at (12.55,3.52) {stock};
-\fill[fsred!55] (12.68,3.34) rectangle (16.18,3.70);
-\node[font=\tiny\sffamily, text=white] at (14.43,3.52) {ship all \textperiodcentered\ $162$\,ms};
-\node[font=\tiny\sffamily, text=fsgain, anchor=east] at (12.55,2.62) {gate};
-\fill[fsgreen!65!black] (12.68,2.44) rectangle ({12.68+3.50*31.4/162},2.80);
-\node[font=\tiny\sffamily, text=fsgain, anchor=west] at ({12.78+3.50*31.4/162},2.62) {$31.4$\,ms};
-\fill[fsblue!6] (11.42,1.66) rectangle (16.32,2.10);
-\draw[fsblue!25, line width=0.3pt] (11.42,1.66) rectangle (16.32,2.10);
-\node[font=\tiny\sffamily, text=fsblue] at (13.87,1.88)
-  {same split \textperiodcentered\ less KV on the wire};
+% critical path: spine slots, overlap, tool-idle suffix
+\node[font=\tiny\sffamily\bfseries, anchor=west] at (11.46,4.22) {same decode step};
+\node[chip, draw=fsblue!55, fill=white, align=center] at (13.87,3.72)
+  {slots $C{=}\lfloor H/M_{\mathrm{spine}}\rfloor$};
+\node[chip, draw=fsgreen!55!black, fill=fscommit, align=center] at (13.87,3.12)
+  {decode $\parallel$ next $\rho_\star$};
+\node[chip, draw=fsorange!70, fill=fsspec, align=center] at (13.87,2.52)
+  {idle: pin $p{=}1$ suffix};
+\fill[fsblue!6] (11.42,1.66) rectangle (16.32,2.14);
+\draw[fsblue!25, line width=0.3pt] (11.42,1.66) rectangle (16.32,2.14);
+\node[font=\tiny\sffamily, text=fsblue] at (13.87,1.90)
+  {after the pause, only the obs tail};
 
 % residuals into APP; kept miss tail stops at the prefill card edge
 \draw[arr] (b2.east) -- ++(0.22,0) |- (5.38,6.58) -- (inr.west);
@@ -189,7 +189,7 @@
 \node[font=\tiny\sffamily, text=fsgray, anchor=west] at (3.22,1.33)
   {DeepSeek-R1 GSM8K, $8$\,GiB pool};
 \node[chip, draw=fsblue!40, fill=fslight] at (8.70,1.33) {$M_{\mathrm{spine}}=b(L+\ell_\star)$};
-\node[chip, draw=fsblue!40, fill=white] at (11.85,1.33) {$C\propto H/M$};
+\node[chip, draw=fsblue!40, fill=white] at (11.85,1.33) {$C{=}\lfloor H/M_{\mathrm{spine}}\rfloor$};
 \node[chip, draw=fsblue!40, fill=white] at (14.15,1.33) {$\Theta\propto C/T_{\mathrm{e2e}}$};
 
 % occupancy: pool 1.70--7.55 (5.85cm). APC full; FS 0.74 of that.

@@ -11,7 +11,7 @@
   arr/.style={-{Latex[length=1.5mm,width=1.15mm]}, line width=0.45pt, draw=fsblue!70},
   sarr/.style={-{Latex[length=1.2mm,width=0.9mm]}, densely dashed, draw=fsgray, line width=0.35pt},
 ]
-\path (0,-0.15) rectangle (16.50,7.15);
+\path (0,-1.50) rectangle (16.50,7.15);
 
 % ===== legend =====
 \node[font=\tiny\sffamily, anchor=west, text=fsblue] at (0.05,6.95)
@@ -97,7 +97,7 @@
   {$\Work{=}kL{+}\sum\ell_i$ \quad $\Xfer{=}0$ \quad $M{=}M_{\mathrm{clone}}$};
 
 % stock PD
-\node[font=\tiny\sffamily\bfseries, anchor=east, text=fspurple] at (1.55,2.00) {stock P/D};
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fspurple] at (1.55,2.00) {P/D disagg.};
 \node[box, minimum width=1.35cm, minimum height=0.55cm] (p1) at (2.45,2.00) {$k$ reqs};
 \node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fsmiss] (p2) at (4.35,2.00) {prefill all};
 \node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fsmiss] (p3) at (6.55,2.00) {\texttt{insert} all};
@@ -126,6 +126,24 @@
 \node[lab, anchor=west] at (9.60,0.56)
   {$\Work{=}L{+}\sum_{\Keep}\ell_i$ \quad $\Xfer{=}\sum_{\Keep}\Work_i$ \quad $M{\to}M_{\mathrm{spine}}$};
 
-\node[lab, anchor=west] at (0.10,0.08)
-  {Takeaway: APC and stock P/D incur the clone on the first expand; CoW removes the clone; \app{} additionally rejects non-winner $\Work$ and $\Xfer$ before a kernel or \texttt{insert}.};
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fsgreen!40!black] at (1.55,-0.16) {overlap};
+\node[box, minimum width=1.35cm, minimum height=0.55cm, fill=fslight] (v1) at (2.45,-0.16) {keep $\rho_\star$};
+\node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fscommit] (v2) at (4.35,-0.16) {decode step};
+\node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fscommit] (v3) at (6.55,-0.16) {prefill next};
+\node[box, minimum width=1.55cm, minimum height=0.55cm] (v4) at (8.65,-0.16) {admit slot};
+\draw[arr] (v1) -- (v2); \draw[arr] (v2) -- (v3); \draw[arr] (v3) -- (v4);
+\node[lab, anchor=west] at (9.60,-0.16)
+  {$B^s_t$ prefills the next winner \quad losers are not in the queue};
+
+\node[font=\tiny\sffamily\bfseries, anchor=east, text=fsorange!80!black] at (1.55,-0.88) {tool idle};
+\node[box, minimum width=1.35cm, minimum height=0.55cm, fill=fsspec] (i1) at (2.45,-0.88) {pause};
+\node[box, minimum width=1.55cm, minimum height=0.55cm, fill=fsspec] (i2) at (4.35,-0.88) {pin $p{=}1$};
+\node[box, minimum width=1.85cm, minimum height=0.55cm, fill=fscommit] (i3) at (6.55,-0.88) {obs arrives};
+\node[box, minimum width=1.55cm, minimum height=0.55cm] (i4) at (8.65,-0.88) {tail only};
+\draw[arr] (i1) -- (i2); \draw[arr] (i2) -- (i3); \draw[arr] (i3) -- (i4);
+\node[lab, anchor=west] at (9.60,-0.88)
+  {$\Pref\le\Idle(u)$ \quad else reject \quad $C{=}\lfloor H/M_{\mathrm{spine}}\rfloor$};
+
+\node[lab, anchor=west] at (0.10,-1.28)
+  {Takeaway: pruning removes non-winner work; the spine then sets the slot count, shares the decode step with the next winner, and absorbs a known suffix during the tool pause.};
 \end{tikzpicture}

@@ -62,9 +62,9 @@ $\Work_{\mathrm{APC}}=kL+\sum_i\ell_i$.
 A later replay of the committed winner is a full hash hit ($\Work{=}0$).
 Hash-only prefill therefore helps the second session, not the first expand.
 
-\paragraph{Why stock P/D does not raise tokens/s.}
-DistServe/Splitwise isolate \ttft{} from ITL by running prefill and decode on different instances and moving KV through a connector ($\texttt{insert}$ non-blocking, $\texttt{drop\_select}$ blocking)~\cite{distserve,splitwise}.
-The stock connector transfers the pages the prefiller computed,
+\paragraph{Why prefill--decode disaggregation does not raise tokens/s.}
+DistServe and Splitwise isolate \ttft{} from inter-token latency by placing prefill and decode on different instances and moving KV through a connector ($\texttt{insert}$ is non-blocking, $\texttt{drop\_select}$ blocks)~\cite{distserve,splitwise}.
+That baseline transfers every page the prefiller computed,
 \begin{equation}
 \label{eq:xfer-stock}
 \Xfer_{\mathrm{PD}}=kL+\textstyle\sum_i\ell_i,
@@ -81,7 +81,7 @@ In all four cases the next call is drawn from a discrete set $\Br(u)$; existing 
 
 \begin{insight}[Prune before prefill]
 \label{ins:prune}
-APC reuses a trunk only after a hash hit; stock P/D transfers the span that was computed.
+APC reuses a trunk only after a hash hit; prefill--decode disaggregation transfers the span that was computed.
 The missing operation is a per-residual decision $(\Work_i,\Xfer_i,a_i)$, issued \emph{before} a GPU kernel and \emph{before} \texttt{insert}.
 \end{insight}
 
@@ -117,7 +117,7 @@ IdleSpec~\cite{idlespec} & plan & n/a & \xmark & n/a & plan samples & plan \\
 Pie~\cite{pie} & inferlet & programmable & app-level & app-level & app-level & app-level \\
 ThunderAgent~\cite{thunderagent} & LLM program & hit-rate aware & \xmark & on arrival & \xmark & env. prep \\
 Hive~\cite{hive} & multi-agent & contribution & \xmark & on arrival & logits reuse & \xmark \\
-DistServe~\cite{distserve}/Splitwise~\cite{splitwise} & request & P/D ship-all & \xmark & isolated prefill & \xmark & stock connector \\
+DistServe~\cite{distserve}/Splitwise~\cite{splitwise} & request & full KV transfer & \xmark & isolated prefill & \xmark & disagg.\ connector \\
 \midrule
 \textbf{\sys} & \textbf{branch} & \textbf{tree TTL} & \textbf{CoW pages} & \textbf{APP filter} & \textbf{prune, keep winner} & \textbf{disagg gate} \\
 \bottomrule

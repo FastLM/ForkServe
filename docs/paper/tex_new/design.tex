@@ -108,10 +108,10 @@ The cascade is the stage that removes that work.
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{tex_new/fig_pipeline}}
-\caption{\textbf{Cost-ordered prefill pruning and transfer gating.}
-(a)~A residual exits at the first decisive stage: block-hash probe ($\otimes$), draft score ($\oplus$), kernel prefix ($\rhd$), then the GPU miss tail.
-Only a kept miss tail reaches \texttt{insert}.
-(b)~APC and stock P/D clone the trunk $k$ ways on the first expand; CoW aliases $L$; \app{} also rejects non-winner $\Work$ and $\Xfer$ before a kernel or a connector write.}
+\caption{\textbf{Cost-ordered prefill pruning and the critical path.}
+(a)~A residual exits at the first decisive stage. Only a kept miss tail reaches \texttt{insert}.
+(b)~APC and baseline disaggregation clone the trunk. CoW aliases $L$. \app{} keeps the winner.
+The overlap row prefills that next winner in the decode step. The tool-idle row pins a known suffix during the pause and leaves the observation tail.}
 \label{fig:app}
 \end{figure*}
 
@@ -211,7 +211,7 @@ Recompute & \botn{$kL+\sum_i\ell_i$} & $0$ & \botn{$kL+\sum_i\ell_i$} & $\Theta(
 APC (first expand) & \botn{$kL+\sum_i\ell_i$} & $0$ & $kL+\sum_i\ell_i$ & LRU of hashed $\rho$ & $k$ & $0$ \\
 hash prefill (first) & \botn{$kL+\sum_i\ell_i$} & $0$ & $kL+\sum_i\ell_i$ & LRU & $k$ & $0$ \\
 \rowcolor{tblalt}
-stock P/D & \botn{$kL+\sum_i\ell_i$} & \botn{$kL+\sum_i\ell_i$} & $kL+\sum_i\ell_i$ & $0$ (ship-all) & $k$ & $0$ \\
+P/D disagg. & \botn{$kL+\sum_i\ell_i$} & \botn{$kL+\sum_i\ell_i$} & $kL+\sum_i\ell_i$ & full KV transfer & $k$ & $0$ \\
 FS CoW & $L+\sum_i\ell_i$ & $0$ & \win{$L+\ell_\star$} & $\Theta(\ell_i/P)$ & $1$ & $L_{\mathrm{miss}}$ \\
 \rowcolor{tblalt}
 FS+ + P/D & \win{$L+\sum_{i\in\Keep}\ell_i$} & \win{$\sum_{i\in\Keep}\Work_i$} & \win{$L+\ell_\star$} & lazy, residual only & $1$ & \win{$0$} \\
@@ -252,12 +252,12 @@ The abort is therefore a prefix of the kernel, rather than a barrier on the rema
 Draft-skipped and early-aborted residuals are not in $\Keep$, so they never enter the connector buffer.
 
 \paragraph{Gated connector insert.}
-P/D disaggregation is a placement of prefill and decode~\cite{distserve,splitwise}.
+Prefill--decode disaggregation places prefill and decode on separate instances~\cite{distserve,splitwise}.
 It does not choose a branch.
 The connector stays vLLM-shaped---\texttt{insert} is non-blocking, \texttt{drop\_select} blocks---and a production pipe (Nixl, LMCache, Mooncake) keeps the same gate.
-Stock P/D uses \eqref{eq:xfer-stock} and therefore transfers the computed span, including the $k$-way trunk.
+Baseline disaggregation uses \eqref{eq:xfer-stock} and therefore transfers the computed span, including the $k$-way trunk.
 \app uses \eqref{eq:xfer}: $\Xfer_i$ is nonzero only for a kept residual whose action is $\mathrm{HP}$ or $\mathrm{PF}$, and then only for the miss tail that the kernel computed.
-Rejected residuals and hash-local hits stay on the prefill instance, so \app{}+P/D reduces both $\Work$ and $\Xfer$ relative to stock P/D.
+Rejected residuals and hash-local hits stay on the prefill instance, so gated transfer reduces both $\Work$ and $\Xfer$ relative to baseline disaggregation.
 Let $\mu$ be microseconds per transferred token.
 Fan-out time is
 \begin{equation}
@@ -265,7 +265,7 @@ Fan-out time is
 T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
 \end{equation}
 with $T_{\mathrm{CoW}}$ a pointer swap (no KV memcpy) and $T_{\mathrm{abort}}$ deferrable when \texttt{abort} is lazy.
-Under the control-plane model of \S\ref{sec:eval-app} ($\ell{\times}12\,\mu\mathrm{s}$, $\mu{=}2\,\mu\mathrm{s}$), \eqref{eq:tfan} is $139$\,ms for APC, $162$\,ms for stock P/D, $47$\,ms for CoW, and $31.4$\,ms for \app.
+Under the control-plane model of \S\ref{sec:eval-app} ($\ell{\times}12\,\mu\mathrm{s}$, $\mu{=}2\,\mu\mathrm{s}$), \eqref{eq:tfan} is $139$\,ms for APC, $162$\,ms for baseline disaggregation, $47$\,ms for CoW, and $31.4$\,ms for \app.
 
 \iffalse
 \paragraph{Orthogonal decode-length stop.}
@@ -277,21 +277,51 @@ If item $j$ hits a marker at $t_j$, emitted tokens are $D^{+}=\sum_j\min(t_j,D)\
 The stop ends a finished answer; it does not draft output tokens, and it does not change which residual was admitted.
 \fi
 
-\subsection{Two-Class Scheduling}
+\subsection{The Spine on the Critical Path}
 \label{sec:schedule}
-Each tick $t$ has a token budget $B_t$ from max batched tokens and the chunked-prefill cap~\cite{sarathi}.
+After \app, fan-out is the prefill of the kept residual.
+End-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}$, and $T_{\mathrm{dec}}$ is the long term.
+Three placements put the spine on that sum.
+A fixed chunk width and a fan-out barrier leave the freed KV and the pruned queue off the path.
+
+\paragraph{Slots follow the spine.}
+Let $H$ be the KV pool after weights.
+A live tree occupies $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+APC still holds the aborted residuals until they expire, so its live set is the larger $M_{\mathrm{APC}}$.
+The number of concurrent decode slots is
+\begin{equation}
+\label{eq:slots}
+C=\bigl\lfloor H/M\bigr\rfloor,
+\end{equation}
+with $M=M_{\mathrm{spine}}$ for \sys and $M=M_{\mathrm{APC}}$ for the prefix cache.
+$C$ is not a constant chunk size.
+A request that finishes its current decode step releases the slot, and the next queued spine takes it.
+Throughput is
+\begin{equation}
+\label{eq:theta}
+\Theta\;\propto\; C/T_{\mathrm{e2e}}.
+\end{equation}
+The same $H$ therefore admits more sessions once occupancy is the spine, and the wall clock of a batch is the number of waves $n/C$, not $n$ divided by a fixed width.
+
+\paragraph{Prefill the next winner during decode.}
+Each tick $t$ has a token budget $B_t$ from the chunked-prefill cap~\cite{sarathi}.
 JITServe's margin~\cite{jitserve} gives each committed request $r$ a minimum token rate $\underline{s}_r$.
-We allocate
 \begin{align}
 B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t}\max(\underline{s}_r\Delta,\;1)\Bigr), \label{eq:bc}\\
 B^{\mathrm{s}}_t &= B_t-B^{\mathrm{c}}_t. \label{eq:bs}
 \end{align}
-If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted: speculation is drawn from residual budget and is not additional load.
+$B^{\mathrm{c}}_t$ is committed decode.
+$B^{\mathrm{s}}_t$ is not spent on the $k{-}1$ residuals \app already rejected.
+It prefills the miss tail of the next winner, in the same step as the running decode.
+If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted.
+The fan-out of losers is not a generate that must finish before any decode token.
 A tree-sticky router pins the trunk to the worker that prefills the root; only residual work may migrate.
-Under P/D, speculative known suffixes are prefiller work tagged with $\texttt{soft-deadline}=\Idle(u)$ and produce small residuals that transfer once to the trunk-owner decoder.
-Throughput under an HBM pool of size $H$ is
-\begin{equation}
-\label{eq:theta}
-\Theta\;\propto\; C/T_{\mathrm{e2e}},\qquad C\;\propto\; H/M,
-\end{equation}
-so a measured drop from $M_{\mathrm{APC}}$ to $M_{\mathrm{spine}}$ raises SLO-feasible concurrency without changing the model.
+
+\paragraph{Hide the known suffix in the tool pause.}
+A candidate with $p{=}1$ is an exact wrapper, not a guess.
+If $\Pref(|w|)\le\Idle(u)$, that prefill runs while the tool is in flight, including when the parent is still marked committed.
+The pause is the deadline.
+A suffix that would finish after $\Idle(u)$ is rejected, as is any observation residual the pause cannot cover.
+When the observation arrives, LCP commit checks the pinned prefix and the committed prefill is the unmatched tail.
+Under P/D the same suffix is prefiller work tagged $\texttt{soft-deadline}=\Idle(u)$ and is inserted once, onto the trunk owner.
+Speculative tokens still do not enter the sampler, so Theorem~\ref{thm:correct} is unchanged.

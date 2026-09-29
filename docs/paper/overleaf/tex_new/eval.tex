@@ -3,7 +3,7 @@
 
 The GPU measurements share one node and one engine, and they differ by model, tensor-parallel width, and workload.
 \S\ref{sec:eval-gpu} is the full GSM8K forest on Qwen3-14B at $\mathrm{tp}{=}2$.
-\S\ref{sec:eval-app} is a control-plane cost model of \app, with no GPU, against APC, hash prefill, stock P/D, and \sys.
+\S\ref{sec:eval-app} is a control-plane cost model of \app, with no GPU, against APC, hash prefill, baseline prefill--decode disaggregation, and \sys.
 \S\ref{sec:eval-plus} runs ForkServe+ on Qwen3-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 \S\ref{sec:eval-multi} repeats the forest on six families at $n{=}40$.
 \S\ref{sec:eval-sens} sweeps branching, depth, pruning, and batch width on Llama-3-8B, Mistral-7B, and DeepSeek-R1-Distill-Llama-8B, then runs a $2048$-token contest forest on that DeepSeek model and on Qwen3-4B.
@@ -69,7 +69,7 @@ Ten sessions, $k{=}4$, $L{=}256$, $\ell{=}32$.
 Two of four residuals fail the draft score; the winner is index $0$.
 Prefill time is $\ell\times 12\,\mu\mathrm{s}/\mathrm{token}$; P/D transfer is $2\,\mu\mathrm{s}/\mathrm{token}$.
 APC and hash prefill publish blocks only after a request materializes them, so the first fan-out clones $k$ trunks.
-Stock P/D uses that prefill and then transfers the live token span.
+Baseline disaggregation uses that prefill and then transfers the live token span.
 \sys aliases the trunk by pointer swap and prefills the $k$ residuals.
 \app adds hash skip, draft prune, early abort, lazy abort, and a connector that inserts only retained residuals.
 
@@ -92,7 +92,7 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
  & APC & \botn{$11520$} & $139.0$ & $0$ & $11520$ & $0$ & $0$ \\
 \rowcolor{tblalt}
  & hash & \botn{$11520$} & $139.0$ & $0$ & $11520$ & $0$ & $0$ \\
- & stock P/D & \botn{$11520$} & \botn{$162.1$} & \botn{$11520$} & $11520$ & $0$ & $0$ \\
+ & P/D disagg. & \botn{$11520$} & \botn{$162.1$} & \botn{$11520$} & $11520$ & $0$ & $0$ \\
 \rowcolor{tblalt}
  & FS & $3840$ & $47.1$ & $0$ & $3840$ & $0$ & $0$ \\
  & ForkServe+ & \win{$2592$} & \win{$31.4$} & \win{$32$} & \win{$2880$} & $9$ & $30$ \\
@@ -106,7 +106,7 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
 \Cref{tab:app} is the comparison the GPU gap motivates.
 % and \Cref{fig:eval-stack} shows occupancy over the expand--abort--decode phase.
 On the first expand, hash prefill matches APC: the blocks are unpublished, so the hash probe does not remove the cloned trunks.
-Stock P/D exceeds APC ($162$ vs.\ $139$\,ms) because it transfers that clone.
+Baseline disaggregation exceeds APC ($162$ vs.\ $139$\,ms) because it transfers that clone.
 \sys removes the clone by aliasing the trunk ($3840$ prefill tokens, $47$\,ms).
 \app then withholds prefill from $30$ of the $40$ residuals, which reduces $T_{\mathrm{fan}}$ to $31.4$\,ms and the connector payload from $11520$ tokens to $32$.
 
