@@ -266,7 +266,7 @@ for system in ('vllm_apc', 'forkserve', 'forkserve_plus'):
 PYTHONPATH=. python experiments/tot_multiturn_bench.py
 ```
 
-GPU，多数据集（GSM8K / SVAMP / MATH-500 / AIME / AMC23 / Game24），默认 `--chunk 1` 所以一次 generate 就是 4 个 agent：
+GPU，多数据集（GSM8K / SVAMP / MATH-500 / AIME / AMC23 / Game24），默认 `--chunk 1` 所以一次 generate 就是 4 个 agent。GSM8K 的 APC 和 ForkServe 都走 `_iter_chunks`（和 Game24 同一道 chunk barrier）；不要再把 16 题塞进同一次 `LLM.generate`。
 
 ```bash
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"

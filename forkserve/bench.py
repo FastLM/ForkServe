@@ -1892,19 +1892,22 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
             decode_n=workload_decode(args, "gsm8k"),
         )
     thoughts = gsm8k_thoughts(args.branching)
-    width = _chunk_size(args)
-    trunks = _apply_depth([gsm8k_trunk(item) for item in problems], thoughts, args)
-    # One generate. max_num_seqs is ``width``: a request that finishes
-    # (answer stop or max_tokens) frees a slot for the next item.
-    row = _forest_tot_forkserve(
-        eng, cfg, args, "gsm8k", trunks, thoughts,
-        decode_n=workload_decode(args, "gsm8k"), inflight=width,
-    )
-    _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
-    row.item_ids = [p.item_id for p in problems]
-    _log_forest_chunk(args, "forkserve", "gsm8k", 0, problems, len(problems), row, [row])
-    _close_all(eng)
-    return row
+    parts: list[RunMetrics] = []
+    n_dec = workload_decode(args, "gsm8k")
+    # Same chunk barrier as Game24 / APC GSM8K. Do not keep the whole
+    # file in one forest: inflight was only peak-KV accounting and left
+    # generate_many free to batch across items.
+    for start, batch in _iter_chunks(problems, args):
+        trunks = _apply_depth([gsm8k_trunk(item) for item in batch], thoughts, args)
+        row = _forest_tot_forkserve(
+            eng, cfg, args, "gsm8k", trunks, thoughts, decode_n=n_dec,
+        )
+        _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _log_forest_chunk(args, "forkserve", "gsm8k", start, batch, len(problems), row, parts)
+        _close_all(eng)
+    return merge_metrics(parts)
 
 
 def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
@@ -2019,18 +2022,22 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
             decode_n=workload_decode(args, "gsm8k"),
         )
     thoughts = gsm8k_thoughts(args.branching)
-    trunks = _apply_depth([gsm8k_trunk(item) for item in problems], thoughts, args)
-    # Same slot width as ForkServe. A finished request admits the next
-    # queued item inside this generate; there is no chunk barrier.
-    row = _forest_tot_vllm(
-        llm, SamplingParams, TokensPrompt, system, cfg_bpt, args, "gsm8k",
-        trunks, thoughts,
-        decode_n=workload_decode(args, "gsm8k"), inflight=_chunk_size(args),
-    )
-    _set_golds(row, [p.answer for p in problems], _vllm_texts(llm, row.decode_ids))
-    row.item_ids = [p.item_id for p in problems]
-    _log_forest_chunk(args, system, "gsm8k", 0, problems, len(problems), row, [row])
-    return row
+    parts: list[RunMetrics] = []
+    n_dec = workload_decode(args, "gsm8k")
+    # Match ForkServe / Game24: ``--chunk 1`` is one problem (k agents)
+    # per generate. The old path passed inflight=chunk but still called
+    # ``_gen`` on all 16 trunks at once, so APC e2e was not comparable.
+    for start, batch in _iter_chunks(problems, args):
+        trunks = _apply_depth([gsm8k_trunk(item) for item in batch], thoughts, args)
+        row = _forest_tot_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt, args, "gsm8k",
+            trunks, thoughts, decode_n=n_dec,
+        )
+        _set_golds(row, [p.answer for p in batch], _vllm_texts(llm, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _log_forest_chunk(args, system, "gsm8k", start, batch, len(problems), row, parts)
+    return merge_metrics(parts)
 
 
 def _math_workload_spec(name: str):

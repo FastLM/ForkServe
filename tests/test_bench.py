@@ -255,6 +255,62 @@ def test_chunked_forest_keeps_item_count() -> None:
     assert len(game.item_ids) == 2
 
 
+def test_gsm8k_chunked_matches_game24_schedule() -> None:
+    args = parse_args(
+        [
+            "--backend", "mock", "--workloads", "gsm8k",
+            "--limit", "2", "--chunk", "1", "--decode", "2",
+            "--out", "/tmp/forkserve-gsm8k-chunked.json",
+        ]
+    )
+    row = run_mock(args)[0]
+    assert row.sessions == 2
+    assert len(row.item_ids) == 2
+    assert "2 chunks" in row.notes
+
+
+def test_gsm8k_vllm_chunks_one_problem_per_generate() -> None:
+    from forkserve import bench
+
+    sizes: list[int] = []
+
+    def fake_forest(*args: object, **kwargs: object) -> bench.RunMetrics:
+        trunks = args[7]
+        assert isinstance(trunks, (list, tuple))
+        n = len(trunks)
+        sizes.append(n)
+        return bench.RunMetrics(
+            system="vllm_apc",
+            workload="gsm8k",
+            tp=0,
+            e2e_ms=1.0,
+            sessions=n,
+            decode_ids=[[1]] * n,
+            notes=f"{n} items; 3-turn ToT × 4 agents; APC rebuilds k spines/turn",
+        )
+
+    orig_forest = bench._forest_tot_vllm
+    orig_texts = bench._vllm_texts
+    bench._forest_tot_vllm = fake_forest  # type: ignore[method-assign]
+    bench._vllm_texts = lambda *_a, **_k: ["#### 1"] * sizes[-1]  # type: ignore[method-assign]
+    try:
+        args = parse_args(
+            [
+                "--workloads", "gsm8k",
+                "--limit", "2", "--chunk", "1", "--decode", "2",
+                "--out", "/tmp/forkserve-gsm8k-vllm-chunked.json",
+            ]
+        )
+        row = bench.run_gsm8k_vllm(object(), object(), object(), "vllm_apc", 1.0, args)
+    finally:
+        bench._forest_tot_vllm = orig_forest
+        bench._vllm_texts = orig_texts
+
+    assert sizes == [1, 1]
+    assert row.sessions == 2
+    assert "2 chunks" in row.notes
+
+
 def test_mock_tot_multiturn_four_agents() -> None:
     args = parse_args(
         [
