@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from time import monotonic
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 from uuid import uuid4
 
 from forkserve.commit import CommitProtocol, CommitResult
@@ -82,6 +82,7 @@ class Engine:
         self.ngrams = NGramResidual(self.config.ngram_order, self.config.ngram_prefix)
         self.hash_index = None
         self._disagg = None
+        self._next_suffix: dict[SessionId, list[TokenSeq]] = {}
         if self.config.hash_prune:
             from forkserve.prefill_prune import PrefillHashIndex
 
@@ -466,8 +467,27 @@ class Engine:
                 continue
             if row.action in (PrefillAction.DRAFT_SKIP, PrefillAction.EARLY_ABORT):
                 self.abort(sid, kids[row.index], lazy=False)
+        if self.config.slack_fill and self.hash_index is not None and plan is not None:
+            from forkserve.slack_fill import freed_tokens, refill
+
+            spine = tree.get(kids[winner]).tokens if kids else ()
+            staged = self._next_suffix.pop(sid, [])
+            filled = refill(
+                self.hash_index,
+                spine,
+                staged,
+                freed=freed_tokens(plan.decisions),
+            )
+            bd.pinned_tokens = filled.pinned_tokens
         self.last_fanout = bd
         return bd
+
+    def stage_next_suffix(self, session: SessionId | str, tokens: TokenSeq | str) -> None:
+        """Queue a known suffix to pin into KV freed by the next prune."""
+        sid = SessionId(str(session))
+        if isinstance(tokens, str):
+            tokens = self._tok(tokens)
+        self._next_suffix.setdefault(sid, []).append(as_tokens(tokens))
 
     def _release_backend_node(
         self,
@@ -608,6 +628,73 @@ class Engine:
         if self.config.lazy_abort:
             self.drain_aborts()
         return result
+
+    def generate_nodes(
+        self,
+        session: SessionId | str,
+        nodes: Sequence[NodeId],
+        n_tokens: int,
+        *,
+        seed: int | None = None,
+    ) -> list[TokenSeq]:
+        """Committed decode on several nodes of one session (one multi-agent turn)."""
+        tree = self.forest.get(SessionId(str(session)))
+        live: list[NodeId] = []
+        for nid in nodes:
+            node = tree.get(nid)
+            if node.mode is NodeMode.DEAD:
+                continue
+            live.append(nid)
+        if not live or n_tokens <= 0:
+            return [() for _ in nodes]
+        seqs: list[TokenSeq] = []
+        parents: list[NodeId | None] = []
+        for nid in live:
+            node = tree.get(nid)
+            if node.mode is NodeMode.SPEC:
+                tree.set_mode(nid, NodeMode.COMMIT)
+            self.scheduler.submit_committed(
+                CommittedJob(
+                    session=tree.session,
+                    node_id=nid,
+                    tokens=n_tokens,
+                    kind="decode",
+                    slo_tokens_per_s=1000.0 / max(self.config.tbt_slo_ms, 1e-3),
+                    tenant=tree.tenant,
+                )
+            )
+            seqs.append(node.tokens)
+            parents.append(nid)
+        gen = getattr(self.backend, "generate_committed_many", None)
+        if callable(gen):
+            kwargs: dict[str, Any] = dict(
+                seed=seed,
+                node_ids=live,
+                parent_nodes=parents,
+                sessions=[str(tree.session)] * len(live),
+            )
+            try:
+                outs = gen(seqs, n_tokens, **kwargs)
+            except TypeError:
+                outs = gen(seqs, n_tokens)
+        else:
+            outs = []
+            for nid, seq in zip(live, seqs, strict=True):
+                one = getattr(self.backend, "generate_committed", None)
+                if callable(one):
+                    outs.append(one(seq, n_tokens, seed=seed, node_id=nid, parent_node=nid))
+                else:
+                    outs.append(self.backend.decode(DecodeRequest(tree.session, nid, n_tokens, seed=seed)))
+        produced: dict[NodeId, TokenSeq] = {}
+        for nid, out in zip(live, outs, strict=True):
+            tokens = tuple(out)
+            if tokens:
+                tree.append_tokens(nid, tokens, committed=True)
+                self.metrics[tree.session].committed_tokens += len(tokens)
+            produced[nid] = tokens
+        if self.config.lazy_abort:
+            self.drain_aborts()
+        return [produced.get(nid, ()) for nid in nodes]
 
     def queue_known_prefill(self, session: SessionId | str, node: NodeId) -> None:
         """Queue a child's residual (trunk is already in ``full_prompt``).

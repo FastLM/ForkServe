@@ -1,0 +1,31 @@
+{
+  "model": "/home/dliu/models/Qwen3-4B",
+  "rows": [
+    {
+      "mode": "bare",
+      "n": 8,
+      "tp": 4,
+      "answer_stop": "",
+      "decode_tokens_per_call": 1,
+      "fanout_ms": 134.5,
+      "pin_ms": 0.0,
+      "next_ms": 58.9,
+      "next_prompt_tokens": 768,
+      "pinned_suffix_tokens": 0,
+      "freed_residual_tokens": 192
+    },
+    {
+      "mode": "fill",
+      "n": 8,
+      "tp": 4,
+      "answer_stop": "",
+      "decode_tokens_per_call": 1,
+      "fanout_ms": 92.8,
+      "pin_ms": 47.3,
+      "next_ms": 30.2,
+      "next_prompt_tokens": 768,
+      "pinned_suffix_tokens": 192,
+      "freed_residual_tokens": 192
+    }
+  ]
+}

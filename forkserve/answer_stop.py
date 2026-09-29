@@ -177,7 +177,9 @@ class AnswerStopLogitsProcessor(_LogitsProcessor):
         for index, (ids, mode, hint) in list(self._rows.items()):
             # Full-string decode every step added tens of seconds on traces
             # that never stop (AIME). The answer marker is at the tail.
-            if index >= n or len(ids) < 8 or (len(ids) & 7) != 0:
+            # The step that wrote the answer has already finished. This
+            # runs before the next sample, so EOS is the following token.
+            if index >= n or len(ids) < 8:
                 continue
             try:
                 text = self._tok.decode(ids[-192:], skip_special_tokens=True)

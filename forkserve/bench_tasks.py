@@ -185,6 +185,35 @@ HUMANEVAL_SKETCHES = (
     "Filter, then map; avoid mutating the caller's list.",
 )
 
+# Later ToT turns: the four agents continue from the committed winner spine.
+CONTINUE_STRATEGIES = (
+    "Check the last step; fix any arithmetic slip, then continue.",
+    "Try an alternative identity on the same quantities.",
+    "Re-derive the last quantity from the givens before proceeding.",
+    "Keep the useful intermediate and drop the dead end.",
+)
+
+FINALIZE_STRATEGIES = (
+    "Write the remaining algebra and box the final number.",
+    "Substitute back and simplify to the asked quantity.",
+    "Audit units and signs, then give the answer.",
+    "State the answer on the last line in the required format.",
+)
+
+GAME24_CONTINUE = (
+    "Use the leftover two cards to finish 24.",
+    "Invert the last product and retry the unused pair.",
+    "Insert parentheses around the last subexpression.",
+    "Swap which card is the multiplier.",
+)
+
+GAME24_FINALIZE = (
+    "Write the full equation using each card once.",
+    "Clear parentheses and confirm the value is 24.",
+    "Reorder the last product so the leftover pair makes 1.",
+    "Emit one line: Equation: <expr> = 24",
+)
+
 
 def chat_style() -> str:
     """Qwen chat by default; DeepSeek-R1 distill uses its own special tokens."""
@@ -457,6 +486,37 @@ def contest_thoughts(branching: int) -> list[str]:
     for i in range(branching):
         out.append(w.thought_prefix(i) + CONTEST_STRATEGIES[i % len(CONTEST_STRATEGIES)])
     return out
+
+
+def tot_family(workload: str) -> str:
+    """Strategy pack for a ToT tree: grade-school, contest, or 24-game."""
+    if workload == "game24":
+        return "game24"
+    if workload in ("math500", "aime", "amc23"):
+        return "contest"
+    return "grade"
+
+
+def tot_turn_thoughts(family: str, branching: int, turn: int, turns: int) -> list[str]:
+    """One ToT / multi-agent layer: k thought prefixes for ``turn`` of ``turns``.
+
+    Turn 0 is the published single-turn pack (same strings as ``gsm8k_thoughts``
+    / ``contest_thoughts`` / ``game24_thoughts``). Later turns are continue /
+    finalize prefixes on the committed winner spine.
+    """
+    if turn <= 0 or turns <= 1:
+        if family == "game24":
+            return game24_thoughts(branching)
+        if family == "contest":
+            return contest_thoughts(branching)
+        return gsm8k_thoughts(branching)
+    w = _wrappers()
+    last = turn >= max(turns, 1) - 1
+    if family == "game24":
+        pack = GAME24_FINALIZE if last else GAME24_CONTINUE
+    else:
+        pack = FINALIZE_STRATEGIES if last else CONTINUE_STRATEGIES
+    return [w.thought_prefix(i) + pack[i % len(pack)] for i in range(branching)]
 
 
 def _read_json_or_jsonl(path: Path) -> list[dict]:

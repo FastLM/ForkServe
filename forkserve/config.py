@@ -82,6 +82,8 @@ class ForkServeConfig:
     prefill_keep_m: int = 0
     disagg_prefill: bool = False
     disagg_transfer_us_per_token: float = 2.0
+    # After a prune, pin next-turn known suffixes into the freed KV budget.
+    slack_fill: bool = False
 
     extra: dict[str, float] = field(default_factory=dict)
 

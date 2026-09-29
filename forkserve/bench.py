@@ -8,6 +8,13 @@ Workloads
 * ``humaneval`` — function completion + pytest tool-idle (ReAct wrappers).
 * ``tot`` / ``react`` / ``multi`` — synthetic microbenchmarks of the same verbs.
 
+``--turns N`` (N>1) is Tree-of-Thoughts *depth*: each problem is one
+session, each batch is ``k`` agents (``--branching``, default 4). Turn
+1..N-1 every agent emits a short step; losers abort; the winner spine
+is the parent of the next fan-out. Turn N is the published winner
+decode. CoW aliases the growing spine; APC / recompute rebuild
+``k`` copies of it every turn.
+
 Baselines (offline ``vllm.LLM.generate``):
 
 * ``vllm_recompute`` — prefix cache off; each branch prefills the full trunk.
@@ -168,6 +175,9 @@ class RunMetrics:
     hash_skips: int = 0
     early_aborts: int = 0
     transfer_tokens: int = 0
+    turns: int = 1
+    step_decode: int = 0
+    pinned_tokens: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -299,6 +309,10 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
     plus = str(getattr(args, "system", "")) == "forkserve_plus"
     if plus:
         cfg = plus_config(cfg)
+        # Stop only after the step that finished the answer. APC and
+        # plain ForkServe still run to max_tokens.
+        cfg.answer_stop = "auto"
+        cfg.prefill_keep_m = 1
         cfg.extra["spec_pool_tokens"] = float(
             extra_batched_tokens(cfg.max_batched_tokens, 0.26, cfg.spec_pool_frac)
         )
@@ -387,6 +401,54 @@ def _select_winner(eng: Any, session: Any, kids: Sequence[Any], winner: int = 0)
     from forkserve.types import JoinPolicy
 
     return eng.join(session, [keep], JoinPolicy.WINNER).node_id
+
+
+def _n_turns(args: argparse.Namespace | None, default: int = 1) -> int:
+    if args is None:
+        return max(1, int(os.environ.get("FORKSERVE_TURNS", default) or default))
+    return max(1, int(getattr(args, "turns", default) or default))
+
+
+def _step_decode(args: argparse.Namespace | None, default: int = 32) -> int:
+    if args is None:
+        return max(1, int(os.environ.get("FORKSERVE_STEP_DECODE", default) or default))
+    return max(1, int(getattr(args, "step_decode", default) or default))
+
+
+def _thought_turns(workload: str, branching: int, turns: int) -> list[list[str]]:
+    from forkserve.bench_tasks import tot_family, tot_turn_thoughts
+
+    family = tot_family(workload)
+    return [tot_turn_thoughts(family, branching, t, turns) for t in range(turns)]
+
+
+def _slack_fill_next(eng: Any, handles: Sequence[Any], suffixes: Sequence[str], freed: int) -> int:
+    """Pin the next-turn winner thought on the committed spine (ForkServe+)."""
+    if not getattr(eng.config, "slack_fill", False) or getattr(eng, "hash_index", None) is None:
+        return 0
+    from forkserve.slack_fill import refill
+
+    toks = [eng._tok(s) for s in suffixes[:1]]
+    pinned = 0
+    for h in handles:
+        tree = eng.tree(h.id)
+        if tree.tip is None:
+            continue
+        filled = refill(eng.hash_index, tree.get(tree.tip).tokens, toks, freed=freed)
+        pinned += filled.pinned_tokens
+    return pinned
+
+
+def _add_fanout(acc: dict[str, int], bd: Any) -> None:
+    if bd is None:
+        return
+    acc["pointer_swaps"] += int(getattr(bd, "pointer_swaps", 0) or 0)
+    acc["pruned"] += int(getattr(bd, "pruned", 0) or 0)
+    acc["prefilled"] += int(getattr(bd, "prefilled_branches", 0) or 0)
+    acc["hash_skips"] += int(getattr(bd, "hash_skips", 0) or 0)
+    acc["early_aborts"] += int(getattr(bd, "early_aborts", 0) or 0)
+    acc["transfer"] += int(getattr(bd, "transfer_tokens", 0) or 0)
+    acc["pinned"] += int(getattr(bd, "pinned_tokens", 0) or 0)
 
 
 def run_tot_forkserve(
@@ -577,6 +639,7 @@ def _vllm_llm(model: str, tp: int, args: argparse.Namespace, prefix_cache: bool)
         enable_prefix_caching=prefix_cache,
         enable_chunked_prefill=True,
         max_num_batched_tokens=args.max_batched_tokens,
+        max_num_seqs=_chunk_size(args),
         enforce_eager=args.enforce_eager,
     )
     return llm, SamplingParams, TokensPrompt
@@ -697,6 +760,9 @@ def merge_metrics(parts: Sequence[RunMetrics]) -> RunMetrics:
         hash_skips=sum(p.hash_skips for p in parts),
         early_aborts=sum(p.early_aborts for p in parts),
         transfer_tokens=sum(p.transfer_tokens for p in parts),
+        turns=a.turns,
+        step_decode=a.step_decode,
+        pinned_tokens=sum(p.pinned_tokens for p in parts),
     )
     return _set_golds(out, golds, texts, prompts)
 
@@ -1326,6 +1392,7 @@ def run_tot_forest_vllm(
     decode_n: int,
     prefix_cache: bool,
     workload: str,
+    inflight: int | None = None,
 ) -> RunMetrics:
     trunk_ids = [_tok_ids(llm, t) for t in trunks]
     res_ids = [_tok_ids(llm, th) for th in thoughts]
@@ -1346,11 +1413,16 @@ def run_tot_forest_vllm(
 
     cow = _mib(cow_memory_bytes(trunk_n * len(trunks), residuals, cfg_bpt))
     clone = _mib(clone_memory_bytes(trunk_n * len(trunks), residuals, cfg_bpt, k))
-    peak = (
-        sum(len(t) for t in trunk_ids) + sum(residuals)
-        if prefix_cache
-        else sum(len(b) for b in branches)
-    )
+    per_item = []
+    for t in trunk_ids:
+        if prefix_cache:
+            per_item.append(len(t) + sum(len(r) for r in res_ids))
+        else:
+            per_item.append(sum(len(t) + len(r) for r in res_ids))
+    if inflight is not None and inflight < len(per_item):
+        peak = _inflight_peak(per_item, inflight)
+    else:
+        peak = sum(per_item)
     return RunMetrics(
         system=system,
         workload=workload,
@@ -1365,12 +1437,262 @@ def run_tot_forest_vllm(
         m_clone_mib=clone,
         kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
         gpu_mem_mib=gpu_mem_mib(),
-        decode_tokens=decode_n * len(trunks),
+        decode_tokens=sum(len(d) for d in decoded),
         decode_per_item=decode_n,
         decode_ids=decoded,
         sessions=len(trunks),
         branching=len(thoughts),
-        notes=f"{len(trunks)} items; one fan-out generate + one winner decode",
+        notes=f"{len(trunks)} items; slot refill; one fan-out generate + one winner decode",
+    )
+
+
+def run_tot_mt_forest_forkserve(
+    eng: Any,
+    cfg: Any,
+    trunks: Sequence[str],
+    thought_turns: Sequence[Sequence[str]],
+    *,
+    decode_n: int,
+    step_n: int,
+    workload: str,
+    inflight: int | None = None,
+) -> RunMetrics:
+    """Multi-turn ToT: k agents per problem, winner spine is the next parent."""
+    turns = max(1, len(thought_turns))
+    k = max((len(layer) for layer in thought_turns), default=1)
+    trunk_ids = [eng._tok(t) for t in trunks]
+    layers = [[eng._tok(th) for th in layer] for layer in thought_turns]
+    plus = bool(getattr(eng.config, "prune_enabled", False) or getattr(eng.config, "lazy_abort", False))
+    sys_name = "forkserve_plus" if plus else "forkserve"
+    fan = {
+        "pointer_swaps": 0,
+        "pruned": 0,
+        "prefilled": 0,
+        "hash_skips": 0,
+        "early_aborts": 0,
+        "transfer": 0,
+        "pinned": 0,
+    }
+    t0 = _now()
+    handles = [eng.open(ids, flush=False) for ids in trunk_ids]
+    residuals: list[int] = []
+    trunk_n = 0
+    peak = 0
+    fanout_ms = 0.0
+    decode_ms = 0.0
+    cow_ms = 0.0
+    prefill_ms = 0.0
+    abort_ms = 0.0
+    pinned = 0
+    for turn, (texts, knowns) in enumerate(zip(thought_turns, layers, strict=True)):
+        last = turn == turns - 1
+        t_cow0 = _now()
+        all_kids: list[list[Any]] = []
+        turn_res = 0
+        for h in handles:
+            tree = eng.tree(h.id)
+            parent = tree.tip
+            trunk_n = len(tree.get(parent).tokens)
+            kids: list[Any] = []
+            for i, known in enumerate(knowns):
+                nid = eng.fork(h.id, parent, f"t{turn}-{i}", known)
+                kids.append(nid)
+                residuals.append(len(known))
+                turn_res += len(known)
+            all_kids.append(kids)
+            if hasattr(eng, "queue_fanout_prefills"):
+                eng.queue_fanout_prefills(h.id, kids, list(texts), winner=0)
+            else:
+                for nid in kids:
+                    eng.queue_known_prefill(h.id, nid)
+            _add_fanout(fan, getattr(eng, "last_fanout", None))
+        t_cow = _now()
+        eng.flush()
+        t_fan = _now()
+        cow_ms += (t_cow - t_cow0) * 1000.0
+        prefill_ms += (t_fan - t_cow) * 1000.0
+        fanout_ms += (t_fan - t_cow0) * 1000.0
+        if not last and step_n > 0 and hasattr(eng, "generate_nodes"):
+            t_step = _now()
+            for h, kids in zip(handles, all_kids, strict=True):
+                tree = eng.tree(h.id)
+                live = [c for c in kids if tree.get(c).is_live()]
+                if live:
+                    eng.generate_nodes(h.id, live, step_n)
+            decode_ms += (_now() - t_step) * 1000.0
+        t_ab0 = _now()
+        for h, kids in zip(handles, all_kids, strict=True):
+            if kids:
+                _select_winner(eng, h.id, kids, winner=0)
+        abort_ms += (_now() - t_ab0) * 1000.0
+        fanout_ms += (_now() - t_ab0) * 1000.0
+        per_item = [int(eng.tree(h.id).live_kv_tokens()) for h in handles]
+        if inflight is not None and inflight < len(handles):
+            peak = max(peak, _inflight_peak(per_item, inflight))
+        else:
+            peak = max(peak, sum(per_item))
+        if not last:
+            n_drop = max(k - 1, 1)
+            freed = n_drop * (turn_res // max(len(handles) * k, 1))
+            nxt = thought_turns[turn + 1] if turn + 1 < turns else ()
+            extra = _slack_fill_next(eng, handles, nxt, freed)
+            pinned += extra
+            fan["pinned"] += extra
+    from forkserve.answer_stop import stop_mode_for
+
+    prev_mode = str(getattr(eng.config, "answer_stop", "") or "")
+    mode = stop_mode_for(workload, prev_mode)
+    eng.config.answer_stop = mode
+    t_dec = _now()
+    try:
+        if hasattr(eng, "generate_many"):
+            outs = eng.generate_many([h.id for h in handles], decode_n)
+        else:
+            outs = [eng.generate(h.id, decode_n) for h in handles]
+    finally:
+        eng.config.answer_stop = prev_mode
+    decode_ms += (_now() - t_dec) * 1000.0
+    t1 = _now()
+    last_spine = trunk_n
+    last_res = [len(x) for x in layers[-1]] if layers else []
+    cow, clone, saving = _peak_memory(
+        cfg, last_spine * len(handles), last_res * len(handles), len(handles) * k
+    )
+    hits = [eng.metrics[h.id].known_suffix_hit_rate for h in handles]
+    n_out = sum(len(o) for o in outs)
+    return RunMetrics(
+        system=sys_name,
+        workload=workload,
+        tp=0,
+        e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=fanout_ms,
+        decode_ms=decode_ms,
+        trunk_tokens=len(trunk_ids[0]) if trunk_ids else 0,
+        residual_tokens=residuals,
+        peak_kv_tokens=int(peak),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=saving,
+        gpu_mem_mib=gpu_mem_mib(),
+        known_suffix_hit_rate=sum(hits) / max(len(hits), 1),
+        decode_tokens=n_out,
+        decode_per_item=decode_n,
+        decode_ids=[[int(t) for t in o] for o in outs],
+        sessions=len(handles),
+        branching=k,
+        turns=turns,
+        step_decode=step_n,
+        pinned_tokens=pinned,
+        notes=(
+            f"{len(handles)} items; {turns}-turn ToT × {k} agents; "
+            f"{'lazy' if plus else 'sync'} abort; peak is winner spine"
+            + (
+                f"; slot refill inflight={inflight}"
+                if inflight is not None and inflight < len(handles)
+                else ""
+            )
+        ),
+        cow_ms=cow_ms,
+        prefill_ms=prefill_ms,
+        abort_mark_ms=abort_ms,
+        pointer_swaps=fan["pointer_swaps"],
+        pruned_branches=fan["pruned"],
+        prefilled_branches=fan["prefilled"],
+        hash_skips=fan["hash_skips"],
+        early_aborts=fan["early_aborts"],
+        transfer_tokens=fan["transfer"],
+    )
+
+
+def run_tot_mt_forest_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    system: str,
+    cfg_bpt: float,
+    trunks: Sequence[str],
+    thought_turns: Sequence[Sequence[str]],
+    *,
+    decode_n: int,
+    step_n: int,
+    prefix_cache: bool,
+    workload: str,
+    inflight: int | None = None,
+) -> RunMetrics:
+    """Same k-agent depth-d tree as ``run_tot_mt_forest_forkserve``."""
+    turns = max(1, len(thought_turns))
+    trunk_ids = [_tok_ids(llm, t) for t in trunks]
+    layers = [[_tok_ids(llm, th) for th in layer] for layer in thought_turns]
+    k = max((len(layer) for layer in layers), default=1)
+    spines = [list(t) for t in trunk_ids]
+    residuals: list[int] = []
+    t0 = _now()
+    if prefix_cache:
+        _gen(llm, SamplingParams, TokensPrompt, trunk_ids, 1)
+    fanout_ms = 0.0
+    decode_ms = 0.0
+    peak = 0
+    decoded: list[list[int]] = []
+    for turn, res_ids in enumerate(layers):
+        last = turn == turns - 1
+        residuals.extend(len(r) for _ in spines for r in res_ids)
+        branches = [s + r for s in spines for r in res_ids]
+        if prefix_cache:
+            per_item = [len(s) + sum(len(r) for r in res_ids) for s in spines]
+        else:
+            per_item = [sum(len(s) + len(r) for r in res_ids) for s in spines]
+        if inflight is not None and inflight < len(per_item):
+            peak = max(peak, _inflight_peak(per_item, inflight))
+        else:
+            peak = max(peak, sum(per_item))
+        t_fan = _now()
+        if last:
+            _gen(llm, SamplingParams, TokensPrompt, branches, 1)
+            fanout_ms += (_now() - t_fan) * 1000.0
+            winners = [s + res_ids[0] for s in spines]
+            t_dec = _now()
+            decoded = _gen(llm, SamplingParams, TokensPrompt, winners, decode_n)
+            decode_ms += (_now() - t_dec) * 1000.0
+        else:
+            steps = _gen(llm, SamplingParams, TokensPrompt, branches, step_n)
+            fanout_ms += (_now() - t_fan) * 1000.0
+            nxt: list[list[int]] = []
+            for i, s in enumerate(spines):
+                step = steps[i * k] if steps else []
+                nxt.append(s + res_ids[0] + list(step))
+            spines = nxt
+    t1 = _now()
+    last_spine = len(spines[0]) if spines else 0
+    last_res = [len(r) for r in layers[-1]] if layers else []
+    from forkserve.pages import clone_memory_bytes, cow_memory_bytes
+
+    cow = _mib(cow_memory_bytes(last_spine * len(trunks), last_res * len(trunks), cfg_bpt))
+    clone = _mib(clone_memory_bytes(last_spine * len(trunks), last_res * len(trunks), cfg_bpt, len(trunks) * k))
+    return RunMetrics(
+        system=system,
+        workload=workload,
+        tp=0,
+        e2e_ms=(t1 - t0) * 1000.0,
+        fanout_ms=fanout_ms,
+        decode_ms=decode_ms,
+        trunk_tokens=len(trunk_ids[0]) if trunk_ids else 0,
+        residual_tokens=residuals,
+        peak_kv_tokens=int(peak),
+        m_cow_mib=cow,
+        m_clone_mib=clone,
+        kv_saving=0.0 if clone <= 0 else 1.0 - (cow / clone),
+        gpu_mem_mib=gpu_mem_mib(),
+        decode_tokens=sum(len(d) for d in decoded),
+        decode_per_item=decode_n,
+        decode_ids=decoded,
+        sessions=len(trunks),
+        branching=k,
+        turns=turns,
+        step_decode=step_n,
+        notes=(
+            f"{len(trunks)} items; {turns}-turn ToT × {k} agents; "
+            f"{'APC' if prefix_cache else 'recompute'} rebuilds k spines/turn"
+        ),
     )
 
 
@@ -1452,13 +1774,76 @@ def run_react_forest_vllm(
     )
 
 
-def _apply_depth(trunks: list[str], thoughts: Sequence[str]) -> list[str]:
-    """Prefix the committed thought so a second fan-out sits on a longer spine."""
+def _apply_depth(
+    trunks: list[str],
+    thoughts: Sequence[str],
+    args: argparse.Namespace | None = None,
+) -> list[str]:
+    """Prefix the committed thought so a second fan-out sits on a longer spine.
+
+    Real ``--turns N`` already grows the spine; skip this fake extra layer.
+    """
+    if _n_turns(args) > 1:
+        return trunks
     depth = int(os.environ.get("FORKSERVE_DEPTH", "1") or 1)
     if depth <= 1 or not thoughts:
         return trunks
     extra = thoughts[0]
     return [t + extra for t in trunks]
+
+
+def _forest_tot_forkserve(
+    eng: Any,
+    cfg: Any,
+    args: argparse.Namespace,
+    workload: str,
+    trunks: Sequence[str],
+    thoughts: Sequence[str],
+    *,
+    decode_n: int,
+    idle_ms: float = 0.0,
+    inflight: int | None = None,
+) -> RunMetrics:
+    turns = _n_turns(args)
+    if turns <= 1:
+        return run_tot_forest_forkserve(
+            eng, cfg, trunks, thoughts,
+            decode_n=decode_n, idle_ms=idle_ms, workload=workload, inflight=inflight,
+        )
+    return run_tot_mt_forest_forkserve(
+        eng, cfg, trunks, _thought_turns(workload, args.branching, turns),
+        decode_n=decode_n, step_n=_step_decode(args), workload=workload, inflight=inflight,
+    )
+
+
+def _forest_tot_vllm(
+    llm: Any,
+    SamplingParams: Any,
+    TokensPrompt: Any,
+    system: str,
+    cfg_bpt: float,
+    args: argparse.Namespace,
+    workload: str,
+    trunks: Sequence[str],
+    thoughts: Sequence[str],
+    *,
+    decode_n: int,
+    inflight: int | None = None,
+) -> RunMetrics:
+    turns = _n_turns(args)
+    prefix = system == "vllm_apc"
+    if turns <= 1:
+        return run_tot_forest_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+            trunks, thoughts,
+            decode_n=decode_n, prefix_cache=prefix, workload=workload, inflight=inflight,
+        )
+    return run_tot_mt_forest_vllm(
+        llm, SamplingParams, TokensPrompt, system, cfg_bpt,
+        trunks, _thought_turns(workload, args.branching, turns),
+        decode_n=decode_n, step_n=_step_decode(args), prefix_cache=prefix,
+        workload=workload, inflight=inflight,
+    )
 
 
 def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
@@ -1473,19 +1858,19 @@ def run_gsm8k_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetr
             decode_n=workload_decode(args, "gsm8k"),
         )
     thoughts = gsm8k_thoughts(args.branching)
-    parts: list[RunMetrics] = []
-    for start, batch in _iter_chunks(problems, args):
-        trunks = _apply_depth([gsm8k_trunk(item) for item in batch], thoughts)
-        row = run_tot_forest_forkserve(
-            eng, cfg, trunks, thoughts,
-            decode_n=workload_decode(args, "gsm8k"), idle_ms=0.0, workload="gsm8k",
-        )
-        _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
-        row.item_ids = [p.item_id for p in batch]
-        parts.append(row)
-        _log_forest_chunk(args, "forkserve", "gsm8k", start, batch, len(problems), row, parts)
-        _close_all(eng)
-    return merge_metrics(parts)
+    width = _chunk_size(args)
+    trunks = _apply_depth([gsm8k_trunk(item) for item in problems], thoughts, args)
+    # One generate. max_num_seqs is ``width``: a request that finishes
+    # (answer stop or max_tokens) frees a slot for the next item.
+    row = _forest_tot_forkserve(
+        eng, cfg, args, "gsm8k", trunks, thoughts,
+        decode_n=workload_decode(args, "gsm8k"), inflight=width,
+    )
+    _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
+    row.item_ids = [p.item_id for p in problems]
+    _log_forest_chunk(args, "forkserve", "gsm8k", 0, problems, len(problems), row, [row])
+    _close_all(eng)
+    return row
 
 
 def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMetrics:
@@ -1503,11 +1888,11 @@ def run_game24_forkserve(eng: Any, cfg: Any, args: argparse.Namespace) -> RunMet
     os.environ["FORKSERVE_MIN_TOKENS"] = "24"
     try:
         for start, batch in _iter_chunks(problems, args):
-            trunks = _apply_depth([game24_trunk(item) for item in batch], thoughts)
+            trunks = _apply_depth([game24_trunk(item) for item in batch], thoughts, args)
             eng.config.answer_stop_hints = tuple(p.question for p in batch)
-            row = run_tot_forest_forkserve(
-                eng, cfg, trunks, thoughts,
-                decode_n=args.decode, idle_ms=0.0, workload="game24",
+            row = _forest_tot_forkserve(
+                eng, cfg, args, "game24", trunks, thoughts,
+                decode_n=args.decode,
             )
             eng.config.answer_stop_hints = ()
             _set_golds(row, [p.question for p in batch], _fs_texts(eng, row.decode_ids))
@@ -1600,19 +1985,18 @@ def run_gsm8k_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: str
             decode_n=workload_decode(args, "gsm8k"),
         )
     thoughts = gsm8k_thoughts(args.branching)
-    parts: list[RunMetrics] = []
-    for start, batch in _iter_chunks(problems, args):
-        trunks = _apply_depth([gsm8k_trunk(item) for item in batch], thoughts)
-        row = run_tot_forest_vllm(
-            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-            trunks, thoughts,
-            decode_n=workload_decode(args, "gsm8k"), prefix_cache=(system == "vllm_apc"), workload="gsm8k",
-        )
-        _set_golds(row, [p.answer for p in batch], _vllm_texts(llm, row.decode_ids))
-        row.item_ids = [p.item_id for p in batch]
-        parts.append(row)
-        _log_forest_chunk(args, system, "gsm8k", start, batch, len(problems), row, parts)
-    return merge_metrics(parts)
+    trunks = _apply_depth([gsm8k_trunk(item) for item in problems], thoughts, args)
+    # Same slot width as ForkServe. A finished request admits the next
+    # queued item inside this generate; there is no chunk barrier.
+    row = _forest_tot_vllm(
+        llm, SamplingParams, TokensPrompt, system, cfg_bpt, args, "gsm8k",
+        trunks, thoughts,
+        decode_n=workload_decode(args, "gsm8k"), inflight=_chunk_size(args),
+    )
+    _set_golds(row, [p.answer for p in problems], _vllm_texts(llm, row.decode_ids))
+    row.item_ids = [p.item_id for p in problems]
+    _log_forest_chunk(args, system, "gsm8k", 0, problems, len(problems), row, [row])
+    return row
 
 
 def _math_workload_spec(name: str):
@@ -1647,9 +2031,9 @@ def run_named_math_forkserve(eng: Any, cfg: Any, args: argparse.Namespace, workl
     # One generate for the whole file. max_num_seqs stays at ``width``, so a
     # request that answer-stops frees a slot for the next queued item instead
     # of leaving the batch on the longest trace until the chunk barrier.
-    row = run_tot_forest_forkserve(
-        eng, cfg, trunks, thoughts,
-        decode_n=n_dec, idle_ms=0.0, workload=workload, inflight=width,
+    row = _forest_tot_forkserve(
+        eng, cfg, args, workload, trunks, thoughts,
+        decode_n=n_dec, inflight=width,
     )
     _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
     row.item_ids = [p.item_id for p in problems]
@@ -1676,10 +2060,9 @@ def run_named_math_vllm(
     parts: list[RunMetrics] = []
     for start, batch in _iter_chunks(problems, args):
         trunks = [trunk_fn(item) for item in batch]
-        row = run_tot_forest_vllm(
-            llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-            trunks, thoughts,
-            decode_n=n_dec, prefix_cache=(system == "vllm_apc"), workload=workload,
+        row = _forest_tot_vllm(
+            llm, SamplingParams, TokensPrompt, system, cfg_bpt, args, workload,
+            trunks, thoughts, decode_n=n_dec,
         )
         _set_golds(row, [p.answer for p in batch], _vllm_texts(llm, row.decode_ids))
         row.item_ids = [p.item_id for p in batch]
@@ -1703,11 +2086,10 @@ def run_game24_vllm(llm: Any, SamplingParams: Any, TokensPrompt: Any, system: st
     os.environ["FORKSERVE_MIN_TOKENS"] = "24"
     try:
         for start, batch in _iter_chunks(problems, args):
-            trunks = _apply_depth([game24_trunk(item) for item in batch], thoughts)
-            row = run_tot_forest_vllm(
-                llm, SamplingParams, TokensPrompt, system, cfg_bpt,
-                trunks, thoughts,
-                decode_n=args.decode, prefix_cache=(system == "vllm_apc"), workload="game24",
+            trunks = _apply_depth([game24_trunk(item) for item in batch], thoughts, args)
+            row = _forest_tot_vllm(
+                llm, SamplingParams, TokensPrompt, system, cfg_bpt, args, "game24",
+                trunks, thoughts, decode_n=args.decode,
             )
             _set_golds(row, [p.question for p in batch], _vllm_texts(llm, row.decode_ids))
             row.item_ids = [p.item_id for p in batch]
@@ -2160,6 +2542,10 @@ def _orchestrate(args: argparse.Namespace) -> int:
                 str(args.limit),
                 "--chunk",
                 str(getattr(args, "chunk", 4)),
+                "--turns",
+                str(_n_turns(args)),
+                "--step-decode",
+                str(_step_decode(args)),
                 "--out",
                 str(shard),
             ]
@@ -2250,6 +2636,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--idle-ms", type=float, default=2000.0)
     p.add_argument("--branching", type=int, default=4)
+    p.add_argument(
+        "--turns",
+        type=int,
+        default=int(os.environ.get("FORKSERVE_TURNS", "1")),
+        help="ToT depth. 1 = published single fan-out; N>1 = k agents × N turns on one problem",
+    )
+    p.add_argument(
+        "--step-decode",
+        type=int,
+        default=int(os.environ.get("FORKSERVE_STEP_DECODE", "32")),
+        help="tokens each agent decodes on intermediate ToT turns (ignored when --turns 1)",
+    )
     p.add_argument("--sessions", type=int, default=2)
     p.add_argument("--trunk-tokens", type=int, default=512)
     p.add_argument("--max-model-len", type=int, default=4096)

@@ -21,6 +21,7 @@ class FanoutBreakdown:
     transfer_ms: float = 0.0
     prefill_tokens: int = 0
     skipped_prefill_tokens: int = 0
+    pinned_tokens: int = 0
 
     @property
     def fanout_ms(self) -> float:
@@ -42,6 +43,7 @@ class FanoutBreakdown:
             "transfer_ms": self.transfer_ms,
             "prefill_tokens": float(self.prefill_tokens),
             "skipped_prefill_tokens": float(self.skipped_prefill_tokens),
+            "pinned_tokens": float(self.pinned_tokens),
             "fanout_ms": self.fanout_ms,
         }
 

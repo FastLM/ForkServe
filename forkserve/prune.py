@@ -101,6 +101,7 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     cfg.skip_known_losers = True
     cfg.share_prefixes = True
     cfg.gc_admit = True
+    cfg.slack_fill = True
     # Winner plus one alternate. Wider fan-outs are draft-skipped, not prefilled.
     cfg.prefill_keep_m = 2
     cfg.spec_pool_frac = 0.25 if cfg.spec_pool_frac <= 0 else cfg.spec_pool_frac
@@ -118,8 +119,9 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
         cfg.skip_known_losers = "skip" in want
         cfg.prune_enabled = bool(want & {"skip", "prune"})
         cfg.hash_prune = "hash" in want or cfg.hash_prune
-        cfg.answer_stop = "auto" if "stop" in want else ""
+        cfg.answer_stop = "auto" if "stop" in want else cfg.answer_stop
         cfg.lazy_abort = "lazy" in want or cfg.lazy_abort
-    elif not cfg.answer_stop:
-        cfg.answer_stop = "auto"
+    # Answer-stop stays off unless the caller or FORKSERVE_PLUS_FLAGS=stop
+    # asks for it. APC runs to max_tokens; a default stop would shorten
+    # only the ForkServe+ decode.
     return cfg

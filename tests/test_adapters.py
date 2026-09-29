@@ -70,3 +70,21 @@ def test_tot_expand_select(eng: Engine) -> None:
     live = [n for n in eng.tree(h.id).live_nodes() if n.branch_id.startswith("thought")]
     assert eng.tree(h.id).get(winner).mode is NodeMode.COMMIT
     assert all(n.mode is NodeMode.DEAD or n.id == kids[1] for n in live)
+
+
+def test_tot_run_turns_keeps_winner_spine(eng: Engine) -> None:
+    ad = ToTAdapter(eng, ToolWrappers(), branching=4)
+    h = eng.open("shared problem trunk")
+    turns = [
+        ["Thought 1: plan A", "Thought 2: plan B", "Thought 3: plan C", "Thought 4: plan D"],
+        ["Thought 1: continue A", "Thought 2: continue B", "Thought 3: continue C", "Thought 4: continue D"],
+        ["Thought 1: box A", "Thought 2: box B", "Thought 3: box C", "Thought 4: box D"],
+    ]
+    tip = ad.run_turns(h.id, h.tip, turns, winner=0)
+    tree = eng.tree(h.id)
+    live = [n for n in tree.live_nodes() if n.id != tree.root]
+    assert tree.get(tip).mode is NodeMode.COMMIT
+    assert tree.tip == tip
+    assert all(n.mode is NodeMode.DEAD or n.id == tip or n.id == tree.root for n in tree.live_nodes())
+    assert tree.live_kv_tokens() < 4 * len(tree.get(tree.root).tokens)
+    assert live
