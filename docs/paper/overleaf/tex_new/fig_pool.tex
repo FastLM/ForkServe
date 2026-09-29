@@ -37,8 +37,8 @@
 \node[fmbadge=fsblue] at (0.42,5.12) {1};
 \node[anchor=west,font=\tiny\sffamily\bfseries] at (0.64,5.12) {Request table \(\sigma_u\)};
 \node[tbox=fsblue,minimum width=0.64cm,minimum height=0.30cm] (uu) at (1.22,4.74) {\(u\)};
-\node[tbox=fsorange,minimum width=0.70cm,minimum height=0.30cm] (v1) at (0.52,4.40) {\(\rho_1\)};
-\node[tbox=fsgreen,minimum width=0.70cm,minimum height=0.30cm] (vs) at (1.36,4.40) {\(\rho_\star\)};
+\node[tbox=fsorange,minimum width=0.70cm,minimum height=0.30cm] (v1) at (0.52,4.40) {\(\sigma_1\)};
+\node[tbox=fsgreen,minimum width=0.70cm,minimum height=0.30cm] (vs) at (1.36,4.40) {\(\sigma_\star\)};
 \node[tbox=fsgray,minimum width=0.56cm,minimum height=0.30cm] (vk) at (2.12,4.40) {\(\cdots\)};
 \draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (v1.north);
 \draw[fsblue!70,densely dashed,line width=0.45pt] (uu.south) -- (vs.north);
@@ -74,7 +74,7 @@
 \node[fmcard=fsgreen,minimum width=5.35cm,minimum height=0.34cm] at (3.05,2.36)
   {\(v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)\)};
 \node[fmcard=fsgreen,minimum width=5.35cm,minimum height=0.34cm] at (3.05,1.98)
-  {full blocks \(\rightarrow H\)};
+  {\(H\leftarrow H\cup\{x_\star\}\)};
 \node[fmcard=fspurple,minimum width=5.35cm,minimum height=0.34cm] at (3.05,1.66)
   {\(g\leftarrow g{+}1\) retires in-flight spec};
 % ===================== 7. abort =====================
@@ -131,3 +131,82 @@
    \textcolor{fsgray}{free}\qquad
    dashed edge \(=\) alias};
 \end{tikzpicture}
+\iffalse
+% Alternate symbolic drawing. Kept for reuse; not compiled.
+% Symbolic page pool. The previous drawing is kept below and is not rendered.
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\scriptsize\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  panel/.style={draw=fsblue!28, line width=0.5pt, rounded corners=1.2pt, fill=white},
+  head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
+  eq/.style={font=\scriptsize\sffamily, anchor=west, inner sep=0.5pt},
+  pg/.style={draw=fsblue!70, fill=fsblue!12, minimum width=0.72cm, minimum height=0.52cm,
+             font=\tiny\sffamily, inner sep=1pt},
+  priv/.style={draw=fsorange!75!black, fill=fsspec, minimum width=0.62cm, minimum height=0.42cm,
+               font=\tiny\sffamily, inner sep=0.6pt},
+  alias/.style={densely dashed, line width=0.4pt, draw=fsblue!60},
+]
+\path (0,0) rectangle (16.45,5.55);
+
+\draw[panel] (0,0) rectangle (7.55,5.55);
+\draw[panel] (7.78,0) rectangle (16.45,5.55);
+\fill[fsblue] (0,5.18) rectangle (7.55,5.55);
+\fill[fsorange!85!black] (7.78,5.18) rectangle (16.45,5.55);
+\node[head] at (0.14,5.36) {operations};
+\node[head] at (7.92,5.36) {one physical trunk, $k$ aliases};
+
+\node[eq] at (0.18,4.78) {$\texttt{fork}(\sigma_u)$};
+\node[eq] at (0.36,4.32) {$\sigma_i\leftarrow(\sigma_u,|x_u|),\quad \mathrm{ref}(p){+}{=}1$};
+\node[eq] at (0.36,3.86) {allocate $\rho_i$ only,\ $O(1)$};
+
+\node[eq] at (0.18,3.28) {write on $p$,\ $\mathrm{ref}(p)>1$};
+\node[eq] at (0.36,2.82) {copy the valid rows of $p$};
+\node[eq] at (0.36,2.36) {$\mathrm{ref}(p){-}{=}1$, writer owns the copy};
+
+\node[eq] at (0.18,1.78) {$\texttt{lcp\_commit}(x_\star)$};
+\node[eq] at (0.36,1.32) {$H\leftarrow H\cup\{x_\star\},\quad g\leftarrow g{+}1$};
+
+\node[eq] at (0.18,0.74) {$\texttt{abort}(\sigma_i)$};
+\node[eq] at (0.36,0.28) {free $\rho_i$;\ $\mathrm{ref}(p){=}0\Rightarrow$ free list};
+
+% right: before abort — shared pages, private residual
+\node[font=\tiny\sffamily\bfseries, anchor=west] at (7.96,4.95) {before abort};
+\foreach \x in {8.55,9.40,10.25,11.10} {
+  \node[pg] at (\x,4.38) {$p$};
+}
+\node[font=\tiny\sffamily, anchor=west, text=fsblue] at (11.62,4.38) {$\mathrm{ref}(p){=}k$};
+\node[draw=fsgreen!60!black, fill=fscommit, rounded corners=1pt, font=\tiny\sffamily,
+      inner sep=1.2pt, minimum width=0.95cm] (a0) at (8.70,3.28) {$\sigma_\star$};
+\node[draw=fsgray, fill=black!4, densely dashed, rounded corners=1pt, font=\tiny\sffamily,
+      inner sep=1.2pt, minimum width=0.95cm] (a1) at (11.15,3.28) {$\sigma_i$};
+\node[draw=fsorange!75!black, fill=fsspec, rounded corners=1pt, font=\tiny\sffamily,
+      inner sep=1.2pt, minimum width=0.95cm] (ak) at (13.60,3.28) {$\sigma_k$};
+\draw[alias] (a0.north) -- (9.40,4.12);
+\draw[alias] (a1.north) -- (9.82,4.12);
+\draw[alias] (ak.north) -- (10.25,4.12);
+\node[priv] (r0) at (8.70,2.52) {$\rho_\star$};
+\node[priv] (r1) at (11.15,2.52) {$\rho_i$};
+\node[priv] (rk) at (13.60,2.52) {$\rho_k$};
+\draw[-{Latex[length=1.4mm]}, line width=0.4pt, draw=fsorange!75!black] (a0.south) -- (r0.north);
+\draw[-{Latex[length=1.4mm]}, line width=0.4pt, draw=fsorange!75!black] (a1.south) -- (r1.north);
+\draw[-{Latex[length=1.4mm]}, line width=0.4pt, draw=fsorange!75!black] (ak.south) -- (rk.north);
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (14.55,2.52) {$\notin H$};
+
+% right: after
+\node[font=\tiny\sffamily\bfseries, anchor=west] at (7.96,1.95) {after abort of $i\neq\star$};
+\foreach \x in {8.55,9.40,10.25,11.10} {
+  \node[pg] at (\x,1.38) {$p$};
+}
+\node[font=\tiny\sffamily, anchor=west, text=fsgreen!35!black] at (11.62,1.38) {$\mathrm{ref}(p)\ge 1$};
+\node[draw=fsgreen!60!black, fill=fscommit, rounded corners=1pt, font=\tiny\sffamily,
+      inner sep=1.2pt, minimum width=0.95cm] (b0) at (8.70,0.48) {$\sigma_\star$};
+\draw[alias] (b0.north) -- (9.40,1.12);
+\node[priv] (rb) at (10.55,0.48) {$\rho_\star$};
+\draw[-{Latex[length=1.4mm]}, line width=0.4pt, draw=fsorange!75!black] (b0.east) -- (rb.west);
+\node[font=\scriptsize\sffamily, anchor=west] at (11.55,0.48)
+  {$M_{\mathrm{spine}}=b(L+\ell_\star)$};
+\end{tikzpicture}
+
+\fi

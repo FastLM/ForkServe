@@ -45,7 +45,7 @@ TTL and offload are node-granular: speculative leaves first, then idle committed
 \resizebox{\textwidth}{!}{\input{tex_new/fig_pool}}
 \caption{\textbf{Context-tree page pool.}
 \texttt{fork} aliases the trunk in $O(1)$ and allocates only $\rho$~\textcircled{1}--\textcircled{3}.
-$H$ publishes full committed blocks~\textcircled{4}\textcircled{6}.
+LCP commit publishes $x_\star$ into $H$~\textcircled{4}\textcircled{6}.
 \texttt{abort} returns residual frames only, so live occupancy is the spine $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
 \label{fig:pool}
 \end{figure*}
@@ -131,15 +131,17 @@ Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also f
 The order above is one action per residual.
 Write $\Act=\{\mathrm{HS},\mathrm{DS},\mathrm{EA},\mathrm{HP},\mathrm{PF}\}$
 for hash skip, draft skip, early abort, hash partial, and prefill.
-For residual $\rho_i$ of $\ell_i$ tokens against a published index $H$,
+Let $m_i$ be the longest prefix of $\rho_i$ covered by full pages of the published index $H$, so $m_i\in\{0,P,2P,\ldots\}$ and $m_i\le\ell_i$.
+The probe key is $\mathrm{trunk}\Vert\rho_i$, but the trunk itself is the alias written by \texttt{fork} ($\sigma_i\leftarrow(\sigma_u,|x_u|)$), so $L$ is absent from $\Work_i$ and $\Work_i\le\ell_i$ on every action.
+Cases below are first-match.
 \begin{equation}
 \label{eq:action}
 a_i=\begin{cases}
-\mathrm{HS} & H\text{ covers }\rho_i,\\
-\mathrm{HP} & H\text{ covers a proper prefix,}\\
-\mathrm{DS} & s_i<\tau\text{ and the prefix is clean,}\\
-\mathrm{EA} & \text{the first }\alpha\ell_i\text{ already fails,}\\
-\mathrm{PF} & \text{otherwise.}
+\mathrm{HS} & m_i=\ell_i,\\
+\mathrm{HP} & 0<m_i<\ell_i,\\
+\mathrm{DS} & m_i=0,\ s_i<\tau\text{ and the prefix is clean,}\\
+\mathrm{EA} & m_i=0\text{ and the first }\alpha\ell_i\text{ already fails,}\\
+\mathrm{PF} & \text{otherwise }(m_i=0).
 \end{cases}
 \end{equation}
 Winner $i{=}0$ is forced to $\Keep$.
@@ -160,6 +162,10 @@ GPU work and connector payload are
 \end{cases}
 \label{eq:xfer}
 \end{align}
+A full hit is a retrieval: $m_i=\ell_i$ reads published KV and issues no kernel ($\Work_i=\Xfer_i=0$).
+A proper prefix retrieves $m_i$ tokens and prefills the uncovered tail $\ell_i-m_i$.
+A miss ($m_i=0$) has an empty probe. The draft score runs, and a residual that remains is a prefill of $\ell_i$ on the aliased trunk.
+Speculative pages stay out of $H$ until LCP commit, so the first expand of an unpublished child has $m_i=0$.
 Hash-local hits stay on the decode instance (the same published blocks are APC-visible there).
 Draft-skipped and early-aborted residuals never enter the buffer.
 \Cref{alg:app} is the per-fan-out plan; \Cref{tab:span} is the first-fan-out span.
@@ -172,18 +178,25 @@ Draft-skipped and early-aborted residuals never enter the buffer.
 \REQUIRE residuals, hash index $H$, threshold $\tau$, fraction $\alpha$
 \ENSURE actions $a_i$, work $\Work_i$, transfer $\Xfer_i$
 \FOR{$i=1$ \TO $k$}
-  \STATE $m_i\leftarrow H.\mathrm{lookup}(\mathrm{trunk}\Vert\rho_i)$ \COMMENT{full blocks only}
-  \STATE $s_i\leftarrow\mathrm{DraftScore}(\rho_i)$
-  \IF{$i=\mathrm{winner}$}
-    \STATE $a_i\leftarrow\mathrm{PF}$ or $\mathrm{HP}$; keep $i$
-  \ELSIF{$m_i$ covers $\rho_i$}
-    \STATE $a_i\leftarrow\mathrm{HS}$
-  \ELSIF{$s_i<\tau$ and prefix-fails$(\rho_i)$}
-    \STATE $a_i\leftarrow\mathrm{EA}$; $\Work_i\leftarrow\lceil\alpha\ell_i\rceil$
-  \ELSIF{$s_i<\tau$}
-    \STATE $a_i\leftarrow\mathrm{DS}$; $\Work_i\leftarrow 0$
+  \STATE $m_i\leftarrow H.\mathrm{lookup}(\mathrm{trunk}\Vert\rho_i)$ \COMMENT{full pages of $\rho_i$}
+  \IF{$m_i=\ell_i$}
+    \STATE $a_i\leftarrow\mathrm{HS}$; $\Work_i\leftarrow 0$ \COMMENT{retrieve}
+  \ELSIF{$0<m_i<\ell_i$}
+    \STATE $a_i\leftarrow\mathrm{HP}$; $\Work_i\leftarrow\ell_i-m_i$
   \ELSE
-    \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i-m_i$
+    \STATE $s_i\leftarrow\mathrm{DraftScore}(\rho_i)$ \COMMENT{$m_i=0$, no row to read}
+    \IF{$i=\mathrm{winner}$}
+      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$
+    \ELSIF{$s_i<\tau$ and prefix-fails$(\rho_i)$}
+      \STATE $a_i\leftarrow\mathrm{EA}$; $\Work_i\leftarrow\lceil\alpha\ell_i\rceil$
+    \ELSIF{$s_i<\tau$}
+      \STATE $a_i\leftarrow\mathrm{DS}$; $\Work_i\leftarrow 0$
+    \ELSE
+      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$
+    \ENDIF
+  \ENDIF
+  \IF{$i=\mathrm{winner}$ \OR $a_i\in\{\mathrm{HS},\mathrm{HP},\mathrm{PF}\}$}
+    \STATE keep $i$
   \ENDIF
   \STATE gate \texttt{insert} by \eqref{eq:xfer}
 \ENDFOR
@@ -236,15 +249,14 @@ On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{A
 \paragraph{Block-hash pruning.}
 The first stage is a table probe and issues no model FLOPs.
 The index key is $\mathrm{hash}(\mathrm{parent},\;\mathrm{block\_tokens},\;\mathrm{extra})$, with $\mathrm{extra}$ carrying LoRA id, multimodal hash, or $\mathrm{cache\_salt}$ on block $0$~\cite{vllm}.
-Only full pages enter $H$, so a hit means those rows already exist and $\Work_i{=}0$.
-A proper-prefix hit ($\mathrm{HP}$) prefills only the miss tail.
-Speculative pages are never published; LCP commit inserts full blocks of $x_\star$, which is what makes a later session a hash hit rather than another fan-out.
+Only full pages enter $H$, which is why \eqref{eq:action} tests $m_i$ in steps of $P$.
+LCP commit inserts full blocks of $x_\star$, which is what makes a later session a hash hit ($m_i=\ell_i$) rather than another fan-out.
 \texttt{fork} itself does not walk hashes: aliasing stays $O(1)$, and the lookup is a filter on the residual, not part of creating the child.
 A hash-local hit is also not a transfer.
 The same published blocks are already APC-visible on the decode instance, so $\Xfer_i{=}0$ even though the residual is kept.
 
 \paragraph{Draft-score rejection.}
-On a hash miss the next stage is a CPU score, still before the prefill kernel.
+On a miss ($m_i=0$ in \eqref{eq:action}) the next stage is a CPU score, still before the prefill kernel.
 Each residual receives a score from illegal-token and repetition checks, token entropy, or an optional draft model.
 A score below $\tau$ (default $0.15$) is $\mathrm{DS}$: that residual is not submitted to prefill and is not inserted as a hash key.
 If the residual has already entered chunked prefill and the first fraction $\alpha{=}0.20$ fails, the action is $\mathrm{EA}$ and only $\lceil\alpha\ell_i\rceil$ tokens are charged.

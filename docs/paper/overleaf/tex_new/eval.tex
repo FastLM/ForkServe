@@ -297,6 +297,51 @@ Peak KV is $275$ against APC $318$ on GSM8K ($0.86\times$) and $216$ against $26
 \sys stays within $6\%$ of APC end-to-end ($1.00$--$1.06\times$).
 Across $16$ problems, three turns, and four agents, the expand issues $192$ residuals.
 ForkServe+ prefills $48$ of them and withholds the other $144$ before they reach the GPU.
+
+\begin{table}[t]
+\centering
+\caption{Expand versus decode, milliseconds per problem.
+Expand is the prefill of the $k$ residuals across three turns.
+On APC that timer also includes the two $32$-token step decodes; \sys and ForkServe+ charge those steps to decode.
+Speedup in \Cref{fig:eval-mt-split} is APC expand time over the other system.
+Shortest time in each trio in green.}
+\label{tab:mt-split}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{lrrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & \multicolumn{3}{c}{Expand (ms)} & \multicolumn{3}{c}{Decode (ms)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & APC & FS & FS+ & APC & FS & FS+ \\
+\midrule
+4B GSM8K & $429$ & $83$ & \win{$55$} & \win{$1215$} & $1680$ & $1572$ \\
+\rowcolor{tblalt}
+4B Game24 & $435$ & $87$ & \win{$53$} & $1166$ & $1552$ & \win{$1074$} \\
+8B GSM8K & $597$ & $94$ & \win{$58$} & $1867$ & $2468$ & \win{$1848$} \\
+\rowcolor{tblalt}
+8B Game24 & $598$ & $94$ & \win{$56$} & $1538$ & $2060$ & \win{$1466$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_mt_split}}
+\caption{\textbf{Expand versus APC} on the same four runs as \Cref{tab:mt-split}.
+(a)~Expand milliseconds per problem.
+(b)~Speedup of that expand over APC. The dashed line is $1\times$.
+\sys is $5.0$--$6.4\times$ and ForkServe+ is $7.9$--$10.6\times$.
+Decode in \Cref{tab:mt-split} does not repeat that ratio: the step decodes sit in the \sys decode column, so \sys end-to-end stays with APC.}
+\label{fig:eval-mt-split}
+\end{figure}
+
+\Cref{tab:mt-split,fig:eval-mt-split} separate that expand from the winner decode.
+The expand speedup is $5.0$--$6.4\times$ for \sys and $7.9$--$10.6\times$ for ForkServe+.
+Decode does not match it.
+\sys decode is slower than APC because the two step decodes are timed there, which is why end-to-end stays at $1.00$--$1.06\times$.
 % Answer stop, not for the paper. It moves end-to-end only when it shortens
 % the trace. Qwen3-4B GSM8K stays at 0.98x (208 vs 214 tokens; 1.63s vs 1.66s).
 % Where it cuts the answer, end-to-end is 0.70--0.77x: Qwen3-4B Game24 1.13s
