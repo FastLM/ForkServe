@@ -228,36 +228,6 @@ gsm8k,svamp,gsmhard,math500,aime,amc23,game24
 
 `--limit 0` 跑完整 jsonl/csv，此时 `--chunk` 必须 ≥ 1（脚本默认 4，上面用 8）。质量对照、不做 fan-out 时加 `--quality-only`：`peak_kv` 和 `fanout_ms` 保持 0，只比单路径生成。
 
-### 3.4 多轮 multi-agent ToT（4 agents / 一题）
-
-单轮 ToT 是一次 4 路 fan-out 再解码赢家。多轮是 Tree-of-Thoughts 的深度：每题一个 session，每个 batch 是这题上的 **k=4 个 agent**。第 1..N-1 轮每个 agent 写一小步，输家 abort，赢家脊成为下一轮的父节点；第 N 轮是原来的赢家 decode。脊随轮次变长：APC / recompute 每轮重建 k 份脊，ForkServe 只 alias，APP 再把下一轮已知 thought 填进刚释放的 slack。
-
-控制面（无 GPU），8 session × 4 agent × 3 轮：
-
-```bash
-PYTHONPATH=. python experiments/tot_multiturn_bench.py
-```
-
-GPU，多数据集（GSM8K / SVAMP / MATH-500 / AIME / AMC23 / Game24），默认 `--chunk 1` 所以一次 generate 就是 4 个 agent：
-
-```bash
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
-PYTHONPATH=. python scripts/tot_mt_compare.py
-```
-
-环境变量：`TOT_MT_LIMIT`（默认 16）、`TOT_MT_TURNS`（默认 3）、`TOT_MT_STEP`（中间轮 decode，默认 32）、`TOT_MT_CHUNK`（题/batch，默认 1）、`TOT_MT_WORKLOADS`、`TOT_MT_SWEEP=1`（再跑 depth 2/4）。直接调 bench：
-
-```bash
-PYTHONPATH=. python -m forkserve.bench \
-  --systems vllm_apc,forkserve,forkserve_plus \
-  --workloads gsm8k,svamp,math500,aime,amc23,game24 \
-  --turns 3 --step-decode 32 --branching 4 --chunk 1 \
-  --limit 16 --decode 256 \
-  --out logs/tot_mt/eval.json
-```
-
-`--turns 1` 是原来的单轮 forest，已有数字不受影响。多轮行上 `turns`、`step_decode`、`pinned_tokens` 在 JSON 里。汇总：`python scripts/summarize_tot_mt.py logs/tot_mt`。要看的是：同一 workload 上 `peak_kv` 和 `e2e_ms` ForkServe / APP < APC，`task_score` 不塌（赢家仍是 thought-0 路径）。
-
 DeepSeek-R1 distill 权重会自动设 `FORKSERVE_CHAT_STYLE=deepseek_r1`（路径里含 `deepseek` 或 `r1-distill`）。其它聊天模板用环境变量 `FORKSERVE_CHAT_STYLE`。
 
 ### 3.3 怎么读 GPU JSON
@@ -286,12 +256,45 @@ for system in ('vllm_apc', 'forkserve', 'forkserve_plus'):
 
 `tp` 改成实际写入 JSON 的值。曲线点是 `{items, decode_tokens, accuracy, solved}`。
 
+### 3.4 多轮 multi-agent ToT（4 agents / 一题）
+
+单轮 ToT 是一次 4 路 fan-out 再解码赢家。多轮是 Tree-of-Thoughts 的深度：每题一个 session，每个 batch 是这题上的 **k=4 个 agent**。第 1..N-1 轮每个 agent 写一小步，输家 abort，赢家脊成为下一轮的父节点；第 N 轮是原来的赢家 decode。脊随轮次变长：APC / recompute 每轮重建 k 份脊，ForkServe 只 alias，APP 再把下一轮已知 thought 填进刚释放的 slack。
+
+控制面（无 GPU），8 session × 4 agent × 3 轮：
+
+```bash
+PYTHONPATH=. python experiments/tot_multiturn_bench.py
+```
+
+GPU，多数据集（GSM8K / SVAMP / MATH-500 / AIME / AMC23 / Game24），默认 `--chunk 1` 所以一次 generate 就是 4 个 agent：
+
+```bash
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3}"
+PYTHONPATH=. python scripts/tot_mt_compare.py
+# or: bash scripts/tot_mt_compare.sh
+```
+
+环境变量：`TOT_MT_LIMIT`（默认 16）、`TOT_MT_TURNS`（默认 3）、`TOT_MT_STEP`（中间轮 decode，默认 32）、`TOT_MT_CHUNK`（题/batch，默认 1）、`TOT_MT_WORKLOADS`、`TOT_MT_SWEEP=1`（再跑 depth 2/4）。直接调 bench：
+
+```bash
+PYTHONPATH=. python -m forkserve.bench \
+  --systems vllm_apc,forkserve,forkserve_plus \
+  --workloads gsm8k,svamp,math500,aime,amc23,game24 \
+  --turns 3 --step-decode 32 --branching 4 --chunk 1 \
+  --limit 16 --decode 256 \
+  --out logs/tot_mt/eval.json
+```
+
+`--turns 1` 是原来的单轮 forest，已有数字不受影响。多轮行上 `turns`、`step_decode`、`pinned_tokens` 在 JSON 里。汇总：`python scripts/summarize_tot_mt.py logs/tot_mt`。要看的是：同一 workload 上 `peak_kv` 和 `e2e_ms` ForkServe / APP < APC，`task_score` 不塌（赢家仍是 thought-0 路径）。
+
 ## 4. 产物
 
 | 文件 | 内容 |
 |---|---|
 | `experiments/hash_forkserve_bench.json` | APC / CoW / hybrid 活页、命中、别名 |
 | `experiments/prefill_prune_bench.json` | 五方法 × {fanout, replay}、summary、合成曲线、QPS 扫描 |
+| `experiments/tot_multiturn_bench.json` | 4 agent × 3 轮 ToT：APC / ForkServe / APP 的 prefill 与峰值 KV |
+| `logs/tot_mt/eval.json` | 多数据集 GPU 多轮 ToT；`scripts/tot_mt_compare.py` |
 | `logs/hash_app/eval_plus.json` | mock 的 baseline vs plus、并发上界 |
 | `logs/hash_app/bench_<system>_tp<tp>.json` | 单个 GPU worker |
 | `logs/hash_app/eval.json` | 合并表；`table` 字段是 stdout 那张表 |
@@ -310,6 +313,7 @@ for system in ('vllm_apc', 'forkserve', 'forkserve_plus'):
 | 无望兄弟在成为哈希键之前丢掉 | 档 1 `pruned`；档 2 `pruned_branches` |
 | 库存 disagg 不提高吞吐；APP 少算少传 | 档 1 `disagg_prefill.xfer_tok` vs `app.xfer_tok` |
 | 赢家 decode 只看见提交脊 | 档 2 `task_score` 不塌；峰值 KV 不含输家残差 |
+| 多轮 ToT 脊变长时 CoW 仍只付残差 | 档 1 `tot_multiturn_bench`；档 2 `--turns 3 --chunk 1` |
 | 式 (9) 并发随 M 下降而上升 | 档 1 `concurrency`；档 2 用实测 `peak_kv_tokens` 代入，不要用合成 192→256 代替 |
 
 档 1 的 192→256 QPS 来自默认的 GSM8K 峰值令牌假设（APC 1563、ForkServe 1163）和 8 GiB KV 池，不是这次 GPU 跑出来的。GPU 跑完后用 `eval.json` 里的 `peak_kv_tokens` 重算才是该模型、该 TP 的容量。
