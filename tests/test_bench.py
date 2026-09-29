@@ -311,6 +311,57 @@ def test_gsm8k_vllm_chunks_one_problem_per_generate() -> None:
     assert "2 chunks" in row.notes
 
 
+def test_named_math_forkserve_chunks_one_problem_per_generate() -> None:
+    from types import SimpleNamespace
+
+    from forkserve import bench
+
+    sizes: list[int] = []
+    inflights: list[object] = []
+
+    def fake_forest(*args: object, **kwargs: object) -> bench.RunMetrics:
+        trunks = args[4]
+        assert isinstance(trunks, (list, tuple))
+        n = len(trunks)
+        sizes.append(n)
+        inflights.append(kwargs.get("inflight"))
+        return bench.RunMetrics(
+            system="forkserve",
+            workload=str(args[3]),
+            tp=0,
+            e2e_ms=1.0,
+            sessions=n,
+            decode_ids=[[1]] * n,
+            notes=f"{n} items; 3-turn ToT × 4 agents; sync abort; peak is winner spine",
+        )
+
+    eng = SimpleNamespace(forest=SimpleNamespace(sessions={}), close=lambda _sid: None)
+    orig = bench._forest_tot_forkserve
+    orig_texts = bench._fs_texts
+    bench._forest_tot_forkserve = fake_forest  # type: ignore[method-assign]
+    bench._fs_texts = lambda *_a, **_k: ["#### 1"] * sizes[-1]  # type: ignore[method-assign]
+    try:
+        for workload in ("svamp", "math500", "aime", "amc23"):
+            sizes.clear()
+            inflights.clear()
+            args = parse_args(
+                [
+                    "--workloads", workload,
+                    "--limit", "2", "--chunk", "1", "--decode", "2",
+                    "--turns", "3",
+                    "--out", "/tmp/forkserve-math-chunked.json",
+                ]
+            )
+            row = bench.run_named_math_forkserve(eng, object(), args, workload)
+            assert sizes == [1, 1], workload
+            assert inflights == [None, None], workload
+            assert row.sessions == 2, workload
+            assert "2 chunks" in row.notes, workload
+    finally:
+        bench._forest_tot_forkserve = orig
+        bench._fs_texts = orig_texts
+
+
 def test_mock_tot_multiturn_four_agents() -> None:
     args = parse_args(
         [

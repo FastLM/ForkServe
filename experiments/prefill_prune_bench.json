@@ -266,6 +266,99 @@
       "decode_tokens": 5120,
       "notes": "replay published winner; APP hash-skips the full prompt",
       "extra": {}
+    },
+    {
+      "method": "esc",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 2560,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 30.72,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 276.48,
+      "live_pages": 0,
+      "peak_kv_tokens": 23040,
+      "hash_hits": 30,
+      "hash_skips": 0,
+      "pruned": 0,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 20480,
+      "notes": "ESC window 5 stays open at k=4; each child decodes to the budget",
+      "extra": {
+        "decision_tokens": 512.0,
+        "decode_until_cut": 20480.0,
+        "loser_tokens": 10240.0,
+        "esc_window": 5.0
+      }
+    },
+    {
+      "method": "specrej",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 2560,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 30.72,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 153.6,
+      "live_pages": 0,
+      "peak_kv_tokens": 12800,
+      "hash_hits": 30,
+      "hash_skips": 0,
+      "pruned": 20,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 10240,
+      "notes": "Speculative Rejection \u03b1=0.5 at \u03c4=256",
+      "extra": {
+        "decision_tokens": 256.0,
+        "decode_until_cut": 10240.0,
+        "loser_tokens": 5120.0,
+        "esc_window": 5.0
+      }
+    },
+    {
+      "method": "dpts",
+      "phase": "fanout",
+      "sessions": 10,
+      "branching": 4,
+      "trunk_tokens": 256,
+      "prefill_tokens": 2560,
+      "skipped_prefill_tokens": 0,
+      "prefill_ms": 30.72,
+      "cow_ms": 0.0,
+      "abort_ms": 0.0,
+      "transfer_tokens": 0,
+      "transfer_ms": 0.0,
+      "fanout_ms": 78.72,
+      "live_pages": 0,
+      "peak_kv_tokens": 6560,
+      "hash_hits": 30,
+      "hash_skips": 0,
+      "pruned": 20,
+      "early_aborts": 0,
+      "fork_aliases": 0,
+      "kv_saving": 0.0,
+      "decode_tokens": 4000,
+      "notes": "DPTS early-stop after a 100-token mini-step",
+      "extra": {
+        "decision_tokens": 100.0,
+        "decode_until_cut": 4000.0,
+        "loser_tokens": 2000.0,
+        "esc_window": 5.0
+      }
     }
   ],
   "summary": {
@@ -295,7 +388,33 @@
     "app_vs_apc_peak_kv": 0.75,
     "fs_vs_apc_peak_kv": 0.6666666666666667,
     "app_pruned": 30,
-    "app_early_aborts": 0
+    "app_early_aborts": 0,
+    "decoding_prune": {
+      "esc": {
+        "prefill_tokens": 2560,
+        "decode_until_cut": 20480,
+        "loser_tokens": 10240,
+        "peak_kv": 23040,
+        "fanout_ms": 276.48,
+        "pruned": 0
+      },
+      "specrej": {
+        "prefill_tokens": 2560,
+        "decode_until_cut": 10240,
+        "loser_tokens": 5120,
+        "peak_kv": 12800,
+        "fanout_ms": 153.6,
+        "pruned": 20
+      },
+      "dpts": {
+        "prefill_tokens": 2560,
+        "decode_until_cut": 4000,
+        "loser_tokens": 2000,
+        "peak_kv": 6560,
+        "fanout_ms": 78.72,
+        "pruned": 20
+      }
+    }
   },
   "decode_curve": {
     "target_accuracy": 0.845,

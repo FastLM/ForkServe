@@ -92,6 +92,8 @@ Materializing $k$ independent KV copies allocates $\Theta(k)$ redundant HBM for 
 A location-addressed alias at \texttt{fork} makes a miss residual-only.
 \end{insight}
 
+% Agent-system landscape table omitted from the paper.
+\iffalse
 \begin{table*}[t]
 \centering
 \caption{Comparison of agentic serving systems. \cmark{}~full support; \pmark{}~partial / single-path; \xmark{}~absent.
@@ -124,3 +126,4 @@ DistServe~\cite{distserve}/Splitwise~\cite{splitwise} & request & full KV transf
 \end{tabular}%
 }
 \end{table*}
+\fi

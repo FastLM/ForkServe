@@ -2067,20 +2067,22 @@ def run_named_math_forkserve(eng: Any, cfg: Any, args: argparse.Namespace, workl
             decode_n=n_dec,
         )
     thoughts = thoughts_fn(args.branching)
-    width = _chunk_size(args)
-    trunks = [trunk_fn(item) for item in problems]
-    # One generate for the whole file. max_num_seqs stays at ``width``, so a
-    # request that answer-stops frees a slot for the next queued item instead
-    # of leaving the batch on the longest trace until the chunk barrier.
-    row = _forest_tot_forkserve(
-        eng, cfg, args, workload, trunks, thoughts,
-        decode_n=n_dec, inflight=width,
-    )
-    _set_golds(row, [p.answer for p in problems], _fs_texts(eng, row.decode_ids))
-    row.item_ids = [p.item_id for p in problems]
-    _log_forest_chunk(args, "forkserve", workload, 0, problems, len(problems), row, [row])
-    _close_all(eng)
-    return row
+    parts: list[RunMetrics] = []
+    # Same chunk barrier as APC / GSM8K / Game24. ``inflight`` only changed
+    # the peak-KV account; ``generate_many`` still decoded the whole file
+    # in one batch, so e2e was not comparable at ``--chunk 1``.
+    for start, batch in _iter_chunks(problems, args):
+        trunks = [trunk_fn(item) for item in batch]
+        row = _forest_tot_forkserve(
+            eng, cfg, args, workload, trunks, thoughts,
+            decode_n=n_dec,
+        )
+        _set_golds(row, [p.answer for p in batch], _fs_texts(eng, row.decode_ids))
+        row.item_ids = [p.item_id for p in batch]
+        parts.append(row)
+        _log_forest_chunk(args, "forkserve", workload, start, batch, len(problems), row, parts)
+        _close_all(eng)
+    return merge_metrics(parts)
 
 
 def run_named_math_vllm(

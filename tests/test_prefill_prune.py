@@ -14,7 +14,13 @@ from forkserve.prefill_prune import (
 )
 from forkserve.prune import plus_config
 
-from experiments.prefill_prune_bench import run_apc, run_app, run_forkserve, run_suite
+from experiments.prefill_prune_bench import (
+    run_apc,
+    run_app,
+    run_decoding_prune,
+    run_forkserve,
+    run_suite,
+)
 
 
 def _cfg() -> ForkServeConfig:
@@ -125,12 +131,38 @@ def test_bench_app_beats_apc_on_prefill_and_kv() -> None:
     assert app.transfer_tokens < apc.prefill_tokens
 
 
+def test_decoding_prune_pays_for_losers_before_the_cut() -> None:
+    """ESC, Speculative Rejection, and DPTS decode a prefix before they can drop."""
+    app = run_app()[0]
+    by = {row.method: row for row in run_decoding_prune()}
+    assert set(by) == {"esc", "specrej", "dpts"}
+    # Published decision prefix: DPTS mini-step, SR partial-reward horizon, ESC full budget.
+    expect = {"dpts": (100, 20), "specrej": (256, 20), "esc": (512, 0)}
+    for method, (step, pruned) in expect.items():
+        row = by[method]
+        assert row.extra["decision_tokens"] == step
+        assert row.pruned == pruned
+        assert row.prefill_tokens == 10 * 256
+        assert row.extra["decode_until_cut"] == 10 * 4 * step
+        assert row.extra["loser_tokens"] == 10 * 2 * step
+        assert row.peak_kv_tokens == 10 * (256 + 4 * step)
+        assert row.extra["loser_tokens"] > 0
+        assert row.fanout_ms > app.fanout_ms
+        assert row.peak_kv_tokens > app.peak_kv_tokens
+    # Earliest decoding cut (DPTS, 100 tokens) is still later than withholding prefill.
+    assert by["dpts"].fanout_ms > app.fanout_ms
+    assert by["dpts"].extra["loser_tokens"] < by["specrej"].extra["loser_tokens"]
+    assert by["specrej"].extra["loser_tokens"] < by["esc"].extra["loser_tokens"]
+
+
 def test_suite_writes_summary() -> None:
     report: dict[str, Any] = run_suite()
     summary = report["summary"]
     curve = report["decode_curve"]
     conc = report["concurrency"]
     assert set(summary["fanout_ms"]) >= {"apc", "forkserve", "app"}
+    assert set(summary["decoding_prune"]) == {"esc", "specrej", "dpts"}
+    assert summary["decoding_prune"]["dpts"]["loser_tokens"] > 0
     assert summary["app_vs_apc_prefill"] > 0.3
     assert summary["app_vs_apc_peak_kv"] > 0.5
     assert conc["tok_s_gain"] > 0.0

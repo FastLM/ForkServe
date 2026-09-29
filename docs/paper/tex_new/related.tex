@@ -19,3 +19,12 @@ SmoothAgent~\cite{smoothagent} lookahead-transforms context; IdleSpec~\cite{idle
 Classical speculative decoding~\cite{speculative,medusa,eagledraft} drafts \emph{output} tokens.
 ForkKV~\cite{forkkv} CoW-splits LoRA residuals.
 We represent the future as a \emph{set} of CoW children, speculate several known suffixes, commit by LCP, prune losers before prefill, and gate P/D \texttt{insert}.
+
+\paragraph{Decoding-time pruning.}
+A second line drops a candidate after the model has generated it.
+Beam search in Tree-of-Thoughts~\cite{tot} scores a finished step and keeps the top beams.
+Early-stopping self-consistency (ESC)~\cite{esc} draws a window of complete samples and skips later samples only once that window agrees.
+Speculative Rejection~\cite{specrej} ranks partial generations and halts the lower quantile.
+Dynamic Parallel Tree Search (DPTS)~\cite{dpts} generates a fixed mini-step on every active node, then early-stops low-confidence children.
+In each method the score is computed from tokens already resident in the KV cache, so the prefill of the candidate and a decode prefix are issued before the drop.
+\app scores a known residual first and withholds that prefill, which also keeps the child off the disaggregated connector (\S\ref{sec:eval-app}).

@@ -1,7 +1,13 @@
 """Compare prefill methods: APC, ForkServe, hash_prefill, disagg_prefill, APP.
 
-Control-plane cost model (no GPU). Prefill ms = tokens × prefill_us_per_token.
-Disagg transfer ms = shipped tokens × disagg_transfer_us_per_token.
+Also places three decoding-time pruners on the same fan-out: ESC, Speculative
+Rejection, and DPTS. They drop a child only after a decoded prefix, so the
+trunk prefill and that prefix are already issued. APP withholds the residual
+before prefill.
+
+Control-plane cost model (no GPU). Prefill and decode share
+``prefill_us_per_token``. Disagg transfer ms = shipped tokens ×
+disagg_transfer_us_per_token.
 
 Methods
 -------
@@ -35,6 +41,21 @@ from forkserve.prune import plus_config
 
 
 METHODS = ("apc", "forkserve", "hash_prefill", "disagg_prefill", "app")
+# Decoding-time pruning. The prune score is a function of tokens already
+# generated; hyperparameters are the ones published for each method.
+DECODING_METHODS = ("esc", "specrej", "dpts")
+# ToT token budget used by the GPU forest. ESC decodes a full sample to here.
+DECODE_BUDGET = 512
+# Li et al., ICLR 2024: GSM8K observation window. A window must agree before
+# later samples are skipped, and k=4 never fills a window of 5.
+ESC_WINDOW = 5
+# Sun et al., NeurIPS 2024: drop the lower α at the partial-reward horizon
+# where they measure rank correlation (Fig. 2). Their runtime trigger is OOM;
+# a k=4 fan-out would not reach it, so τ=256 is the early checkpoint.
+SR_ALPHA = 0.5
+SR_TAU = 256
+# Ding et al., ACL 2025, Appendix C.2: one mini-step, then early-stop.
+DPTS_MINI_STEP = 100
 
 # ToT-like residuals: two live thoughts, two hopeless (illegal / loop).
 THOUGHTS = (
@@ -369,6 +390,89 @@ def run_app(**kwargs) -> list[MethodResult]:
     return run_forkserve(prune=True, disagg_gate=True, method="app", **kwargs)
 
 
+def run_decoding_prune(
+    *,
+    n_sessions: int = 10,
+    fanout: int = 4,
+    trunk_len: int = 256,
+    decode_budget: int = DECODE_BUDGET,
+    n_losers: int = 2,
+) -> list[MethodResult]:
+    """Decoding-time pruning on one fan-out.
+
+    The trunk is prefilled once per session (prefix cache). Each child is then
+    decoded for ``step`` tokens before the method can drop it. ``n_losers``
+    low-score children match the draft-score rejects; the winner is kept.
+    Peak KV is the trunk plus every child's decoded prefix, live together.
+    """
+    cfg = _cfg()
+    if n_losers < 0 or n_losers >= fanout:
+        raise ValueError("n_losers must leave the winner in the fan-out")
+    # (method, decoded tokens before the cut, children dropped at the cut, note)
+    sr_drop = min(n_losers, int(SR_ALPHA * fanout))
+    specs: tuple[tuple[str, int, int, str], ...] = (
+        (
+            "esc",
+            decode_budget,
+            0,
+            f"ESC window {ESC_WINDOW} stays open at k={fanout}; each child decodes to the budget",
+        ),
+        (
+            "specrej",
+            SR_TAU,
+            sr_drop,
+            f"Speculative Rejection α={SR_ALPHA} at τ={SR_TAU}",
+        ),
+        (
+            "dpts",
+            DPTS_MINI_STEP,
+            n_losers,
+            f"DPTS early-stop after a {DPTS_MINI_STEP}-token mini-step",
+        ),
+    )
+    rows: list[MethodResult] = []
+    for method, step, dropped, note in specs:
+        prefill = n_sessions * trunk_len
+        decoded = n_sessions * fanout * step
+        loser_tokens = n_sessions * n_losers * step
+        peak = n_sessions * (trunk_len + fanout * step)
+        row = MethodResult(
+            method=method,
+            phase="fanout",
+            sessions=n_sessions,
+            branching=fanout,
+            trunk_tokens=trunk_len,
+            prefill_tokens=prefill,
+            skipped_prefill_tokens=0,
+            prefill_ms=_prefill_ms(cfg, prefill),
+            cow_ms=0.0,
+            abort_ms=0.0,
+            transfer_tokens=0,
+            transfer_ms=0.0,
+            fanout_ms=0.0,
+            live_pages=0,
+            peak_kv_tokens=peak,
+            hash_hits=n_sessions * max(0, fanout - 1),
+            hash_skips=0,
+            pruned=n_sessions * dropped,
+            early_aborts=0,
+            fork_aliases=0,
+            kv_saving=0.0,
+            decode_tokens=decoded,
+            notes=note,
+            extra={
+                "decision_tokens": float(step),
+                "decode_until_cut": float(decoded),
+                "loser_tokens": float(loser_tokens),
+                "esc_window": float(ESC_WINDOW),
+            },
+        )
+        # Same 12 µs/token clock as prefill: time until the prune score exists.
+        row.fanout_ms = _prefill_ms(cfg, prefill + decoded)
+        rows.append(row)
+    return rows
+
+
 def decode_curve() -> dict[str, object]:
     """Same traces, APP early-stops at the answer marker (stop_frac=0.6)."""
     # 50-item synthetic grade-school set: 84.5% solvable.
@@ -405,6 +509,18 @@ def summarize(rows: list[MethodResult]) -> dict[str, object]:
         else 0.0,
         "app_pruned": app.pruned,
         "app_early_aborts": app.early_aborts,
+        "decoding_prune": {
+            m: {
+                "prefill_tokens": fan[m].prefill_tokens,
+                "decode_until_cut": int(fan[m].extra.get("decode_until_cut", 0)),
+                "loser_tokens": int(fan[m].extra.get("loser_tokens", 0)),
+                "peak_kv": fan[m].peak_kv_tokens,
+                "fanout_ms": fan[m].fanout_ms,
+                "pruned": fan[m].pruned,
+            }
+            for m in DECODING_METHODS
+            if m in fan
+        },
     }
 
 
@@ -415,6 +531,7 @@ def run_suite(out_dir: Path | None = None) -> dict[str, Any]:
     rows.extend(run_hash_prefill())
     rows.extend(run_disagg_prefill())
     rows.extend(run_app())
+    rows.extend(run_decoding_prune())
     conc = concurrency_sweep()
     slo_apc = max((r["qps"] for r in conc if r["apc_slo_ok"]), default=0)
     slo_fs = max((r["qps"] for r in conc if r["fs_slo_ok"]), default=0)
@@ -465,6 +582,13 @@ def _print(report: dict[str, Any]) -> None:
         f"P99≤1s QPS: APC={q['max_qps_p99_1s']['apc']} APP={q['max_qps_p99_1s']['app']}  "
         f"tok/s gain={100 * q['tok_s_gain']:.1f}%"
     )
+    print()
+    print(f"{'decode-prune':<16} {'prefill':>8} {'decode':>8} {'losers':>8} {'peak':>8} {'T_cut':>8}")
+    for m, row in s.get("decoding_prune", {}).items():
+        print(
+            f"{m:<16} {row['prefill_tokens']:8d} {row['decode_until_cut']:8d} "
+            f"{row['loser_tokens']:8d} {row['peak_kv']:8d} {row['fanout_ms']:8.2f}"
+        )
     print(f"wrote {report['wrote']}")
 
 
