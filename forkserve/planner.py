@@ -215,7 +215,13 @@ class SpeculatePlanner:
             if m + hbm > m_free:
                 result.rejected.append((w, "hbm"))
                 continue
-            if t_pre > gamma_ms and parent_mode is NodeMode.COMMIT:
+            # A known suffix that finishes inside the tool pause is not
+            # on the decode critical path, even if the parent is still COMMIT.
+            if (
+                t_pre > gamma_ms
+                and parent_mode is NodeMode.COMMIT
+                and t_pre > t_idle_ms
+            ):
                 result.rejected.append((w, "tbt_margin"))
                 continue
             result.items.append(w)

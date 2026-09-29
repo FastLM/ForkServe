@@ -6,6 +6,17 @@ from forkserve.prune import plus_config
 from forkserve.slack_fill import freed_tokens, miss_tokens, refill
 
 
+def test_spine_slots_scale_with_the_live_tree() -> None:
+    from forkserve.spec_pool import kv_pool_tokens, spine_slots
+
+    pool = kv_pool_tokens(40.0, 0.85, 4.0, 147_456.0, 2)
+    wide = spine_slots(pool, 2048, floor=1, cap=10_000)
+    narrow = spine_slots(pool, 2048 * 4, floor=1, cap=10_000)
+    assert wide > narrow
+    assert wide == pool // 2048
+    assert spine_slots(100, 1000, floor=8, cap=32) == 8
+
+
 def test_plus_does_not_stop_decode_by_default() -> None:
     cfg = plus_config(ForkServeConfig())
     assert cfg.answer_stop == ""

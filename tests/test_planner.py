@@ -89,13 +89,23 @@ def test_tbt_filter_when_parent_committed() -> None:
         SessionId("s"),
         NodeId(0),
         cands,
-        t_idle_ms=1e9,
+        t_idle_ms=31.95,
         gamma_ms=0.1,
         m_free=1e12,
         parent_mode=NodeMode.COMMIT,
     )
     assert plan.items == []
     assert plan.rejected[0][1] == "tbt_margin"
+    covered = planner.allocate(
+        SessionId("s"),
+        NodeId(0),
+        cands,
+        t_idle_ms=1e9,
+        gamma_ms=0.1,
+        m_free=1e12,
+        parent_mode=NodeMode.COMMIT,
+    )
+    assert covered.items and covered.items[0].kind.name == "KNOWN_SUFFIX"
 
 
 def test_chunking_bounds_cancel_loss() -> None:

@@ -190,6 +190,32 @@ def kv_bytes_per_token(
     return float(layers * kv_heads * head_dim * 2 * kv_bytes)
 
 
+def _weight_gib(model: str) -> float:
+    root = Path(model)
+    total = 0
+    if not root.is_dir():
+        return 8.0
+    for p in root.iterdir():
+        if p.suffix == ".safetensors" or p.name.endswith(".bin"):
+            total += p.stat().st_size
+    if total <= 0:
+        return 8.0
+    return total / (1 << 30)
+
+
+def _max_seqs(args: argparse.Namespace, model: str, tp: int, system: str) -> int:
+    """Decode slots from the KV pool and the live spine, not a fixed chunk."""
+    from forkserve.spec_pool import kv_pool_tokens, spine_slots
+
+    bpt = bytes_per_token_from_config(model)
+    weight = _weight_gib(model) / max(tp, 1)
+    pool = kv_pool_tokens(40.0, float(args.gpu_util), weight, bpt, tp)
+    k = max(1, int(getattr(args, "branching", 4) or 4))
+    # APC keeps every residual. ForkServe's live tree is the winner spine.
+    spine = 192 + 64 * (1 if str(system).startswith("forkserve") else k)
+    return spine_slots(pool, spine, floor=_chunk_size(args), cap=256)
+
+
 def bytes_per_token_from_config(model: str) -> float:
     cfg_path = Path(model) / "config.json"
     if not cfg_path.is_file():
@@ -326,7 +352,7 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
         enforce_eager=args.enforce_eager,
         two_class=False,
         cow_blocks=True,
-        max_num_seqs=_chunk_size(args),
+        max_num_seqs=_max_seqs(args, model, tp, getattr(args, "system", "")),
     )
     return Engine(backend, cfg), backend, cfg
 
@@ -639,7 +665,7 @@ def _vllm_llm(model: str, tp: int, args: argparse.Namespace, prefix_cache: bool)
         enable_prefix_caching=prefix_cache,
         enable_chunked_prefill=True,
         max_num_batched_tokens=args.max_batched_tokens,
-        max_num_seqs=_chunk_size(args),
+        max_num_seqs=_max_seqs(args, model, tp, "vllm_apc" if prefix_cache else "vllm_recompute"),
         enforce_eager=args.enforce_eager,
     )
     return llm, SamplingParams, TokensPrompt
@@ -1212,7 +1238,15 @@ def run_tot_forest_forkserve(
             for nid in kids:
                 eng.queue_known_prefill(h.id, nid)
     t_cow = _now()
-    eng.flush()
+    # Plus already dropped the other residuals. Leave the winner's prefill
+    # for the decode generate so the next spine is chunked in beside decode
+    # instead of a barrier that finishes every fan-out first.
+    if plus:
+        pending = getattr(eng.backend, "_pending", None)
+        if pending is not None:
+            pending.clear()
+    else:
+        eng.flush()
     t_fan = _now()
     t_ab0 = _now()
     for h, kids in zip(handles, all_kids, strict=True):

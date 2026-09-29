@@ -38,6 +38,32 @@ def concurrent_slots(hbm_bytes: float, bytes_per_seq: float) -> int:
     return max(1, int(hbm_bytes // bytes_per_seq))
 
 
+def kv_pool_tokens(
+    gpu_gib: float,
+    util: float,
+    weight_gib_per_gpu: float,
+    bytes_per_token: float,
+    tp: int,
+) -> int:
+    """Token capacity of the KV pool after weights, per logical sequence."""
+    kv = max(0.5, gpu_gib * util - weight_gib_per_gpu - 1.0) * (1 << 30)
+    per_gpu = max(float(bytes_per_token), 1.0) / max(int(tp), 1)
+    return max(1, int(kv / per_gpu))
+
+
+def spine_slots(
+    pool_tokens: int,
+    spine_tokens: int,
+    *,
+    floor: int = 1,
+    cap: int = 256,
+) -> int:
+    """How many committed spines fit. Wider than a fixed chunk when the pool allows."""
+    spine = max(1, int(spine_tokens))
+    n = max(1, int(pool_tokens) // spine)
+    return max(int(floor), min(int(cap), n))
+
+
 def extra_batched_tokens(base: int, saving: float, spec_pool_frac: float) -> int:
     """Give the leftover class a share of the memory that CoW freed."""
     if saving <= 0.0 or spec_pool_frac <= 0.0:
