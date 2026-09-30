@@ -3,7 +3,9 @@
 Also places three decoding-time pruners on the same fan-out: ESC, Speculative
 Rejection, and DPTS. They drop a child only after a decoded prefix, so the
 trunk prefill and that prefix are already issued. APP withholds the residual
-before prefill.
+before prefill. ``run_prefill_on_decoding`` stacks that admission on each
+decoder: a rejected child never pays the decision prefix, and a child both
+sides keep still decodes to the budget.
 
 Control-plane cost model (no GPU). Prefill and decode share
 ``prefill_us_per_token``. Disagg transfer ms = shipped tokens ×
@@ -37,7 +39,7 @@ from forkserve.eval_plus import concurrency_sweep, time_accuracy_curve, tokens_t
 from forkserve.hash_forkserve import HashForkServe
 from forkserve.pages import clone_memory_bytes, cow_memory_bytes
 from forkserve.prefill_prune import PrefillHashIndex, PrefillPruner
-from forkserve.prune import plus_config
+from forkserve.prune import BranchPruner, plus_config
 
 
 METHODS = ("apc", "forkserve", "hash_prefill", "disagg_prefill", "app")
@@ -390,27 +392,14 @@ def run_app(**kwargs) -> list[MethodResult]:
     return run_forkserve(prune=True, disagg_gate=True, method="app", **kwargs)
 
 
-def run_decoding_prune(
-    *,
-    n_sessions: int = 10,
-    fanout: int = 4,
-    trunk_len: int = 256,
-    decode_budget: int = DECODE_BUDGET,
-    n_losers: int = 2,
-) -> list[MethodResult]:
-    """Decoding-time pruning on one fan-out.
-
-    The trunk is prefilled once per session (prefix cache). Each child is then
-    decoded for ``step`` tokens before the method can drop it. ``n_losers``
-    low-score children match the draft-score rejects; the winner is kept.
-    Peak KV is the trunk plus every child's decoded prefix, live together.
-    """
-    cfg = _cfg()
-    if n_losers < 0 or n_losers >= fanout:
-        raise ValueError("n_losers must leave the winner in the fan-out")
-    # (method, decoded tokens before the cut, children dropped at the cut, note)
+def _decoding_specs(
+    fanout: int,
+    decode_budget: int,
+    n_losers: int,
+) -> tuple[tuple[str, int, int, str], ...]:
+    """(method, tokens before the cut, children dropped at the cut, note)."""
     sr_drop = min(n_losers, int(SR_ALPHA * fanout))
-    specs: tuple[tuple[str, int, int, str], ...] = (
+    return (
         (
             "esc",
             decode_budget,
@@ -430,6 +419,27 @@ def run_decoding_prune(
             f"DPTS early-stop after a {DPTS_MINI_STEP}-token mini-step",
         ),
     )
+
+
+def run_decoding_prune(
+    *,
+    n_sessions: int = 10,
+    fanout: int = 4,
+    trunk_len: int = 256,
+    decode_budget: int = DECODE_BUDGET,
+    n_losers: int = 2,
+) -> list[MethodResult]:
+    """Decoding-time pruning on one fan-out.
+
+    The trunk is prefilled once per session (prefix cache). Each child is then
+    decoded for ``step`` tokens before the method can drop it. ``n_losers``
+    low-score children match the draft-score rejects; the winner is kept.
+    Peak KV is the trunk plus every child's decoded prefix, live together.
+    """
+    cfg = _cfg()
+    if n_losers < 0 or n_losers >= fanout:
+        raise ValueError("n_losers must leave the winner in the fan-out")
+    specs = _decoding_specs(fanout, decode_budget, n_losers)
     rows: list[MethodResult] = []
     for method, step, dropped, note in specs:
         prefill = n_sessions * trunk_len
@@ -470,6 +480,173 @@ def run_decoding_prune(
         # Same 12 µs/token clock as prefill: time until the prune score exists.
         row.fanout_ms = _prefill_ms(cfg, prefill + decoded)
         rows.append(row)
+    return rows
+
+
+def _loser_indices(fanout: int, n_drop: int) -> tuple[int, ...]:
+    """Lowest draft scores, never the designated winner.
+
+    The same two hopeless thoughts (loop / illegal) are the children DPTS
+    and Speculative Rejection cut, and the ones a text draft can see
+    before any token is decoded.
+    """
+    cfg = _cfg(app=True)
+    cfg.skip_known_losers = False
+    cfg.gc_admit = False
+    ranked = sorted(
+        BranchPruner(cfg, winner=0).rank(list(THOUGHTS[:fanout])),
+        key=lambda row: (row.score, row.index),
+    )
+    losers = [row.index for row in ranked if row.index != 0][:n_drop]
+    return tuple(losers)
+
+
+def _admission_plan(
+    *,
+    fanout: int,
+    trunk_len: int,
+    residual: int,
+    policy: str,
+):
+    """One session of residual admission.
+
+    ``draft`` is the text heuristic only: illegal and loop residuals never
+    start, and the winner is not treated as known. ``app`` is the ForkServe+
+    config used by :func:`run_app`, which also keeps only the winner.
+    """
+    cfg = _cfg(app=True)
+    if policy == "draft":
+        cfg.skip_known_losers = False
+        cfg.gc_admit = False
+        cfg.prefill_keep_m = 0
+    elif policy != "app":
+        raise ValueError(f"unknown admission policy {policy}")
+    index = PrefillHashIndex(cfg.page_size)
+    trunk = tuple(range(trunk_len))
+    index.publish(trunk)
+    suffixes = [_thought_tokens(residual, j) for j in range(fanout)]
+    fulls = [trunk + suf for suf in suffixes]
+    plan = PrefillPruner(cfg, winner=0, hash_index=index).plan(
+        list(THOUGHTS[:fanout]),
+        full_prompts=fulls,
+        token_counts=[residual] * fanout,
+    )
+    return plan
+
+
+def run_prefill_on_decoding(
+    *,
+    n_sessions: int = 10,
+    fanout: int = 4,
+    trunk_len: int = 256,
+    residual: int = 32,
+    decode_budget: int = DECODE_BUDGET,
+    n_losers: int = 2,
+) -> list[MethodResult]:
+    """Stack prefill pruning on ESC, Speculative Rejection, and DPTS.
+
+    The decoding baseline prefills every residual, decodes ``step`` tokens on
+    every child, then continues whoever it did not cut up to ``decode_budget``.
+    Prefill pruning runs first. A child it rejects never pays that residual or
+    the decoder's decision prefix. A child both sides keep still decodes to
+    the budget: the stack does not shorten the survivor.
+
+    ``draft`` withholds only the hopeless residuals. ``app`` is the full
+    ForkServe+ admission (winner only). Both are compared with the survivors
+    still on the same 12 µs/token clock.
+    """
+    cfg = _cfg()
+    if n_losers < 0 or n_losers >= fanout:
+        raise ValueError("n_losers must leave the winner in the fan-out")
+    if decode_budget < max(SR_TAU, DPTS_MINI_STEP):
+        raise ValueError("decode budget is shorter than a decoding-prune checkpoint")
+    specs = _decoding_specs(fanout, decode_budget, n_losers)
+    rows: list[MethodResult] = []
+    for method, step, dropped, note in specs:
+        losers = _loser_indices(fanout, dropped)
+        if len(losers) != dropped:
+            raise RuntimeError(f"{method} asked to drop {dropped}, ranked {losers}")
+        drop_set = set(losers)
+        for policy in ("base", "draft", "app"):
+            if policy == "base":
+                entered = tuple(range(fanout))
+                residual_work = fanout * residual
+                draft_skips = 0
+                early = 0
+            else:
+                plan = _admission_plan(
+                    fanout=fanout,
+                    trunk_len=trunk_len,
+                    residual=residual,
+                    policy=policy,
+                )
+                entered = tuple(d.index for d in plan.decisions if d.keep)
+                residual_work = plan.prefill_tokens
+                draft_skips = plan.draft_skips
+                early = plan.early_aborts
+            survivors = tuple(i for i in entered if i not in drop_set)
+            # Children the decoder still has to see pay ``step`` and then stop
+            # if they are in its drop set. Everyone else who was admitted
+            # continues to the budget. ESC's step is already the budget.
+            decode_one = 0
+            until_cut = 0
+            for i in entered:
+                if i in drop_set:
+                    decode_one += step
+                else:
+                    decode_one += decode_budget
+                until_cut += step
+            avoided_decode = 0
+            for i in range(fanout):
+                if i in entered:
+                    continue
+                avoided_decode += step if i in drop_set else decode_budget
+            prefill = n_sessions * (trunk_len + residual_work)
+            decoded = n_sessions * decode_one
+            # Live at the decision (every admitted child holds ``step``) and
+            # after the cut (only survivors remain, grown to the budget).
+            at_cut = trunk_len + sum(residual + step for _ in entered)
+            after = trunk_len + sum(residual + decode_budget for _ in survivors)
+            peak_one = max(at_cut, after)
+            still_cut = sum(1 for i in entered if i in drop_set)
+            label = method if policy == "base" else f"{method}+{policy}"
+            row = MethodResult(
+                method=label,
+                phase="stack",
+                sessions=n_sessions,
+                branching=fanout,
+                trunk_tokens=trunk_len,
+                prefill_tokens=prefill,
+                skipped_prefill_tokens=n_sessions * max(0, fanout * residual - residual_work),
+                prefill_ms=_prefill_ms(cfg, prefill),
+                cow_ms=0.0,
+                abort_ms=0.0,
+                transfer_tokens=0,
+                transfer_ms=0.0,
+                fanout_ms=0.0,
+                live_pages=0,
+                peak_kv_tokens=n_sessions * peak_one,
+                hash_hits=0,
+                hash_skips=0,
+                pruned=n_sessions * (draft_skips + early + (dropped if policy == "base" else 0)),
+                early_aborts=n_sessions * early,
+                fork_aliases=0,
+                kv_saving=0.0,
+                decode_tokens=decoded,
+                notes=note if policy == "base" else f"{note}; prefill admission={policy}",
+                extra={
+                    "policy_id": {"base": 0.0, "draft": 1.0, "app": 2.0}[policy],
+                    "decision_tokens": float(step),
+                    "decode_until_cut": float(n_sessions * until_cut),
+                    "loser_tokens": float(n_sessions * still_cut * step),
+                    "avoided_decode": float(n_sessions * avoided_decode),
+                    "kept": float(len(survivors)),
+                    "admitted": float(len(entered)),
+                    "e2e_tokens": float(prefill + decoded),
+                },
+            )
+            row.fanout_ms = _prefill_ms(cfg, prefill + decoded)
+            rows.append(row)
     return rows
 
 
@@ -521,7 +698,41 @@ def summarize(rows: list[MethodResult]) -> dict[str, object]:
             for m in DECODING_METHODS
             if m in fan
         },
+        "prefill_on_decoding": _stack_summary(rows),
     }
+
+
+def _stack_summary(rows: list[MethodResult]) -> dict[str, dict[str, float]]:
+    """E2E tokens for each decoding baseline and the two prefill admissions."""
+    stacked = [r for r in rows if r.phase == "stack"]
+    by = {r.method: r for r in stacked}
+    out: dict[str, dict[str, float]] = {}
+    for method in DECODING_METHODS:
+        base = by.get(method)
+        if base is None:
+            continue
+        for policy, label in (("base", method), ("draft", f"{method}+draft"), ("app", f"{method}+app")):
+            row = by.get(label)
+            if row is None:
+                continue
+            e2e = int(row.extra.get("e2e_tokens", 0))
+            base_e2e = int(base.extra.get("e2e_tokens", 0))
+            out[label] = {
+                "policy": row.extra.get("policy_id", 0.0),
+                "admitted": row.extra.get("admitted", 0.0),
+                "kept": row.extra.get("kept", 0.0),
+                "prefill_tokens": float(row.prefill_tokens),
+                "decode_tokens": float(row.decode_tokens),
+                "avoided_decode": row.extra.get("avoided_decode", 0.0),
+                "peak_kv": float(row.peak_kv_tokens),
+                "fanout_ms": row.fanout_ms,
+                "e2e_tokens": float(e2e),
+                "e2e_cut_vs_base": (1.0 - e2e / base_e2e) if base_e2e else 0.0,
+                "peak_cut_vs_base": (
+                    1.0 - row.peak_kv_tokens / base.peak_kv_tokens if base.peak_kv_tokens else 0.0
+                ),
+            }
+    return out
 
 
 def run_suite(out_dir: Path | None = None) -> dict[str, Any]:
@@ -532,6 +743,7 @@ def run_suite(out_dir: Path | None = None) -> dict[str, Any]:
     rows.extend(run_disagg_prefill())
     rows.extend(run_app())
     rows.extend(run_decoding_prune())
+    rows.extend(run_prefill_on_decoding())
     conc = concurrency_sweep()
     slo_apc = max((r["qps"] for r in conc if r["apc_slo_ok"]), default=0)
     slo_fs = max((r["qps"] for r in conc if r["fs_slo_ok"]), default=0)
@@ -561,6 +773,8 @@ def _print(report: dict[str, Any]) -> None:
     print(f"{'method':<16} {'phase':<8} {'prefill_tok':>11} {'prefill_ms':>10} "
           f"{'xfer_tok':>8} {'fanout_ms':>9} {'peak_kv':>8} {'prune':>5}")
     for r in report["rows"]:
+        if r["phase"] == "stack":
+            continue
         print(
             f"{r['method']:<16} {r['phase']:<8} {r['prefill_tokens']:11d} "
             f"{r['prefill_ms']:10.2f} {r['transfer_tokens']:8d} "
@@ -588,6 +802,18 @@ def _print(report: dict[str, Any]) -> None:
         print(
             f"{m:<16} {row['prefill_tokens']:8d} {row['decode_until_cut']:8d} "
             f"{row['loser_tokens']:8d} {row['peak_kv']:8d} {row['fanout_ms']:8.2f}"
+        )
+    print()
+    print(
+        f"{'decode+prefill':<16} {'admit':>5} {'kept':>5} {'prefill':>8} "
+        f"{'decode':>8} {'avoided':>8} {'peak':>8} {'e2e_ms':>8} {'vs_base':>8}"
+    )
+    for label, row in s.get("prefill_on_decoding", {}).items():
+        print(
+            f"{label:<16} {int(row['admitted']):5d} {int(row['kept']):5d} "
+            f"{int(row['prefill_tokens']):8d} {int(row['decode_tokens']):8d} "
+            f"{int(row['avoided_decode']):8d} {int(row['peak_kv']):8d} "
+            f"{row['fanout_ms']:8.2f} {100 * row['e2e_cut_vs_base']:7.1f}%"
         )
     print(f"wrote {report['wrote']}")
 

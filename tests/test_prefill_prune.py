@@ -19,6 +19,7 @@ from experiments.prefill_prune_bench import (
     run_app,
     run_decoding_prune,
     run_forkserve,
+    run_prefill_on_decoding,
     run_suite,
 )
 
@@ -155,6 +156,44 @@ def test_decoding_prune_pays_for_losers_before_the_cut() -> None:
     assert by["specrej"].extra["loser_tokens"] < by["esc"].extra["loser_tokens"]
 
 
+def test_prefill_on_decoding_still_cuts_the_wasted_prefix() -> None:
+    """Draft admission removes the prefix a decoder would pay before its cut."""
+    by = {row.method: row for row in run_prefill_on_decoding()}
+    assert set(by) == {
+        "esc",
+        "esc+draft",
+        "esc+app",
+        "specrej",
+        "specrej+draft",
+        "specrej+app",
+        "dpts",
+        "dpts+draft",
+        "dpts+app",
+    }
+    for method in ("esc", "specrej", "dpts"):
+        base = by[method]
+        draft = by[f"{method}+draft"]
+        app = by[f"{method}+app"]
+        # Text heuristic keeps the two live thoughts. Full APP keeps the winner.
+        assert draft.extra["admitted"] == 2
+        assert app.extra["admitted"] == 1
+        assert draft.extra["avoided_decode"] > 0
+        assert app.decode_tokens < draft.decode_tokens < base.decode_tokens
+        assert app.extra["e2e_tokens"] < draft.extra["e2e_tokens"] < base.extra["e2e_tokens"]
+    # SR and DPTS already planned to drop those two. Draft only moves the cut
+    # earlier, so the survivor count stays 2 and the shorter checkpoint saves less.
+    assert by["dpts"].extra["kept"] == by["dpts+draft"].extra["kept"] == 2
+    assert by["specrej+draft"].extra["kept"] == 2
+    assert by["dpts+draft"].extra["avoided_decode"] < by["specrej+draft"].extra["avoided_decode"]
+    assert by["specrej+draft"].extra["avoided_decode"] < by["esc+draft"].extra["avoided_decode"]
+    # DPTS peak is the two survivors at the budget, so an earlier cut does not
+    # shrink it. APP's single winner does. SR's peak is the four-wide checkpoint.
+    assert by["dpts+draft"].peak_kv_tokens == by["dpts"].peak_kv_tokens
+    assert by["dpts+app"].peak_kv_tokens < by["dpts"].peak_kv_tokens
+    assert by["specrej+draft"].peak_kv_tokens < by["specrej"].peak_kv_tokens
+    assert by["esc+draft"].peak_kv_tokens < by["esc"].peak_kv_tokens
+
+
 def test_suite_writes_summary() -> None:
     report: dict[str, Any] = run_suite()
     summary = report["summary"]
@@ -163,6 +202,9 @@ def test_suite_writes_summary() -> None:
     assert set(summary["fanout_ms"]) >= {"apc", "forkserve", "app"}
     assert set(summary["decoding_prune"]) == {"esc", "specrej", "dpts"}
     assert summary["decoding_prune"]["dpts"]["loser_tokens"] > 0
+    stacked = summary["prefill_on_decoding"]
+    assert stacked["dpts+draft"]["e2e_cut_vs_base"] > 0
+    assert stacked["dpts+app"]["e2e_tokens"] < stacked["dpts+draft"]["e2e_tokens"]
     assert summary["app_vs_apc_prefill"] > 0.3
     assert summary["app_vs_apc_peak_kv"] > 0.5
     assert conc["tok_s_gain"] > 0.0
