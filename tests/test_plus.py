@@ -4,7 +4,13 @@ from forkserve.engine.mock import MockBackend
 from forkserve.engine.vllm_loop import CowBlockTable
 from forkserve.eval_plus import concurrency_sweep, micro_fanout, time_accuracy_curve
 from forkserve.pages import PagePool, TokenKvStore
-from forkserve.prune import BranchPruner, plus_config
+from forkserve.prune import (
+    BranchPruner,
+    DecodeScorer,
+    PrefillScorer,
+    apply_admit_mode,
+    plus_config,
+)
 from forkserve.spec_pool import plan_spec_pool
 from forkserve.tree import ContextTree
 from forkserve.types import NodeMode, SessionId
@@ -70,8 +76,9 @@ def test_answer_stop_waits_for_the_number() -> None:
 
 def test_known_winner_skips_sibling_prefill() -> None:
     from forkserve.prefill_prune import PrefillAction, PrefillPruner
+    from forkserve.prune import apply_admit_mode
 
-    cfg = plus_config()
+    cfg = apply_admit_mode(plus_config(), "winner")
     plan = PrefillPruner(cfg, winner=0).plan(
         [
             "Thought 1: add the numbers and boxed the answer.",
@@ -99,7 +106,8 @@ def test_pruner_keeps_winner_drops_loop() -> None:
     )
     assert ranked[0].keep
     assert not ranked[1].keep
-    assert not ranked[2].keep
+    # plus_config prefill bar is 0.15: illegal text (0.22) still starts.
+    assert ranked[2].keep
 
 
 def test_spec_pool_gives_more_slots_than_apc() -> None:
@@ -164,3 +172,23 @@ def test_generate_nodes_four_agents_one_session() -> None:
         assert eng.tree(h.id).get(kid).mode is NodeMode.COMMIT
         assert len(eng.tree(h.id).get(kid).residual) > 0
     eng.close(h.id)
+
+
+def test_prefill_and_decode_scorers_do_not_share_weights() -> None:
+    loop = "****loop****loop****loop****loop****loop"
+    illegal = "undefined nan junk residual that cannot be a proof"
+    live = "Translate the story into equations, then solve for the missing value."
+    pre = PrefillScorer()
+    dec = DecodeScorer()
+    assert pre.score_text(loop) == (0.02, "loop")
+    assert dec.score_thought(loop) == (0.04, "loop")
+    assert pre.score_text(illegal) == (0.22, "illegal")
+    assert dec.score_thought(illegal) == (0.16, "illegal")
+    p_live, p_why = pre.score_text(live)
+    d_live, d_why = dec.score_thought(live)
+    assert p_why == d_why == "ok"
+    assert p_live == 1.0
+    assert d_live == 1.0
+    # Generated-prefix path is a third function.
+    assert dec.score_prefix("#### 12")[0] == 0.92
+    assert dec.score_prefix(loop)[0] == 0.04

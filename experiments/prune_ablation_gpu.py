@@ -335,14 +335,22 @@ def assign_tokens(
     admit_mode: str = "score",
     keep_m: int = 0,
     admit_alpha: float = 0.5,
+    prefill_threshold: float | None = None,
+    decode_threshold: float | None = None,
 ) -> dict[str, Any]:
-    """Per-child decode length after prefill admission."""
+    """Per-child decode length after prefill admission.
+
+    ``prefill_threshold`` decides who starts. ``decode_threshold`` decides
+    who the decoder later cuts. They are independent.
+    """
+    pbar = float(threshold if prefill_threshold is None else prefill_threshold)
+    dbar = float(DECODE_SCORE_BAR if decode_threshold is None else decode_threshold)
     if method == "grow":
         return plan_grow(
             thoughts,
             budget=budget,
             probe=mild_step,
-            threshold=threshold,
+            threshold=dbar,
             skip_loops=mild_target != "probe",
         )
     if method == "mild":
@@ -358,7 +366,7 @@ def assign_tokens(
     entered = admitted_indices(
         policy,
         thoughts,
-        threshold,
+        pbar,
         admit_mode=admit_mode,
         keep_m=keep_m,
         admit_alpha=admit_alpha,
@@ -367,7 +375,7 @@ def assign_tokens(
         method,
         thoughts,
         alpha=alpha,
-        decode_threshold=decode_threshold,
+        decode_threshold=dbar,
     )
     drop_set = set(drop)
     assigned = {
@@ -413,13 +421,14 @@ def work_key(job: dict[str, Any]) -> tuple[Any, ...]:
         int(job["n"]),
         int(job["k"]),
         int(job["budget"]),
-        float(job["threshold"]),
+        float(job.get("prefill_threshold", job["threshold"])),
         int(job["esc_window"]) if method == "esc" else 0,
     ]
     if method == "specrej":
         parts.extend((int(job["tau"]), float(job["alpha"])))
     if method == "dpts":
         parts.append(int(job["dpts_step"]))
+        parts.append(float(job.get("decode_threshold", DECODE_SCORE_BAR)))
     if method == "mild":
         parts.extend(
             (int(job.get("prefill_drop", 0)), int(job.get("decode_drop", 0)), int(job.get("mild_step", 64)))
@@ -455,12 +464,18 @@ def _job(**kwargs: Any) -> dict[str, Any]:
         dpts_step=100,
         alpha=0.5,
         threshold=0.45,
+        prefill_threshold=0.45,
+        decode_threshold=DECODE_SCORE_BAR,
         esc_window=0,
         admit_mode="score",
         keep_m=0,
         admit_alpha=0.5,
     )
     base.update(kwargs)
+    if "prefill_threshold" not in kwargs:
+        base["prefill_threshold"] = float(base["threshold"])
+    if "threshold" not in kwargs:
+        base["threshold"] = float(base["prefill_threshold"])
     return base
 
 
@@ -682,12 +697,68 @@ def build_thresh_jobs(
     return _finalize_jobs(specs)
 
 
+def unique_prefill_bars(
+    k: int,
+    thresholds: Sequence[float],
+    *,
+    mix: str = "hopeless",
+) -> list[float]:
+    """Keep one bar per distinct admission set. Prefill score only."""
+    thoughts = build_thoughts(int(k), mix)
+    seen: set[tuple[int, ...]] = set()
+    out: list[float] = []
+    for thr in thresholds:
+        key = tuple(admitted_indices("app", thoughts, float(thr)))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(float(thr))
+    return out
+
+
+def build_prefill_jobs(
+    ks: Sequence[int] = (4, 8, 16),
+    thresholds: Sequence[float] = (0.0, 0.10, 0.30),
+) -> list[dict[str, Any]]:
+    """Prefill-only: ESC, no decode prune. One job per admission regime.
+
+    Hopeless residuals score 0.02 (loop), 0.22 (illegal), 1.0 (live), so
+    0.00 / 0.10 / 0.30 are the three distinct bars. Decode knobs stay at
+    defaults and do not change the plan because method=esc.
+    """
+    specs: list[dict[str, Any]] = []
+    for k in ks:
+        bars = unique_prefill_bars(int(k), thresholds)
+        for thr in bars:
+            policy = "base" if float(thr) <= 0.0 else "app"
+            specs.append(
+                _job(
+                    tag="prefill",
+                    method="esc",
+                    policy=policy,
+                    n=16,
+                    k=int(k),
+                    budget=512,
+                    tau=256,
+                    dpts_step=100,
+                    threshold=float(thr),
+                    prefill_threshold=float(thr),
+                    decode_threshold=DECODE_SCORE_BAR,
+                    admit_mode="score",
+                )
+            )
+    return _finalize_jobs(specs)
+
+
 def label_of(job: dict[str, Any]) -> str:
     named = job.get("mild_label")
     if named:
         return str(named)
     method = str(job["method"])
     policy = str(job["policy"])
+    if str(job.get("tag", "")) == "prefill":
+        bar = job.get("prefill_threshold", job.get("threshold", 0))
+        return f"prefill@{bar:g}"
     return method if policy == "base" else f"{method}+{policy}"
 
 
@@ -993,6 +1064,8 @@ def run_job(
         admit_alpha=float(job.get("admit_alpha", 0.5)),
         mild_step=int(job.get("mild_step", 64)),
         mild_target=str(job.get("mild_target", "low_score")),
+        prefill_threshold=float(job.get("prefill_threshold", job["threshold"])),
+        decode_threshold=float(job.get("decode_threshold", DECODE_SCORE_BAR)),
     )
     items = list(problems)[:n]
     trunk_fn = contest_math_trunk if workload == "math500" else gsm8k_trunk
@@ -1045,7 +1118,7 @@ def run_job(
     grow_probed = 0
 
     if str(job["method"]) == "grow":
-        threshold = float(job["threshold"])
+        threshold = float(job.get("decode_threshold", job["threshold"]))
         probe_set = set(plan["probe"])
         probe_n = int(plan["step"])
         partial: dict[tuple[int, int], list[int]] = {}
@@ -1296,7 +1369,7 @@ def run_gpu(args: argparse.Namespace) -> int:
         if args.scale or getattr(args, "grow", False):
             picked = list(jobs)
         else:
-            picked = [job for job in jobs if job["tag"] in ("paper", "wide")][:3]
+            picked = [job for job in jobs if job["tag"] in ("paper", "wide", "prefill")][:3]
             if not picked:
                 picked = list(jobs)[:3]
             extra = next(
@@ -1505,6 +1578,23 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
                 [row for row in wide if int(row["k"]) == k],
                 wide_cols,
             )
+    prefill = _pick(rows, tag="prefill")
+    if prefill:
+        emit(
+            "prefill-only  ESC  n=16 budget=512  no decode prune",
+            prefill,
+            (
+                "label",
+                "k",
+                "prefill_threshold",
+                "admitted",
+                "computed_prefill_tokens",
+                "peak_kv_tokens",
+                "e2e_ms",
+                "winner_acc",
+                "surv_acc",
+            ),
+        )
     thresh = _pick(rows, tag="thresh")
     if thresh:
         thresh_cols = (
@@ -1596,13 +1686,15 @@ def _stamp_admit(jobs: list[dict[str, Any]], args: argparse.Namespace) -> list[d
 
 
 def select_jobs(args: argparse.Namespace) -> list[dict[str, Any]]:
-    ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if (args.wide or args.thresh) else (4,))
+    ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if (args.wide or args.thresh or getattr(args, "prefill", False)) else (4,))
     if getattr(args, "grow", False):
         jobs = build_grow_jobs()
     elif args.scale:
         jobs = build_scale_jobs()
     elif args.mild:
         jobs = build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
+    elif getattr(args, "prefill", False):
+        jobs = build_prefill_jobs(ks=ks, thresholds=parse_thresholds(args.prefill_thresholds))
     elif args.thresh:
         jobs = build_thresh_jobs(ks=ks, thresholds=parse_thresholds(args.thresholds))
     elif args.wide or args.ks:
@@ -1642,6 +1734,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="score-bar sweep: native / decode-only vs APP at --thresholds",
     )
     p.add_argument(
+        "--prefill",
+        action="store_true",
+        help="prefill-only ESC sweep of --prefill-thresholds (no decode prune)",
+    )
+    p.add_argument(
+        "--prefill-thresholds",
+        default="0.0,0.10,0.30",
+        help="comma-separated prefill bars; duplicate admission sets are dropped",
+    )
+    p.add_argument(
         "--thresholds",
         default="0.15,0.45",
         help="comma-separated score bars for --thresh",
@@ -1679,16 +1781,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         jobs = select_jobs(args)
         print(f"{len(jobs)} jobs")
         for job in jobs:
+            extra = ""
+            if job.get("policy") == "app" or job.get("tag") == "prefill":
+                extra = (
+                    f" prefill_t={job.get('prefill_threshold', job.get('threshold', ''))}"
+                    f" decode_t={job.get('decode_threshold', DECODE_SCORE_BAR)}"
+                )
             print(
                 f"{job['tag']:<12} {label_of(job):<16} mix={job['mix']:<8} "
                 f"n={job['n']:<3} k={job['k']:<2} D={job['budget']:<4} "
                 f"tau={job['tau']:<4} step={job['dpts_step']:<4} "
-                f"a={job['alpha']:<4} w={job['esc_window']}"
-                + (
-                    f" admit={job.get('admit_mode', 'score')} t={job.get('threshold', '')}"
-                    if job.get("policy") == "app"
-                    else ""
-                )
+                f"a={job['alpha']:<4} w={job['esc_window']}{extra}"
             )
         return 0
     if args.report:

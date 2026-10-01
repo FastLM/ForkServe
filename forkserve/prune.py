@@ -88,13 +88,16 @@ class DecodeScorer:
         if _ILLEGAL_MATH.search(raw):
             return 0.16, "illegal"
         n = max(len(raw), 1)
+        alpha = sum(ch.isalnum() for ch in raw) / n
+        entropy = len(set(raw)) / n
         digits = sum(ch.isdigit() for ch in raw) / n
         ops = sum(ch in "+-*/=()" for ch in raw) / n
-        uniq = len(set(raw)) / n
+        # Healthy math prose continues even before ####. Weights are not
+        # the prefill 0.55 / 0.45 mix.
         score = (
-            0.40 * min(1.0, digits * 20.0)
-            + 0.35 * min(1.0, ops * 15.0)
-            + 0.25 * min(1.0, uniq * 8.0)
+            0.50 * min(1.0, alpha * 2.0)
+            + 0.30 * min(1.0, entropy * 8.0)
+            + 0.20 * min(1.0, digits * 20.0 + ops * 15.0)
         )
         return float(min(1.0, max(0.0, score))), "ok"
 

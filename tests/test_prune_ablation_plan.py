@@ -4,12 +4,14 @@ from experiments.prune_ablation_gpu import (
     admitted_indices,
     assign_tokens,
     build_jobs,
+    build_prefill_jobs,
     build_thoughts,
     build_thresh_jobs,
     build_wide_jobs,
     drop_indices,
     esc_should_stop,
     parse_ks,
+    unique_prefill_bars,
     work_key,
 )
 
@@ -122,6 +124,11 @@ def test_wide_grid_covers_k8_and_k16() -> None:
     thresh = build_thresh_jobs((4, 8, 16), (0.15, 0.45))
     assert len(thresh) == 27
     assert {job["threshold"] for job in thresh if job["policy"] == "app"} == {0.15, 0.45}
+    assert unique_prefill_bars(8, (0.0, 0.05, 0.10, 0.20, 0.25, 0.45, 0.80)) == [0.0, 0.05, 0.25]
+    prefill = build_prefill_jobs((4, 8, 16), (0.0, 0.10, 0.30))
+    assert len(prefill) == 9
+    assert all(job["method"] == "esc" and job["tag"] == "prefill" for job in prefill)
+    assert {job["prefill_threshold"] for job in prefill} == {0.0, 0.10, 0.30}
 
 
 def test_esc_window_needs_the_same_marker() -> None:
@@ -210,6 +217,46 @@ def test_grow_probes_illegal_text_and_can_extend_it() -> None:
     assert len(jobs) == 9
     assert len({work_key(job) for job in jobs}) == len(jobs)
     assert all(job["workload"] == "math500" and job["budget"] == 1024 for job in jobs)
+
+
+def test_prefill_and_decode_bars_are_independent() -> None:
+    thoughts = build_thoughts(4, "hopeless")
+    # Prefill 0.15 starts illegal text; decode 0.45 still cuts it later.
+    assert admitted_indices("app", thoughts, 0.15) == [0, 1, 3]
+    assert drop_indices("dpts", thoughts, alpha=0.5, decode_threshold=0.45) == [2, 3]
+    # Raising only the prefill bar does not change the decode cut list.
+    assert drop_indices("dpts", thoughts, alpha=0.5, decode_threshold=0.45) == [2, 3]
+    tight = assign_tokens(
+        "dpts",
+        thoughts,
+        policy="app",
+        threshold=0.15,
+        prefill_threshold=0.15,
+        decode_threshold=0.45,
+        budget=512,
+        tau=256,
+        dpts_step=100,
+        alpha=0.5,
+    )
+    assert tight["admitted"] == [0, 1, 3]
+    assert tight["assigned"][3] == 100
+    assert 2 not in tight["admitted"]
+    # Decode bar 0.10 would keep illegal text running; prefill bar unchanged.
+    loose = assign_tokens(
+        "dpts",
+        thoughts,
+        policy="app",
+        threshold=0.15,
+        prefill_threshold=0.15,
+        decode_threshold=0.10,
+        budget=512,
+        tau=256,
+        dpts_step=100,
+        alpha=0.5,
+    )
+    assert loose["admitted"] == [0, 1, 3]
+    assert loose["assigned"][3] == 512
+    assert loose["drop"] == [2]
 
 
 def test_job_grid_is_unique_and_inside_budget() -> None:
