@@ -74,6 +74,8 @@
 \newlabel{eq:work@cref}{{[equation][6][]6}{[1][5][]5}{}{}{}}
 \newlabel{eq:xfer}{{7}{5}{}{equation.7}{}}
 \newlabel{eq:xfer@cref}{{[equation][7][]7}{[1][5][]5}{}{}{}}
+\newlabel{eq:drej}{{8}{5}{}{equation.8}{}}
+\newlabel{eq:drej@cref}{{[equation][8][]8}{[1][5][]5}{}{}{}}
 \newlabel{lem:dom}{{3}{5}{First-fan-out dominance}{lemma.3}{}}
 \newlabel{lem:dom@cref}{{[lemma][3][]3}{[1][5][]5}{}{}{}}
 \citation{distserve,splitwise}
@@ -81,42 +83,42 @@
 \newlabel{fig:app@cref}{{[figure][3][]3}{[1][4][]6}{}{}{}}
 \newlabel{tab:span}{{2}{6}{Work, transfer, and memory spans (bottleneck in \textcolor {fsred}{red}). $W_{\mathrm {pre}}$ is GPU prefill tokens; $X$ is connector tokens; $M$ is live KV after abort; $T_{\mathrm {ab}}$ is abort cost in pages; replay is a later \texttt {open} of the published winner. $\mathrm {PAR}$ is the number of trunk copies touched on the first expand}{table.2}{}}
 \newlabel{tab:span@cref}{{[table][2][]2}{[1][5][]6}{}{}{}}
-\newlabel{eq:tfan}{{8}{6}{}{equation.8}{}}
-\newlabel{eq:tfan@cref}{{[equation][8][]8}{[1][6][]6}{}{}{}}
 \citation{sarathi}
 \citation{jitserve}
 \newlabel{fig:tree}{{4}{7}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.4}{}}
 \newlabel{fig:tree@cref}{{[figure][4][]4}{[1][4][]7}{}{}{}}
+\newlabel{alg:app}{{1}{7}{}{algorithm.1}{}}
+\newlabel{alg:app@cref}{{[algorithm][1][]1}{[1][5][]7}{}{}{}}
+\newlabel{eq:tfan}{{9}{7}{}{equation.9}{}}
+\newlabel{eq:tfan@cref}{{[equation][9][]9}{[1][6][]7}{}{}{}}
 \newlabel{sec:schedule}{{3.5}{7}{}{subsection.3.5}{}}
 \newlabel{sec:schedule@cref}{{[subsection][5][3]3.5}{[1][7][]7}{}{}{}}
-\newlabel{eq:slots}{{9}{7}{}{equation.9}{}}
-\newlabel{eq:slots@cref}{{[equation][9][]9}{[1][7][]7}{}{}{}}
-\newlabel{eq:theta}{{10}{7}{}{equation.10}{}}
-\newlabel{eq:theta@cref}{{[equation][10][]10}{[1][7][]7}{}{}{}}
-\newlabel{eq:bc}{{11}{7}{}{equation.11}{}}
-\newlabel{eq:bc@cref}{{[equation][11][]11}{[1][7][]7}{}{}{}}
-\newlabel{eq:bs}{{12}{7}{}{equation.12}{}}
-\newlabel{eq:bs@cref}{{[equation][12][]12}{[1][7][]7}{}{}{}}
-\newlabel{sec:eval}{{4}{7}{}{section.4}{}}
-\newlabel{sec:eval@cref}{{[section][4][]4}{[1][7][]7}{}{}{}}
+\newlabel{eq:slots}{{10}{7}{}{equation.10}{}}
+\newlabel{eq:slots@cref}{{[equation][10][]10}{[1][7][]7}{}{}{}}
+\newlabel{eq:theta}{{11}{7}{}{equation.11}{}}
+\newlabel{eq:theta@cref}{{[equation][11][]11}{[1][7][]7}{}{}{}}
+\newlabel{eq:bc}{{12}{7}{}{equation.12}{}}
+\newlabel{eq:bc@cref}{{[equation][12][]12}{[1][7][]7}{}{}{}}
+\newlabel{eq:bs}{{13}{7}{}{equation.13}{}}
+\newlabel{eq:bs@cref}{{[equation][13][]13}{[1][7][]7}{}{}{}}
 \newlabel{fig:dragon}{{5}{8}{\textbf {Seven cuts of ``find the dragon.''} The dragon head is the radix root; the body is one residual. Green tokens are full pages in $H$ and are spliced onto decode. Orange tokens are absent from $H$ and are grown by prefill. Gray tokens are withheld. Chips stand in for tokens: a real hit ends on a full page, and each row is a different value of $m_i$. (a)~The body is a hit ($\mathrm {HS}$, $m_i=\ell _i$, $\Work _i=0$). (b)~The front half ``dra'' is in the tree and ``gon'' grows ($\mathrm {HP}$, $\Work _i=\ell _i-m_i$). (c)~The cut falls after ``d''. (d)~The cut falls before the last character. (e)~A miss grows the body from the neck ($\mathrm {PF}$, $m_i=0$, $\Work _i=\ell _i$); the head stays the alias. (f)~The first $\lceil \alpha \ell _i\rceil $ tokens grow and the kernel stops ($\mathrm {EA}$). (g)~A repeated loop is withheld ($\mathrm {DS}$, $\Work _i=0$). A low score that is not a loop is not this row: it is prefilled, then decoded for a probe (\Cref {alg:app})}{figure.5}{}}
 \newlabel{fig:dragon@cref}{{[figure][5][]5}{[1][5][]8}{}{}{}}
-\newlabel{sec:eval-gpu}{{4.1}{8}{}{subsection.4.1}{}}
-\newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval}{{4}{8}{}{section.4}{}}
+\newlabel{sec:eval@cref}{{[section][4][]4}{[1][8][]8}{}{}{}}
 \citation{esc}
 \citation{specrej}
 \citation{dpts}
-\newlabel{alg:app}{{1}{9}{}{algorithm.1}{}}
-\newlabel{alg:app@cref}{{[algorithm][1][]1}{[1][5][]9}{}{}{}}
 \newlabel{tab:gsm}{{3}{9}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.3}{}}
-\newlabel{tab:gsm@cref}{{[table][3][]3}{[1][8][]9}{}{}{}}
+\newlabel{tab:gsm@cref}{{[table][3][]3}{[1][9][]9}{}{}{}}
+\newlabel{sec:eval-gpu}{{4.1}{9}{}{subsection.4.1}{}}
+\newlabel{sec:eval-gpu@cref}{{[subsection][1][4]4.1}{[1][9][]9}{}{}{}}
 \newlabel{sec:eval-app}{{4.2}{9}{}{subsection.4.2}{}}
 \newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][9][]9}{}{}{}}
 \newlabel{tab:app}{{4}{9}{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; ForkServe+ in green. Not GPU wall-clock}{table.4}{}}
 \newlabel{tab:app@cref}{{[table][4][]4}{[1][9][]9}{}{}{}}
 \newlabel{tab:decode-prune}{{5}{9}{Decoding-time pruning on the \Cref {tab:app} fan-out ($10{\times }4$, $L{=}256$). Decode-to-cut is the prefix that must be generated before a child can be dropped. ``On losers'' counts that prefix on the two low-score children. Same $12\,\mu \mathrm {s}/\mathrm {token}$ clock. Not GPU wall-clock}{table.5}{}}
 \newlabel{tab:decode-prune@cref}{{[table][5][]5}{[1][9][]9}{}{}{}}
-\newlabel{tab:grow}{{6}{10}{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$. Any-finished is exact match on a branch that ran the full budget. ``Drop $s{<}\tau $'' withholds every low-score residual before prefill. ``Grow $P$'' skips loops, prefills the other low-score residuals, and continues a probe of $P$ tokens to $D$ only if the generated prefix scores at least $\tau {=}0.45$. Time is trunk warm plus fan-out, in seconds}{table.6}{}}
+\newlabel{tab:grow}{{6}{10}{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$. Any-finished is exact match on a branch that ran the full budget. ``Drop $s{<}\tau $'' withholds every low-score residual before prefill. ``Grow $t_0$'' is \Cref {alg:app}: loops stay at $d_i{=}0$; every other low-score residual is probed for $t_0$ tokens and continues to $D$ only if $s'_i\ge \tau {=}0.45$. Time is trunk warm plus fan-out, in seconds}{table.6}{}}
 \newlabel{tab:grow@cref}{{[table][6][]6}{[1][10][]10}{}{}{}}
 \newlabel{sec:eval-grow}{{4.2}{10}{}{table.5}{}}
 \newlabel{sec:eval-grow@cref}{{[subsection][2][4]4.2}{[1][9][]10}{}{}{}}
@@ -124,14 +126,14 @@
 \newlabel{sec:eval-prefill@cref}{{[subsection][2][4]4.2}{[1][10][]10}{}{}{}}
 \newlabel{tab:prefill-bar}{{7}{10}{GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only. Any-finished is exact match on a full-budget branch. $\tau _{\mathrm {pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text. Time is trunk warm plus fan-out, in seconds. Computed prefill falls $23\%$ at $0.15$ and $45\%$ at $0.45$ at every $k$}{table.7}{}}
 \newlabel{tab:prefill-bar@cref}{{[table][7][]7}{[1][10][]10}{}{}{}}
-\newlabel{tab:plugin}{{8}{10}{Same GSM8K slice, $k{=}16$, $\tau _{\mathrm {pre}}{=}0.15$ on three host decoders. Admitted children and computed prefill tokens are identical across hosts: the plug-in does not read $\tau $, $d_{\mathrm {DPTS}}$, or $\alpha $. Any-finished stays $16/16$}{table.8}{}}
+\newlabel{tab:plugin}{{8}{10}{Same GSM8K slice, $k{=}16$, $\tau _{\mathrm {pre}}{=}0.15$ in front of three host decoders. Admitted children and computed prefill tokens are identical across hosts: prefill admission does not read $\tau $, $d_{\mathrm {DPTS}}$, or $\alpha $. Any-finished stays $16/16$}{table.8}{}}
 \newlabel{tab:plugin@cref}{{[table][8][]8}{[1][10][]10}{}{}{}}
 \newlabel{sec:eval-plus}{{4.3}{10}{}{subsection.4.3}{}}
 \newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][10][]10}{}{}{}}
 \newlabel{fig:eval-slo}{{6}{11}{\textbf {SLO sweep} from measured DeepSeek GSM8K peaks. Left: saturated tok/s plateaus at $C{\times }$decode-rate ($76$ vs.\ $103$ slots). Right: APC crosses the $1$\,s P99 line at $448$ QPS; \sys {} stays under it through $512$}{figure.6}{}}
 \newlabel{fig:eval-slo@cref}{{[figure][6][]6}{[1][10][]11}{}{}{}}
 \newlabel{tab:plus}{{9}{11}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. Game24 / HumanEval peaks stay with the spine}{table.9}{}}
-\newlabel{tab:plus@cref}{{[table][9][]9}{[1][11][]11}{}{}{}}
+\newlabel{tab:plus@cref}{{[table][9][]9}{[1][10][]11}{}{}{}}
 \newlabel{sec:eval-mt}{{4.4}{11}{}{subsection.4.4}{}}
 \newlabel{sec:eval-mt@cref}{{[subsection][4][4]4.4}{[1][11][]11}{}{}{}}
 \newlabel{tab:mt}{{10}{11}{Three-turn ToT, $n{=}16$, $k{=}4$, $\mathrm {tp}{=}2$, one problem per generate. End-to-end time is seconds per problem. Peak KV is tokens on the live spine. FS is \sys ; FS+ is ForkServe+. Shortest end-to-end time and lowest peak in green}{table.10}{}}
@@ -143,7 +145,7 @@
 \newlabel{fig:eval-multi}{{7}{12}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.7}{}}
 \newlabel{fig:eval-multi@cref}{{[figure][7][]7}{[1][10][]12}{}{}{}}
 \newlabel{tab:r1stop}{{12}{12}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green}{table.12}{}}
-\newlabel{tab:r1stop@cref}{{[table][12][]12}{[1][12][]12}{}{}{}}
+\newlabel{tab:r1stop@cref}{{[table][12][]12}{[1][11][]12}{}{}{}}
 \newlabel{sec:eval-sens}{{4.6}{12}{}{subsection.4.6}{}}
 \newlabel{sec:eval-sens@cref}{{[subsection][6][4]4.6}{[1][12][]12}{}{}{}}
 \newlabel{tab:branch}{{13}{12}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green}{table.13}{}}
@@ -191,11 +193,11 @@
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
 \bibcite{medusa}{{7}{}{{}}{{}}}
 \bibcite{murakkab}{{8}{}{{}}{{}}}
+\bibcite{idlespec}{{9}{}{{}}{{}}}
 \newlabel{fig:eval-hist}{{11}{15}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and ForkServe+. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.11}{}}
 \newlabel{fig:eval-hist@cref}{{[figure][11][]11}{[1][11][]15}{}{}{}}
 \newlabel{fig:eval-branch}{{12}{15}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.12}{}}
 \newlabel{fig:eval-branch@cref}{{[figure][12][]12}{[1][12][]15}{}{}{}}
-\bibcite{idlespec}{{9}{}{{}}{{}}}
 \bibcite{contextrot}{{10}{}{{}}{{}}}
 \bibcite{conserve}{{11}{}{{}}{{}}}
 \bibcite{dpts}{{12}{}{{}}{{}}}
