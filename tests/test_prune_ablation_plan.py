@@ -87,6 +87,32 @@ def test_esc_window_needs_the_same_marker() -> None:
     assert esc_should_stop(["3", "1", "1"], 2)
 
 
+def test_mild_each_phase_drops_one_hopeless_thought() -> None:
+    from experiments.prune_ablation_gpu import assign_tokens, build_mild_jobs
+
+    thoughts = build_thoughts(4, "hopeless")
+    common = dict(policy="base", threshold=0.45, budget=512, tau=64, dpts_step=64, alpha=0.5)
+    pre = assign_tokens("mild", thoughts, prefill_drop=1, decode_drop=0, mild_step=64, **common)
+    assert pre["admitted"] == [0, 1, 3]
+    assert pre["kept"] == 3
+    assert pre["avoided_decode"] == 512
+    both = assign_tokens("mild", thoughts, prefill_drop=1, decode_drop=1, mild_step=64, **common)
+    assert both["admitted"] == [0, 1, 3]
+    assert both["assigned"][3] == 64
+    assert both["assigned"][0] == 512
+    assert both["kept"] == 2
+    assert both["avoided_decode"] == 512 + (512 - 64)
+    clean = build_thoughts(4, "clean")
+    untouched = assign_tokens("mild", clean, prefill_drop=1, decode_drop=1, mild_step=64, **common)
+    assert untouched["admitted"] == [0, 1, 2, 3]
+    assert untouched["kept"] == 4
+    assert untouched["avoided_decode"] == 0
+    labels = [job["mild_label"] for job in build_mild_jobs()]
+    assert labels.count("full") == 1
+    assert "both-1@64" in labels
+    assert "clean/prefill-1" in labels
+
+
 def test_job_grid_is_unique_and_inside_budget() -> None:
     jobs = build_jobs()
     keys = [work_key(job) for job in jobs]

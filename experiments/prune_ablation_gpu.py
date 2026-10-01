@@ -152,6 +152,49 @@ def decision_step(method: str, *, budget: int, tau: int, dpts_step: int) -> int:
     raise ValueError(f"unknown method {method}")
 
 
+def assign_mild(
+    thoughts: Sequence[str],
+    *,
+    prefill_drop: int,
+    decode_drop: int,
+    budget: int,
+    step: int,
+) -> dict[str, Any]:
+    """Drop only the worst hopeless thoughts, one phase at a time.
+
+    Eligible losers are non-winners whose draft score is below 0.45. Live
+    strategies are never cut, so a clean fan-out is left whole. Prefill
+    removes the first ``prefill_drop`` of that list before any GPU work.
+    Decoding then stops the next ``decode_drop`` after ``step`` tokens.
+    Everyone else runs to ``budget``.
+    """
+    if step > budget:
+        raise ValueError(f"mild step {step} exceeds budget {budget}")
+    losers = drop_indices("dpts", thoughts, alpha=0.5)
+    pre_n = max(0, min(int(prefill_drop), len(losers)))
+    skipped = losers[:pre_n]
+    rest = losers[pre_n:]
+    dec_n = max(0, min(int(decode_drop), len(rest)))
+    shortened = rest[:dec_n]
+    skip_set = set(skipped)
+    short_set = set(shortened)
+    admitted = [i for i in range(len(thoughts)) if i not in skip_set]
+    assigned = {i: (step if i in short_set else budget) for i in admitted}
+    avoided = 0
+    for i in range(len(thoughts)):
+        got = assigned.get(i, 0)
+        avoided += budget - got
+    return {
+        "admitted": admitted,
+        "drop": list(shortened),
+        "assigned": assigned,
+        "avoided_decode": avoided,
+        "step": step if shortened else budget,
+        "kept": sum(1 for n in assigned.values() if n == budget),
+        "prefill_skipped": list(skipped),
+    }
+
+
 def assign_tokens(
     method: str,
     thoughts: Sequence[str],
@@ -162,8 +205,19 @@ def assign_tokens(
     tau: int,
     dpts_step: int,
     alpha: float,
+    prefill_drop: int = 0,
+    decode_drop: int = 0,
+    mild_step: int = 64,
 ) -> dict[str, Any]:
     """Per-child decode length after prefill admission."""
+    if method == "mild":
+        return assign_mild(
+            thoughts,
+            prefill_drop=prefill_drop,
+            decode_drop=decode_drop,
+            budget=budget,
+            step=mild_step,
+        )
     step = decision_step(method, budget=budget, tau=tau, dpts_step=dpts_step)
     entered = admitted_indices(policy, thoughts, threshold)
     drop = drop_indices(method, thoughts, alpha=alpha)
@@ -218,6 +272,10 @@ def work_key(job: dict[str, Any]) -> tuple[Any, ...]:
         parts.extend((int(job["tau"]), float(job["alpha"])))
     if method == "dpts":
         parts.append(int(job["dpts_step"]))
+    if method == "mild":
+        parts.extend(
+            (int(job.get("prefill_drop", 0)), int(job.get("decode_drop", 0)), int(job.get("mild_step", 64)))
+        )
     return tuple(parts)
 
 
@@ -369,9 +427,50 @@ def build_jobs() -> list[dict[str, Any]]:
 
 
 def label_of(job: dict[str, Any]) -> str:
+    named = job.get("mild_label")
+    if named:
+        return str(named)
     method = str(job["method"])
     policy = str(job["policy"])
     return method if policy == "base" else f"{method}+{policy}"
+
+
+def build_mild_jobs() -> list[dict[str, Any]]:
+    """Each phase drops at most one hopeless thought, instead of half the fan-out.
+
+    ``full`` decodes every child. ``prefill-1`` skips the worst before GPU.
+    ``decode-1`` stops the worst after a short prefix. ``both-1`` lets each
+    phase take one, so two hopeless thoughts are cut and the live ones still
+    finish. ``prefill-2`` is the old draft (both hopeless thoughts skipped)
+    kept as the aggressive anchor.
+    """
+    specs: list[dict[str, Any]] = []
+
+    def add(label: str, *, mix: str, prefill_drop: int, decode_drop: int, mild_step: int) -> None:
+        specs.append(
+            _job(
+                tag="mild",
+                method="mild",
+                policy="base",
+                mix=mix,
+                n=16,
+                k=4,
+                budget=512,
+                mild_label=label,
+                prefill_drop=prefill_drop,
+                decode_drop=decode_drop,
+                mild_step=mild_step,
+            )
+        )
+
+    for mix, prefix in (("hopeless", ""), ("clean", "clean/")):
+        add(f"{prefix}full", mix=mix, prefill_drop=0, decode_drop=0, mild_step=64)
+        add(f"{prefix}prefill-1", mix=mix, prefill_drop=1, decode_drop=0, mild_step=64)
+        add(f"{prefix}decode-1@64", mix=mix, prefill_drop=0, decode_drop=1, mild_step=64)
+        add(f"{prefix}decode-1@128", mix=mix, prefill_drop=0, decode_drop=1, mild_step=128)
+        add(f"{prefix}both-1@64", mix=mix, prefill_drop=1, decode_drop=1, mild_step=64)
+        add(f"{prefix}prefill-2", mix=mix, prefill_drop=2, decode_drop=0, mild_step=64)
+    return specs
 
 
 def _load_done(path: Path) -> dict[tuple[Any, ...], dict[str, Any]]:
@@ -490,6 +589,9 @@ def run_job(
         tau=int(job["tau"]),
         dpts_step=int(job["dpts_step"]),
         alpha=float(job["alpha"]),
+        prefill_drop=int(job.get("prefill_drop", 0)),
+        decode_drop=int(job.get("decode_drop", 0)),
+        mild_step=int(job.get("mild_step", 64)),
     )
     items = list(problems)[:n]
     trunks = [gsm8k_trunk(item) for item in items]
@@ -530,6 +632,8 @@ def run_job(
     fanout_ms = 0.0
     winner_hits = 0
     survivor_hits = 0
+    branch_hits = [0] * k
+    only_hits = [0] * k
     finished_branches = 0
     marker_branches = 0
     winner_hash = hashlib.sha256()
@@ -613,9 +717,16 @@ def run_job(
             w_hit, s_hit = _score_finished(texts, item.answer, flags)
             winner_hits += int(w_hit)
             survivor_hits += int(s_hit)
-            for branch, text, _ in rows:
+            hit_branches: list[int] = []
+            for branch, text, done in rows:
                 if branch == 0:
                     winner_hash.update(text.encode())
+                ok = bool(done) and bool(marker_answer(text)) and gsm8k_correct(text, item.answer)
+                if ok:
+                    branch_hits[branch] += 1
+                    hit_branches.append(branch)
+            if len(hit_branches) == 1:
+                only_hits[hit_branches[0]] += 1
 
     prefill_avoided = len(items) * int(plan["avoided_decode"])
     if window > 1:
@@ -648,6 +759,8 @@ def run_job(
             "e2e_ms": round(warm_ms + fanout_ms, 2),
             "winner_correct": int(winner_hits),
             "survivor_correct": int(survivor_hits),
+            "branch_correct": branch_hits,
+            "branch_unique": only_hits,
             "finished_branches": int(finished_branches),
             "marker_branches": int(marker_branches),
             "prefix_cache_aligned": bool(prefix_ok),
@@ -669,7 +782,7 @@ def run_gpu(args: argparse.Namespace) -> int:
 
     from forkserve.bench_tasks import load_gsm8k
 
-    jobs = build_jobs()
+    jobs = build_mild_jobs() if args.mild else build_jobs()
     if args.smoke:
         picked = [job for job in jobs if job["tag"] == "paper"][:3]
         picked.append(next(job for job in jobs if job["tag"] == "esc_window" and job["mix"] == "hopeless"))
@@ -735,7 +848,7 @@ def run_gpu(args: argparse.Namespace) -> int:
                 f"[{index}/{len(pending)}] {row['label']:<16} {row['tag']:<12} "
                 f"k={row['k']} D={row['budget']} e2e={row['e2e_ms']:.0f}ms "
                 f"decode={row['decode_tokens']} avoid={row['avoided_decode']} "
-                f"acc={row['winner_correct']}/{row['n']} "
+                f"W={row['winner_correct']}/{row['n']} any={row['survivor_correct']}/{row['n']} "
                 f"({time.perf_counter() - t0:.1f}s)",
                 flush=True,
             )
@@ -849,6 +962,23 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
             "surv_acc",
         ),
     )
+    mild = _pick(rows, tag="mild")
+    if mild:
+        emit(
+            "mild  n=16 k=4 budget=512  drop at most one hopeless thought per phase",
+            mild,
+            (
+                "label",
+                "admitted",
+                "kept",
+                "decode_tokens",
+                "avoided_decode",
+                "peak_kv_tokens",
+                "e2e_ms",
+                "winner_acc",
+                "surv_acc",
+            ),
+        )
     return "\n".join(lines)
 
 
@@ -860,6 +990,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--shards", type=int, default=1)
     p.add_argument("--out", default="logs/prune_ablation/shard0.json")
     p.add_argument("--smoke", action="store_true")
+    p.add_argument("--mild", action="store_true", help="drop at most one hopeless thought per phase")
     p.add_argument("--report", default="", help="directory or json to print, no GPU")
     p.add_argument("--max-model-len", type=int, default=4096)
     p.add_argument("--max-batched-tokens", type=int, default=8192)
@@ -873,7 +1004,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     if args.list:
-        jobs = build_jobs()
+        jobs = build_mild_jobs() if args.mild else build_jobs()
         print(f"{len(jobs)} jobs")
         for job in jobs:
             print(
