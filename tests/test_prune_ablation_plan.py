@@ -5,8 +5,10 @@ from experiments.prune_ablation_gpu import (
     assign_tokens,
     build_jobs,
     build_thoughts,
+    build_wide_jobs,
     drop_indices,
     esc_should_stop,
+    parse_ks,
     work_key,
 )
 
@@ -78,6 +80,22 @@ def test_alpha_scales_with_fanout() -> None:
     thoughts = build_thoughts(8, "hopeless")
     assert drop_indices("specrej", thoughts, alpha=0.25) == [4, 5]
     assert len(drop_indices("specrej", thoughts, alpha=0.5)) == 4
+    wide = build_thoughts(16, "hopeless")
+    assert admitted_indices("draft", wide, 0.45) == list(range(8))
+    assert admitted_indices("app", wide, 0.45) == [0]
+    assert drop_indices("dpts", wide, alpha=0.5) == list(range(8, 16))
+    assert len(drop_indices("specrej", wide, alpha=0.5)) == 8
+
+
+def test_wide_grid_covers_k8_and_k16() -> None:
+    assert parse_ks("8,16") == (8, 16)
+    jobs = build_wide_jobs((4, 8, 16))
+    keys = [work_key(job) for job in jobs]
+    assert len(keys) == len(set(keys))
+    assert {job["k"] for job in jobs} == {4, 8, 16}
+    assert len(jobs) == 27
+    assert all(job["n"] == 16 and job["budget"] == 512 for job in jobs)
+    assert all(job["tag"] == "wide" for job in jobs)
 
 
 def test_esc_window_needs_the_same_marker() -> None:
@@ -111,6 +129,42 @@ def test_mild_each_phase_drops_one_hopeless_thought() -> None:
     assert labels.count("full") == 1
     assert "both-1@64" in labels
     assert "clean/prefill-1" in labels
+    wide_mild = build_mild_jobs(ks=(8, 16))
+    assert {job["k"] for job in wide_mild} == {8, 16}
+    assert len(wide_mild) == 24
+
+
+def test_scale_cuts_loops_and_keeps_illegal_text() -> None:
+    from experiments.prune_ablation_gpu import (
+        assign_tokens,
+        build_scale_jobs,
+        loop_indices,
+    )
+
+    thoughts = build_thoughts(16, "hopeless", family="contest")
+    assert loop_indices(thoughts) == [8, 10, 12, 14]
+    common = dict(policy="base", threshold=0.45, budget=1024, tau=128, dpts_step=128, alpha=0.5)
+    pre = assign_tokens(
+        "mild", thoughts, prefill_drop=4, decode_drop=0, mild_step=128, mild_target="loop", **common
+    )
+    assert pre["admitted"] == [0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 15]
+    assert pre["kept"] == 12
+    both = assign_tokens(
+        "mild", thoughts, prefill_drop=2, decode_drop=2, mild_step=128, mild_target="loop", **common
+    )
+    assert 8 not in both["admitted"] and 10 not in both["admitted"]
+    assert both["assigned"][12] == 128 and both["assigned"][14] == 128
+    assert both["assigned"][9] == 1024
+    dead = assign_tokens(
+        "mild", thoughts, prefill_drop=8, decode_drop=0, mild_step=128, mild_target="low_score", **common
+    )
+    assert dead["admitted"] == [0, 1, 2, 3, 4, 5, 6, 7]
+    jobs = build_scale_jobs()
+    assert len(jobs) == 14
+    assert {job["k"] for job in jobs} == {4, 8, 16}
+    assert {job["workload"] for job in jobs} == {"math500"}
+    assert all(job["n"] == 32 and job["budget"] == 1024 for job in jobs)
+    assert len({work_key(job) for job in jobs}) == len(jobs)
 
 
 def test_job_grid_is_unique_and_inside_budget() -> None:

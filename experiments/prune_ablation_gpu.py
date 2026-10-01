@@ -45,7 +45,7 @@ from forkserve.adapters.templates import ToolWrappers
 from forkserve.config import ForkServeConfig
 from forkserve.prefill_prune import PrefillPruner
 from forkserve.prune import BranchPruner, plus_config
-from forkserve.quality import extract_gsm8k_answer, gsm8k_correct
+from forkserve.quality import extract_boxed, extract_gsm8k_answer, gsm8k_correct, math_correct
 
 # Published checkpoints. See experiments/prefill_prune_bench.py.
 DPTS_SCORE_BAR = 0.45
@@ -66,16 +66,29 @@ DEAD = (
 )
 
 
-def build_thoughts(k: int, mix: str) -> list[str]:
-    """k residuals. Winner is index 0, always a live strategy."""
+def build_thoughts(k: int, mix: str, family: str = "grade") -> list[str]:
+    """k residuals. Winner is index 0, always a live strategy.
+
+    ``family=contest`` uses the contest strategy pack for the live half.
+    The dead half is still the loop string alternating with illegal text,
+    so a text draft can see both.
+    """
     if k < 1:
         raise ValueError("k must be positive")
+    if family == "contest":
+        from forkserve.bench_tasks import CONTEST_STRATEGIES
+
+        live = CONTEST_STRATEGIES
+    elif family == "grade":
+        live = LIVE
+    else:
+        raise ValueError(f"unknown family {family}")
     if mix == "clean":
-        bodies = [LIVE[i % len(LIVE)] for i in range(k)]
+        bodies = [live[i % len(live)] for i in range(k)]
     elif mix == "hopeless":
         n_dead = k // 2
         n_live = k - n_dead
-        bodies = [LIVE[i % len(LIVE)] for i in range(n_live)]
+        bodies = [live[i % len(live)] for i in range(n_live)]
         bodies += [DEAD[i % len(DEAD)] for i in range(n_dead)]
     else:
         raise ValueError(f"unknown mix {mix}")
@@ -152,6 +165,15 @@ def decision_step(method: str, *, budget: int, tau: int, dpts_step: int) -> int:
     raise ValueError(f"unknown method {method}")
 
 
+def loop_indices(thoughts: Sequence[str]) -> list[int]:
+    """Non-winners that are repeated loops. Illegal text that is not a loop stays.
+
+    The GSM8K run showed the loop solved nothing, while the other low-score
+    string still produced exact matches. Rank is index order, winner excluded.
+    """
+    return [i for i, text in enumerate(thoughts) if i != 0 and "****" in text]
+
+
 def assign_mild(
     thoughts: Sequence[str],
     *,
@@ -159,18 +181,25 @@ def assign_mild(
     decode_drop: int,
     budget: int,
     step: int,
+    target: str = "low_score",
 ) -> dict[str, Any]:
-    """Drop only the worst hopeless thoughts, one phase at a time.
+    """Drop a short prefix of the loser list, one phase at a time.
 
-    Eligible losers are non-winners whose draft score is below 0.45. Live
-    strategies are never cut, so a clean fan-out is left whole. Prefill
-    removes the first ``prefill_drop`` of that list before any GPU work.
-    Decoding then stops the next ``decode_drop`` after ``step`` tokens.
-    Everyone else runs to ``budget``.
+    ``target=low_score`` is every non-winner under 0.45 (loops and illegal
+    text). ``target=loop`` is only the repeated-loop thoughts, so the other
+    low-score branch still runs to the budget. Live strategies are never
+    cut. Prefill removes the first ``prefill_drop`` of that list before any
+    GPU work. Decoding then stops the next ``decode_drop`` after ``step``
+    tokens. Everyone else runs to ``budget``.
     """
     if step > budget:
         raise ValueError(f"mild step {step} exceeds budget {budget}")
-    losers = drop_indices("dpts", thoughts, alpha=0.5)
+    if target == "loop":
+        losers = loop_indices(thoughts)
+    elif target == "low_score":
+        losers = drop_indices("dpts", thoughts, alpha=0.5)
+    else:
+        raise ValueError(f"unknown mild target {target}")
     pre_n = max(0, min(int(prefill_drop), len(losers)))
     skipped = losers[:pre_n]
     rest = losers[pre_n:]
@@ -208,6 +237,7 @@ def assign_tokens(
     prefill_drop: int = 0,
     decode_drop: int = 0,
     mild_step: int = 64,
+    mild_target: str = "low_score",
 ) -> dict[str, Any]:
     """Per-child decode length after prefill admission."""
     if method == "mild":
@@ -217,6 +247,7 @@ def assign_tokens(
             decode_drop=decode_drop,
             budget=budget,
             step=mild_step,
+            target=mild_target,
         )
     step = decision_step(method, budget=budget, tau=tau, dpts_step=dpts_step)
     entered = admitted_indices(policy, thoughts, threshold)
@@ -276,6 +307,12 @@ def work_key(job: dict[str, Any]) -> tuple[Any, ...]:
         parts.extend(
             (int(job.get("prefill_drop", 0)), int(job.get("decode_drop", 0)), int(job.get("mild_step", 64)))
         )
+        if job.get("mild_target", "low_score") != "low_score":
+            parts.append(str(job["mild_target"]))
+    if job.get("workload", "gsm8k") != "gsm8k":
+        parts.append(str(job["workload"]))
+    if job.get("family", "grade") != "grade":
+        parts.append(str(job["family"]))
     return tuple(parts)
 
 
@@ -296,6 +333,26 @@ def _job(**kwargs: Any) -> dict[str, Any]:
     )
     base.update(kwargs)
     return base
+
+
+def _finalize_jobs(specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop exact-duplicate work. Non-mild checkpoints must sit in the budget."""
+    seen: set[tuple[Any, ...]] = set()
+    jobs: list[dict[str, Any]] = []
+    for spec in specs:
+        if spec["method"] != "mild":
+            decision_step(
+                spec["method"],
+                budget=int(spec["budget"]),
+                tau=int(spec["tau"]),
+                dpts_step=int(spec["dpts_step"]),
+            )
+        key = work_key(spec)
+        if key in seen:
+            continue
+        seen.add(key)
+        jobs.append(dict(spec))
+    return jobs
 
 
 def build_jobs() -> list[dict[str, Any]]:
@@ -408,22 +465,40 @@ def build_jobs() -> list[dict[str, Any]]:
                     esc_window=2,
                 )
             )
-    seen: set[tuple[Any, ...]] = set()
-    jobs: list[dict[str, Any]] = []
-    for spec in specs:
-        # Reject a checkpoint that cannot sit inside the budget.
-        decision_step(
-            spec["method"],
-            budget=int(spec["budget"]),
-            tau=int(spec["tau"]),
-            dpts_step=int(spec["dpts_step"]),
-        )
-        key = work_key(spec)
-        if key in seen:
-            continue
-        seen.add(key)
-        jobs.append(spec)
-    return jobs
+    return _finalize_jobs(specs)
+
+
+def parse_ks(text: str) -> tuple[int, ...]:
+    ks = tuple(int(part.strip()) for part in text.split(",") if part.strip())
+    if not ks or any(k < 1 for k in ks):
+        raise ValueError(f"k must be a positive comma list, got {text!r}")
+    return ks
+
+
+def build_wide_jobs(ks: Sequence[int] = (4, 8, 16)) -> list[dict[str, Any]]:
+    """Paper stack at larger fan-out. Same n / budget / checkpoints as paper.
+
+    k=4 is the published setting. k=8 and k=16 are the same hopeless mix
+    (half live strategies, half loop / illegal) so draft and DPTS cut more
+    losers as the tree widens, while APP still keeps only the winner.
+    """
+    specs: list[dict[str, Any]] = []
+    for k in ks:
+        for method in METHODS:
+            for policy in POLICIES:
+                specs.append(
+                    _job(
+                        tag="wide",
+                        method=method,
+                        policy=policy,
+                        n=16,
+                        k=int(k),
+                        budget=512,
+                        tau=256,
+                        dpts_step=100,
+                    )
+                )
+    return _finalize_jobs(specs)
 
 
 def label_of(job: dict[str, Any]) -> str:
@@ -435,18 +510,27 @@ def label_of(job: dict[str, Any]) -> str:
     return method if policy == "base" else f"{method}+{policy}"
 
 
-def build_mild_jobs() -> list[dict[str, Any]]:
+def build_mild_jobs(ks: Sequence[int] = (4,)) -> list[dict[str, Any]]:
     """Each phase drops at most one hopeless thought, instead of half the fan-out.
 
     ``full`` decodes every child. ``prefill-1`` skips the worst before GPU.
     ``decode-1`` stops the worst after a short prefix. ``both-1`` lets each
     phase take one, so two hopeless thoughts are cut and the live ones still
     finish. ``prefill-2`` is the old draft (both hopeless thoughts skipped)
-    kept as the aggressive anchor.
+    kept as the aggressive anchor. At k>4 the same absolute cuts stay mild
+    because half the tree is still hopeless.
     """
     specs: list[dict[str, Any]] = []
 
-    def add(label: str, *, mix: str, prefill_drop: int, decode_drop: int, mild_step: int) -> None:
+    def add(
+        label: str,
+        *,
+        k: int,
+        mix: str,
+        prefill_drop: int,
+        decode_drop: int,
+        mild_step: int,
+    ) -> None:
         specs.append(
             _job(
                 tag="mild",
@@ -454,7 +538,7 @@ def build_mild_jobs() -> list[dict[str, Any]]:
                 policy="base",
                 mix=mix,
                 n=16,
-                k=4,
+                k=int(k),
                 budget=512,
                 mild_label=label,
                 prefill_drop=prefill_drop,
@@ -463,14 +547,76 @@ def build_mild_jobs() -> list[dict[str, Any]]:
             )
         )
 
-    for mix, prefix in (("hopeless", ""), ("clean", "clean/")):
-        add(f"{prefix}full", mix=mix, prefill_drop=0, decode_drop=0, mild_step=64)
-        add(f"{prefix}prefill-1", mix=mix, prefill_drop=1, decode_drop=0, mild_step=64)
-        add(f"{prefix}decode-1@64", mix=mix, prefill_drop=0, decode_drop=1, mild_step=64)
-        add(f"{prefix}decode-1@128", mix=mix, prefill_drop=0, decode_drop=1, mild_step=128)
-        add(f"{prefix}both-1@64", mix=mix, prefill_drop=1, decode_drop=1, mild_step=64)
-        add(f"{prefix}prefill-2", mix=mix, prefill_drop=2, decode_drop=0, mild_step=64)
-    return specs
+    for k in ks:
+        for mix, prefix in (("hopeless", ""), ("clean", "clean/")):
+            add(f"{prefix}full", k=k, mix=mix, prefill_drop=0, decode_drop=0, mild_step=64)
+            add(f"{prefix}prefill-1", k=k, mix=mix, prefill_drop=1, decode_drop=0, mild_step=64)
+            add(f"{prefix}decode-1@64", k=k, mix=mix, prefill_drop=0, decode_drop=1, mild_step=64)
+            add(f"{prefix}decode-1@128", k=k, mix=mix, prefill_drop=0, decode_drop=1, mild_step=128)
+            add(f"{prefix}both-1@64", k=k, mix=mix, prefill_drop=1, decode_drop=1, mild_step=64)
+            add(f"{prefix}prefill-2", k=k, mix=mix, prefill_drop=2, decode_drop=0, mild_step=64)
+    return _finalize_jobs(specs)
+
+
+def build_scale_jobs() -> list[dict[str, Any]]:
+    """Hard MATH-500, wider fan-out, and cuts that touch loops only.
+
+    32 level-4 and level-5 problems, budget 1024. Half the children are
+    contest strategies and half are dead text (loop, then illegal,
+    alternating). ``prefill-loops`` and ``decode-loops`` touch only the
+    loops, so the illegal strings still finish. ``both-loops`` splits those
+    loops across the two phases. ``prefill-all-dead`` skips every draft
+    score below 0.45 before prefill, including the illegal strings.
+    """
+    specs: list[dict[str, Any]] = []
+
+    def add(k: int, label: str, prefill_drop: int, decode_drop: int, target: str) -> None:
+        specs.append(
+            _job(
+                tag="scale",
+                method="mild",
+                policy="base",
+                mix="hopeless",
+                n=32,
+                k=k,
+                budget=1024,
+                mild_label=f"k{k}/{label}",
+                prefill_drop=prefill_drop,
+                decode_drop=decode_drop,
+                mild_step=128,
+                mild_target=target,
+                workload="math500",
+                family="contest",
+            )
+        )
+
+    for k in (4, 8, 16):
+        n_loop = k // 4
+        n_dead = k // 2
+        add(k, "full", 0, 0, "loop")
+        add(k, "prefill-loops", n_loop, 0, "loop")
+        add(k, "decode-loops@128", 0, n_loop, "loop")
+        if n_loop >= 2:
+            half = n_loop // 2
+            add(k, "both-loops@128", half, half, "loop")
+        add(k, "prefill-all-dead", n_dead, 0, "low_score")
+    return _finalize_jobs(specs)
+
+
+def load_job_problems(jobs: Sequence[dict[str, Any]]) -> list[Any]:
+    """GSM8K, or the first ``n`` MATH-500 items at level 4 or 5."""
+    from forkserve.bench_tasks import load_gsm8k, load_math500
+
+    n = max(int(job["n"]) for job in jobs)
+    workloads = {str(job.get("workload", "gsm8k")) for job in jobs}
+    if workloads == {"gsm8k"}:
+        return load_gsm8k(n)
+    if workloads != {"math500"}:
+        raise RuntimeError(f"mixed workloads {sorted(workloads)}")
+    hard = [item for item in load_math500(0) if int(item.n_steps or 0) >= 4]
+    if len(hard) < n:
+        raise RuntimeError(f"MATH-500 level>=4 has {len(hard)} items, need {n}")
+    return hard[:n]
 
 
 def _load_done(path: Path) -> dict[tuple[Any, ...], dict[str, Any]]:
@@ -544,12 +690,26 @@ def _generate(
     return texts, n_out, cached, elapsed
 
 
+def answer_correct(text: str, gold: str, workload: str) -> bool:
+    """GSM8K needs a #### number. Contest math accepts \\boxed{} or that number."""
+    if workload in ("math500", "aime", "amc23"):
+        return math_correct(text, gold)
+    return bool(marker_answer(text)) and gsm8k_correct(text, gold)
+
+
+def has_answer_marker(text: str, workload: str) -> bool:
+    if workload in ("math500", "aime", "amc23"):
+        return bool(extract_boxed(text)) or "####" in (text or "")
+    return "####" in (text or "")
+
+
 def _score_finished(
     texts: Sequence[str],
     gold: str,
     finished: Sequence[bool],
+    workload: str = "gsm8k",
 ) -> tuple[bool, bool]:
-    """(winner marker match, any finished branch marker match).
+    """(winner match, any finished branch match).
 
     ``texts[0]`` is thought 0 when it was generated. Callers pass only the
     branches they actually decoded, with index 0 first if it is present.
@@ -559,10 +719,10 @@ def _score_finished(
     for text, is_done in zip(texts, finished, strict=True):
         if not is_done:
             continue
-        ok = bool(marker_answer(text)) and gsm8k_correct(text, gold)
+        ok = answer_correct(text, gold, workload)
         any_hit = any_hit or ok
     if texts and finished[0]:
-        winner_hit = bool(marker_answer(texts[0])) and gsm8k_correct(texts[0], gold)
+        winner_hit = answer_correct(texts[0], gold, workload)
     return winner_hit, any_hit
 
 
@@ -574,12 +734,13 @@ def run_job(
     problems: Sequence[Any],
     job: dict[str, Any],
 ) -> dict[str, Any]:
-    from forkserve.bench_tasks import gsm8k_trunk
+    from forkserve.bench_tasks import contest_math_trunk, gsm8k_trunk
 
     n = int(job["n"])
     k = int(job["k"])
     budget = int(job["budget"])
-    thoughts = build_thoughts(k, str(job["mix"]))
+    workload = str(job.get("workload", "gsm8k"))
+    thoughts = build_thoughts(k, str(job["mix"]), family=str(job.get("family", "grade")))
     plan = assign_tokens(
         str(job["method"]),
         thoughts,
@@ -592,9 +753,11 @@ def run_job(
         prefill_drop=int(job.get("prefill_drop", 0)),
         decode_drop=int(job.get("decode_drop", 0)),
         mild_step=int(job.get("mild_step", 64)),
+        mild_target=str(job.get("mild_target", "low_score")),
     )
     items = list(problems)[:n]
-    trunks = [gsm8k_trunk(item) for item in items]
+    trunk_fn = contest_math_trunk if workload == "math500" else gsm8k_trunk
+    trunks = [trunk_fn(item) for item in items]
     trunk_ids = [_encode(tok, text) for text in trunks]
     child_ids: list[list[list[int]]] = []
     prefix_ok = True
@@ -667,7 +830,7 @@ def run_job(
                 answers[pi].append(marker_answer(text))
                 generated[pi].append((text, True))
                 finished_branches += 1
-                if "####" in text:
+                if has_answer_marker(text, workload):
                     marker_branches += 1
                 if esc_should_stop(answers[pi], window):
                     active.discard(pi)
@@ -675,7 +838,7 @@ def run_job(
             texts = [text for text, _ in generated[pi]]
             flags = [flag for _, flag in generated[pi]]
             # Thought 0 is first only when it was admitted, which it is.
-            w_hit, s_hit = _score_finished(texts, item.answer, flags)
+            w_hit, s_hit = _score_finished(texts, item.answer, flags, workload)
             winner_hits += int(w_hit)
             survivor_hits += int(s_hit)
             if texts:
@@ -705,7 +868,7 @@ def run_job(
                 by_problem[pi].append((branch, text, done))
                 if done:
                     finished_branches += 1
-                    if "####" in text:
+                    if has_answer_marker(text, workload):
                         marker_branches += 1
         for pi, item in enumerate(items):
             rows = sorted(by_problem[pi], key=lambda row: row[0])
@@ -714,14 +877,14 @@ def run_job(
             # Winner text is branch 0. Move it to index 0 for the scorer
             # only when it was the first generated branch, which it is
             # because admitted indices come back in plan order starting at 0.
-            w_hit, s_hit = _score_finished(texts, item.answer, flags)
+            w_hit, s_hit = _score_finished(texts, item.answer, flags, workload)
             winner_hits += int(w_hit)
             survivor_hits += int(s_hit)
             hit_branches: list[int] = []
             for branch, text, done in rows:
                 if branch == 0:
                     winner_hash.update(text.encode())
-                ok = bool(done) and bool(marker_answer(text)) and gsm8k_correct(text, item.answer)
+                ok = bool(done) and answer_correct(text, item.answer, workload)
                 if ok:
                     branch_hits[branch] += 1
                     hit_branches.append(branch)
@@ -780,17 +943,26 @@ def run_gpu(args: argparse.Namespace) -> int:
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
 
-    from forkserve.bench_tasks import load_gsm8k
-
-    jobs = build_mild_jobs() if args.mild else build_jobs()
+    jobs = select_jobs(args)
     if args.smoke:
-        picked = [job for job in jobs if job["tag"] == "paper"][:3]
-        picked.append(next(job for job in jobs if job["tag"] == "esc_window" and job["mix"] == "hopeless"))
+        if args.scale:
+            picked = list(jobs)
+        else:
+            picked = [job for job in jobs if job["tag"] in ("paper", "wide")][:3]
+            if not picked:
+                picked = list(jobs)[:3]
+            extra = next(
+                (job for job in jobs if job["tag"] == "esc_window" and job["mix"] == "hopeless"),
+                None,
+            )
+            if extra:
+                picked.append(extra)
         for job in picked:
             job["n"] = 1
             job["budget"] = 32
             job["tau"] = min(int(job["tau"]), 16)
             job["dpts_step"] = min(int(job["dpts_step"]), 8)
+            job["mild_step"] = min(int(job.get("mild_step", 8)), 8)
             job["tag"] = "smoke"
         jobs = picked
     else:
@@ -814,7 +986,7 @@ def run_gpu(args: argparse.Namespace) -> int:
         _write(out, payload)
         return 0
 
-    problems = load_gsm8k(max(int(job["n"]) for job in jobs))
+    problems = load_job_problems(jobs)
     llm = LLM(
         model=args.model,
         tensor_parallel_size=args.tp,
@@ -962,13 +1134,35 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
             "surv_acc",
         ),
     )
-    mild = _pick(rows, tag="mild")
-    if mild:
+    wide_cols = (
+        "label",
+        "k",
+        "admitted",
+        "kept",
+        "decode_tokens",
+        "avoided_decode",
+        "computed_prefill_tokens",
+        "peak_kv_tokens",
+        "e2e_ms",
+        "winner_acc",
+        "surv_acc",
+    )
+    wide = _pick(rows, tag="wide")
+    if wide:
+        for k in sorted({int(row["k"]) for row in wide}):
+            emit(
+                f"wide  n=16 k={k} budget=512  tau=256  dpts=100  hopeless",
+                [row for row in wide if int(row["k"]) == k],
+                wide_cols,
+            )
+    scale = _pick(rows, tag="scale")
+    if scale:
         emit(
-            "mild  n=16 k=4 budget=512  drop at most one hopeless thought per phase",
-            mild,
+            "scale  MATH-500 level>=4  n=32  budget=1024  loops only, except prefill-all-dead",
+            scale,
             (
                 "label",
+                "k",
                 "admitted",
                 "kept",
                 "decode_tokens",
@@ -979,7 +1173,37 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
                 "surv_acc",
             ),
         )
+    mild = _pick(rows, tag="mild")
+    if mild:
+        for k in sorted({int(row["k"]) for row in mild}):
+            emit(
+                f"mild  n=16 k={k} budget=512  drop at most one hopeless thought per phase",
+                [row for row in mild if int(row["k"]) == k],
+                (
+                    "label",
+                    "k",
+                    "admitted",
+                    "kept",
+                    "decode_tokens",
+                    "avoided_decode",
+                    "peak_kv_tokens",
+                    "e2e_ms",
+                    "winner_acc",
+                    "surv_acc",
+                ),
+            )
     return "\n".join(lines)
+
+
+def select_jobs(args: argparse.Namespace) -> list[dict[str, Any]]:
+    ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if args.wide else (4,))
+    if args.scale:
+        return build_scale_jobs()
+    if args.mild:
+        return build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
+    if args.wide or args.ks:
+        return build_wide_jobs(ks=ks)
+    return build_jobs()
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -991,6 +1215,21 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     p.add_argument("--out", default="logs/prune_ablation/shard0.json")
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--mild", action="store_true", help="drop at most one hopeless thought per phase")
+    p.add_argument(
+        "--scale",
+        action="store_true",
+        help="MATH-500 level 4-5, k=4/8/16, loop-only cuts on Qwen-scale runs",
+    )
+    p.add_argument(
+        "--wide",
+        action="store_true",
+        help="paper stack at k=4,8,16 (override with --ks)",
+    )
+    p.add_argument(
+        "--ks",
+        default="",
+        help="comma-separated fan-out, used with --wide or --mild",
+    )
     p.add_argument("--report", default="", help="directory or json to print, no GPU")
     p.add_argument("--max-model-len", type=int, default=4096)
     p.add_argument("--max-batched-tokens", type=int, default=8192)
@@ -1004,7 +1243,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     if args.list:
-        jobs = build_mild_jobs() if args.mild else build_jobs()
+        jobs = select_jobs(args)
         print(f"{len(jobs)} jobs")
         for job in jobs:
             print(
