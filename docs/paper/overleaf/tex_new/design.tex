@@ -139,7 +139,7 @@ Cases below are first-match.
 a_i=\begin{cases}
 \mathrm{HS} & m_i=\ell_i,\\
 \mathrm{HP} & 0<m_i<\ell_i,\\
-\mathrm{DS} & m_i=0,\ s_i<\tau\text{ and the prefix is clean,}\\
+\mathrm{DS} & m_i=0\text{ and }\rho_i\text{ is a repeated loop,}\\
 \mathrm{EA} & m_i=0\text{ and the first }\alpha\ell_i\text{ already fails,}\\
 \mathrm{PF} & \text{otherwise }(m_i=0).
 \end{cases}
@@ -185,7 +185,7 @@ Chips stand in for tokens: a real hit ends on a full page, and each row is a dif
 (d)~The cut falls before the last character.
 (e)~A miss grows the body from the neck ($\mathrm{PF}$, $m_i=0$, $\Work_i=\ell_i$); the head stays the alias.
 (f)~The first $\lceil\alpha\ell_i\rceil$ tokens grow and the kernel stops ($\mathrm{EA}$).
-(g)~A draft score below $\tau$ withholds the body ($\mathrm{DS}$, $\Work_i=0$).}
+(g)~A repeated loop is withheld ($\mathrm{DS}$, $\Work_i=0$). A low score that is not a loop is not this row: it is prefilled, then decoded for a probe (\Cref{alg:app}).}
 \label{fig:dragon}
 \end{figure*}
 Hash-local hits stay on the decode instance (the same published blocks are APC-visible there).
@@ -193,11 +193,11 @@ Draft-skipped and early-aborted residuals never enter the buffer.
 \Cref{alg:app} is the per-fan-out plan; \Cref{tab:span} is the first-fan-out span.
 
 \begin{algorithm}[t]
-\caption{PrefillPlan($\{\rho_i\}$, $H$, $\tau$, $\alpha$, winner)}
+\caption{PrefillPlan($\{\rho_i\}$, $H$, $\tau$, $P$, winner)}
 \label{alg:app}
 \small
 \begin{algorithmic}[1]
-\REQUIRE residuals, hash index $H$, threshold $\tau$, fraction $\alpha$
+\REQUIRE residuals, hash index $H$, threshold $\tau$, probe length $P$
 \ENSURE actions $a_i$, work $\Work_i$, transfer $\Xfer_i$
 \FOR{$i=1$ \TO $k$}
   \STATE $m_i\leftarrow H.\mathrm{lookup}(\mathrm{trunk}\Vert\rho_i)$ \COMMENT{full pages of $\rho_i$}
@@ -207,14 +207,17 @@ Draft-skipped and early-aborted residuals never enter the buffer.
     \STATE $a_i\leftarrow\mathrm{HP}$; $\Work_i\leftarrow\ell_i-m_i$
   \ELSE
     \STATE $s_i\leftarrow\mathrm{DraftScore}(\rho_i)$ \COMMENT{$m_i=0$, no row to read}
-    \IF{$i=\mathrm{winner}$}
-      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$
-    \ELSIF{$s_i<\tau$ and prefix-fails$(\rho_i)$}
-      \STATE $a_i\leftarrow\mathrm{EA}$; $\Work_i\leftarrow\lceil\alpha\ell_i\rceil$
-    \ELSIF{$s_i<\tau$}
-      \STATE $a_i\leftarrow\mathrm{DS}$; $\Work_i\leftarrow 0$
+    \IF{$i=\mathrm{winner}$ \OR $s_i\ge\tau$}
+      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$ \COMMENT{decode to budget $D$}
+    \ELSIF{$\mathrm{IsLoop}(\rho_i)$}
+      \STATE $a_i\leftarrow\mathrm{DS}$; $\Work_i\leftarrow 0$ \COMMENT{repeated loop}
     \ELSE
-      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$
+      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$ \COMMENT{probe $P$ tokens}
+      \IF{$\mathrm{DraftScore}(y_{1:P})\ge\tau$}
+        \STATE continue decode to $D$
+      \ELSE
+        \STATE stop at $P$
+      \ENDIF
     \ENDIF
   \ENDIF
   \IF{$i=\mathrm{winner}$ \OR $a_i\in\{\mathrm{HS},\mathrm{HP},\mathrm{PF}\}$}
@@ -265,7 +268,7 @@ Spec pages are never hashed; LCP commit publishes full blocks of $x_\star$.
 
 \begin{lemma}[First-fan-out dominance]
 \label{lem:dom}
-On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}=\Work_{\mathrm{PD}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with strict inequality in $\Work$ whenever the draft score rejects at least one non-winner, and strict inequality in $\Xfer$ whenever $\Keep\neq[k]$ or any kept residual is a hash hit.
+On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}=\Work_{\mathrm{PD}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with strict inequality in $\Work$ whenever at least one repeated loop is draft-skipped, and strict inequality in $\Xfer$ whenever $\Keep\neq[k]$ or any kept residual is a hash hit.
 \end{lemma}
 
 \paragraph{Block-hash pruning.}
@@ -280,10 +283,18 @@ The same published blocks are already APC-visible on the decode instance, so $\X
 \paragraph{Draft-score rejection.}
 On a miss ($m_i=0$ in \eqref{eq:action}) the next stage is a CPU score, still before the prefill kernel.
 Each residual receives a score from illegal-token and repetition checks, token entropy, or an optional draft model.
-A score below $\tau$ (default $0.15$) is $\mathrm{DS}$: that residual is not submitted to prefill and is not inserted as a hash key.
-If the residual has already entered chunked prefill and the first fraction $\alpha{=}0.20$ fails, the action is $\mathrm{EA}$ and only $\lceil\alpha\ell_i\rceil$ tokens are charged.
-The abort is therefore a prefix of the kernel, rather than a barrier on the remaining residuals.
-Draft-skipped and early-aborted residuals are not in $\Keep$, so they never enter the connector buffer.
+An earlier draft of this rule treated every score below $\tau$ as a draft skip.
+That rule is not admissible.
+A residual the text score marks illegal still solves contest items once it is decoded, while a repeated loop solves none (\Cref{tab:grow}).
+Draft skip is therefore only the repeated loop: that residual is not submitted to prefill and is not inserted as a hash key.
+The prefill bar is a fixed plug-in, $\tau_{\mathrm{pre}}{=}0.15$, and is not retuned when the host decoder is ESC, Speculative Rejection, or DPTS.
+The winner, and every other residual whose score is at least $\tau_{\mathrm{pre}}$, is prefilled and decoded to the budget $D$.
+A non-winner that scores below $\tau$ and is not a loop is still prefilled.
+It is then decoded for a probe of $P$ tokens, and the same score is applied to the generated prefix $y_{1:P}$.
+If that score is at least $\tau$, decode continues from $P$ to $D$; otherwise it stops at $P$.
+The probe is a prefix of decode, not the residual early-abort in panel~(f) of \Cref{fig:dragon}.
+On the measurements below, $\tau{=}0.45$ and $P\in\{64,128\}$.
+The control-plane rows in \S\ref{sec:eval-app} still charge the earlier blanket skip, which drops both low-score residuals before prefill.
 
 \paragraph{Gated connector insert.}
 Prefill--decode disaggregation places prefill and decode on separate instances~\cite{distserve,splitwise}.

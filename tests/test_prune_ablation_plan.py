@@ -4,6 +4,7 @@ from experiments.prune_ablation_gpu import (
     admitted_indices,
     assign_tokens,
     build_jobs,
+    build_plugin_jobs,
     build_prefill_jobs,
     build_thoughts,
     build_thresh_jobs,
@@ -129,6 +130,13 @@ def test_wide_grid_covers_k8_and_k16() -> None:
     assert len(prefill) == 9
     assert all(job["method"] == "esc" and job["tag"] == "prefill" for job in prefill)
     assert {job["prefill_threshold"] for job in prefill} == {0.0, 0.10, 0.30}
+    plugin = build_plugin_jobs((4, 8, 16))
+    assert len(plugin) == 18
+    assert all(job["tag"] == "plugin" for job in plugin)
+    assert {job["prefill_threshold"] for job in plugin} == {0.15}
+    assert {job["method"] for job in plugin} == {"esc", "specrej", "dpts"}
+    assert {job["policy"] for job in plugin} == {"base", "app"}
+    assert all(float(job["decode_threshold"]) == 0.45 for job in plugin)
 
 
 def test_esc_window_needs_the_same_marker() -> None:

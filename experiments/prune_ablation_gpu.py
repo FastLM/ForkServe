@@ -45,11 +45,17 @@ from typing import Any, Sequence
 from forkserve.adapters.templates import ToolWrappers
 from forkserve.config import ForkServeConfig
 from forkserve.prefill_prune import PrefillPruner
-from forkserve.prune import DecodeScorer, apply_admit_mode, plus_config
+from forkserve.prune import (
+    DECODE_THRESHOLD,
+    PREFILL_THRESHOLD,
+    DecodeScorer,
+    apply_admit_mode,
+    plus_config,
+)
 from forkserve.quality import extract_boxed, extract_gsm8k_answer, gsm8k_correct, math_correct
 
-# Decode-side default. Prefill uses job["prefill_threshold"], never this.
-DECODE_SCORE_BAR = 0.45
+# Decode-side default. Prefill uses the frozen PREFILL_THRESHOLD plug-in.
+DECODE_SCORE_BAR = DECODE_THRESHOLD
 DPTS_SCORE_BAR = DECODE_SCORE_BAR
 METHODS = ("esc", "specrej", "dpts")
 POLICIES = ("base", "draft", "app")
@@ -463,8 +469,8 @@ def _job(**kwargs: Any) -> dict[str, Any]:
         tau=256,
         dpts_step=100,
         alpha=0.5,
-        threshold=0.45,
-        prefill_threshold=0.45,
+        threshold=PREFILL_THRESHOLD,
+        prefill_threshold=PREFILL_THRESHOLD,
         decode_threshold=DECODE_SCORE_BAR,
         esc_window=0,
         admit_mode="score",
@@ -750,6 +756,49 @@ def build_prefill_jobs(
     return _finalize_jobs(specs)
 
 
+def build_plugin_jobs(ks: Sequence[int] = (4, 8, 16)) -> list[dict[str, Any]]:
+    """Fixed prefill bar on every decoder. One plug-in, no retune.
+
+    ``base`` is the host decoder alone. ``app`` adds APP at
+    ``PREFILL_THRESHOLD`` (0.15). Decode knobs stay at their own defaults.
+    """
+    specs: list[dict[str, Any]] = []
+    bar = float(PREFILL_THRESHOLD)
+    for k in ks:
+        for method in METHODS:
+            specs.append(
+                _job(
+                    tag="plugin",
+                    method=method,
+                    policy="base",
+                    n=16,
+                    k=int(k),
+                    budget=512,
+                    tau=256,
+                    dpts_step=100,
+                    threshold=bar,
+                    prefill_threshold=bar,
+                    admit_mode="score",
+                )
+            )
+            specs.append(
+                _job(
+                    tag="plugin",
+                    method=method,
+                    policy="app",
+                    n=16,
+                    k=int(k),
+                    budget=512,
+                    tau=256,
+                    dpts_step=100,
+                    threshold=bar,
+                    prefill_threshold=bar,
+                    admit_mode="score",
+                )
+            )
+    return _finalize_jobs(specs)
+
+
 def label_of(job: dict[str, Any]) -> str:
     named = job.get("mild_label")
     if named:
@@ -759,6 +808,11 @@ def label_of(job: dict[str, Any]) -> str:
     if str(job.get("tag", "")) == "prefill":
         bar = job.get("prefill_threshold", job.get("threshold", 0))
         return f"prefill@{bar:g}"
+    if str(job.get("tag", "")) == "plugin":
+        if policy == "base":
+            return method
+        bar = job.get("prefill_threshold", PREFILL_THRESHOLD)
+        return f"{method}+app@{bar:g}"
     return method if policy == "base" else f"{method}+{policy}"
 
 
@@ -1369,7 +1423,7 @@ def run_gpu(args: argparse.Namespace) -> int:
         if args.scale or getattr(args, "grow", False):
             picked = list(jobs)
         else:
-            picked = [job for job in jobs if job["tag"] in ("paper", "wide", "prefill")][:3]
+            picked = [job for job in jobs if job["tag"] in ("paper", "wide", "prefill", "plugin")][:3]
             if not picked:
                 picked = list(jobs)[:3]
             extra = next(
@@ -1578,6 +1632,22 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
                 [row for row in wide if int(row["k"]) == k],
                 wide_cols,
             )
+    plugin = _pick(rows, tag="plugin")
+    if plugin:
+        emit(
+            f"plugin  APP@{PREFILL_THRESHOLD:g} on ESC / SR / DPTS  n=16 budget=512",
+            plugin,
+            (
+                "label",
+                "k",
+                "prefill_threshold",
+                "admitted",
+                "computed_prefill_tokens",
+                "e2e_ms",
+                "winner_acc",
+                "surv_acc",
+            ),
+        )
     prefill = _pick(rows, tag="prefill")
     if prefill:
         emit(
@@ -1686,13 +1756,19 @@ def _stamp_admit(jobs: list[dict[str, Any]], args: argparse.Namespace) -> list[d
 
 
 def select_jobs(args: argparse.Namespace) -> list[dict[str, Any]]:
-    ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if (args.wide or args.thresh or getattr(args, "prefill", False)) else (4,))
+    ks = parse_ks(args.ks) if args.ks else (
+        (4, 8, 16)
+        if (args.wide or args.thresh or getattr(args, "prefill", False) or getattr(args, "plugin", False))
+        else (4,)
+    )
     if getattr(args, "grow", False):
         jobs = build_grow_jobs()
     elif args.scale:
         jobs = build_scale_jobs()
     elif args.mild:
         jobs = build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
+    elif getattr(args, "plugin", False):
+        jobs = build_plugin_jobs(ks=ks)
     elif getattr(args, "prefill", False):
         jobs = build_prefill_jobs(ks=ks, thresholds=parse_thresholds(args.prefill_thresholds))
     elif args.thresh:
@@ -1732,6 +1808,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--thresh",
         action="store_true",
         help="score-bar sweep: native / decode-only vs APP at --thresholds",
+    )
+    p.add_argument(
+        "--plugin",
+        action="store_true",
+        help="fixed APP@0.15 on ESC / SR / DPTS (plug-and-play, no retune)",
     )
     p.add_argument(
         "--prefill",

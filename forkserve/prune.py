@@ -16,6 +16,11 @@ from typing import Sequence
 from forkserve.config import ForkServeConfig
 from forkserve.types import TokenSeq
 
+# Frozen plug-in bar. Drops loops (0.02), keeps illegal text (0.22).
+# Not retuned per decoder: the same value is the APP default on ESC, SR, DPTS.
+PREFILL_THRESHOLD = 0.15
+DECODE_THRESHOLD = 0.45
+
 ADMIT_MODES = ("score", "winner", "top_m", "alpha")
 _ADMIT_ALIASES = {
     "winner_only": "winner",
@@ -227,16 +232,16 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     # Marker strings cut the answer off (#### before the number, </think>
     # before the R1 reply). Answer-complete stop replaces them.
     cfg.decode_stop = ()
-    # Prefill bar: 0.15 drops loops (0.02) and keeps illegal text (0.22).
-    # Decode bar stays 0.45 unless FORKSERVE_DECODE_THRESHOLD is set.
+    # Prefill bar is a fixed plug-in (PREFILL_THRESHOLD). Decode keeps its
+    # own default. Override only with the matching env var.
     raw_pre = (
         os.environ.get("FORKSERVE_PREFILL_THRESHOLD", "").strip()
         or os.environ.get("FORKSERVE_PRUNE_THRESHOLD", "").strip()
     )
-    cfg.prefill_threshold = float(raw_pre) if raw_pre else 0.15
+    cfg.prefill_threshold = float(raw_pre) if raw_pre else PREFILL_THRESHOLD
     cfg.prune_threshold = cfg.prefill_threshold
     raw_dec = os.environ.get("FORKSERVE_DECODE_THRESHOLD", "").strip()
-    cfg.decode_threshold = float(raw_dec) if raw_dec else 0.45
+    cfg.decode_threshold = float(raw_dec) if raw_dec else DECODE_THRESHOLD
     raw_m = os.environ.get("FORKSERVE_KEEP_M", "").strip()
     raw_a = os.environ.get("FORKSERVE_ADMIT_ALPHA", "").strip()
     apply_admit_mode(

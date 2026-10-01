@@ -123,6 +123,8 @@ The two low-score children are the ones removed, and the winner is kept.
 Decoded tokens use the same $12\,\mu\mathrm{s}/\mathrm{token}$ clock.
 DPTS is the earliest cut of the three and still decodes $4000$ tokens before the drop, $2000$ of them on losers, reaching the cut at $78.7$\,ms.
 \app has already withheld those residuals: $0$ tokens on losers and $T_{\mathrm{fan}}{=}31.4$\,ms.
+That row is the blanket skip.
+\S\ref{sec:eval-grow} replaces it: only a repeated loop is withheld before prefill.
 
 \begin{table}[t]
 \centering
@@ -164,6 +166,54 @@ Percentages are the share of the stacked live tokens.}
 \label{fig:eval-stack}
 \end{figure*}
 \fi
+
+\paragraph{Probe-then-grow.}
+\label{sec:eval-grow}
+The blanket skip is the wrong cut once the residual is not a loop.
+We measure the rule in \Cref{alg:app} on Qwen3-8B, one GPU each, four A100-40GB, $\mathrm{tp}{=}1$.
+The slice is the first $32$ MATH-500 problems at level $4$ or $5$.
+Temperature is $0$, EOS is ignored, prefix caching is on, and the decode budget is $D{=}1024$.
+Half of the $k$ residuals are contest strategies.
+The other half alternates a repeated loop with illegal text.
+A question counts when some branch that ran all $1024$ tokens matches the gold answer.
+The winner is residual $0$.
+
+\begin{table}[t]
+\centering
+\caption{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$.
+Any-finished is exact match on a branch that ran the full budget.
+``Drop $s{<}\tau$'' withholds every low-score residual before prefill.
+``Grow $P$'' skips loops, prefills the other low-score residuals, and continues a probe of $P$ tokens to $D$ only if the generated prefix scores at least $\tau{=}0.45$.
+Time is trunk warm plus fan-out, in seconds.}
+\label{tab:grow}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+Full fan-out & $12/32$, $25.3$ & $15/32$, $52.5$ & $20/32$, $104.1$ \\
+\rowcolor{tblalt}
+Drop $s{<}\tau$ & $6/32$, $19.1$ & $11/32$, $25.6$ & $13/32$, $52.1$ \\
+Skip loops only & $11/32$, $23.0$ & $17/32$, $41.5$ & $16/32$, $71.4$ \\
+\rowcolor{tblalt}
+Grow $P{=}64$ & $8/32$, $24.0$ & \win{$16/32$}, $42.0$ & $18/32$, $72.5$ \\
+Grow $P{=}128$ & $9/32$, $24.7$ & $13/32$, $43.3$ & \win{$20/32$}, $72.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:grow} is the correction.
+Dropping every residual below $\tau$ cuts any-finished from $12/32$ to $6/32$ at $k{=}4$ and from $20/32$ to $13/32$ at $k{=}16$.
+Loop branches are $0$ for $0$ at every $k$, so skipping them before prefill is safe.
+At $k{=}16$, a $128$-token probe extends every illegal residual ($128/128$) and none of the loops.
+Any-finished returns to the full fan-out, $20/32$, while end-to-end time falls from $104.1$\,s to $72.2$\,s and decode tokens from $524288$ to $393216$.
+Probing the loops as well extends none of them and costs $74.4$\,s for the same $20/32$.
+At $k{=}8$ the shorter probe is the one that holds accuracy: grow at $P{=}64$ is $16/32$ in $42.0$\,s, against $15/32$ in $52.5$\,s for the full fan-out.
+At $k{=}4$ the probe does not recover the full fan-out ($9/32$ against $12/32$); skipping the single loop, and decoding the illegal residual to $D$, is $11/32$ in $23.0$\,s.
 
 \paragraph{Concurrency from measured KV.}
 Our empirical results on DeepSeek-R1 GSM8K ($761$ APC tokens, $561$ \sys tokens, $n{=}16$, $k{=}4$) in an $8$\,GiB pool in \eqref{eq:theta} give $76$ concurrent trees for APC and $103$ for \sys.

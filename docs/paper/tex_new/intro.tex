@@ -50,7 +50,8 @@ A known suffix with $p(w){=}1$ and $\Pref(|w|)\le\Idle(u)$ is pinned during the 
 
 \S\ref{sec:eval} reports four measurements that are not interchangeable.
 On Qwen3-14B GSM8K, \sys matches APC accuracy at $0.72\times$ median peak KV; fan-out is still slower than APC.
-A control-plane study of \app then shows that hash skip, draft prune, and the P/D gate remove most of that prefill on illegal residuals, and that the measured KV gap raises SLO-feasible concurrency by $35.5\%$.
+A control-plane study of \app then shows that hash skip, draft prune, and the P/D gate remove most of that prefill on residuals that fail the draft score, and that the measured KV gap raises SLO-feasible concurrency by $35.5\%$.
+The GPU rule is narrower than that blanket skip: only a repeated loop is dropped before prefill, and any other low-score residual is probed and extended when the generated prefix clears the threshold (\Cref{tab:grow}).
 A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering.
 A six-model forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC.
 % A last-line answer stop on DeepSeek-R1, Llama-3-8B, and Mistral-7B ($n{=}32$) keeps that peak: ForkServe+ is at or above APC on DeepSeek-R1 and within one problem on Llama-3-8B, and still drops Mistral-7B.

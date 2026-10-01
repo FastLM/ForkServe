@@ -63,7 +63,7 @@ class ForkServeConfig:
     lazy_abort: bool = False
     pointer_swap: bool = True
     prune_enabled: bool = False
-    # Prefill admission bar (APP). decode_threshold is the decoder's bar.
+    # Prefill admission bar (APP). Frozen plug-in: 0.15. Not retuned per decoder.
     prefill_threshold: float = 0.15
     decode_threshold: float = 0.45
     # Alias of prefill_threshold for older callers.

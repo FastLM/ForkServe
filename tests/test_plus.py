@@ -5,6 +5,7 @@ from forkserve.engine.vllm_loop import CowBlockTable
 from forkserve.eval_plus import concurrency_sweep, micro_fanout, time_accuracy_curve
 from forkserve.pages import PagePool, TokenKvStore
 from forkserve.prune import (
+    PREFILL_THRESHOLD,
     BranchPruner,
     DecodeScorer,
     PrefillScorer,
@@ -76,7 +77,6 @@ def test_answer_stop_waits_for_the_number() -> None:
 
 def test_known_winner_skips_sibling_prefill() -> None:
     from forkserve.prefill_prune import PrefillAction, PrefillPruner
-    from forkserve.prune import apply_admit_mode
 
     cfg = apply_admit_mode(plus_config(), "winner")
     plan = PrefillPruner(cfg, winner=0).plan(
@@ -192,3 +192,6 @@ def test_prefill_and_decode_scorers_do_not_share_weights() -> None:
     # Generated-prefix path is a third function.
     assert dec.score_prefix("#### 12")[0] == 0.92
     assert dec.score_prefix(loop)[0] == 0.04
+    assert PREFILL_THRESHOLD == 0.15
+    assert plus_config().prefill_threshold == PREFILL_THRESHOLD
+    assert plus_config().decode_threshold == 0.45
