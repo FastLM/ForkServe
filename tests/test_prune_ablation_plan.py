@@ -32,7 +32,7 @@ def test_hopeless_draft_sees_the_two_dead_thoughts() -> None:
     assert admitted_indices("base", thoughts, 0.45) == [0, 1, 2, 3]
     assert admitted_indices("draft", thoughts, 0.45) == [0, 1]
     assert admitted_indices("draft", thoughts, 0.15) == [0, 1]
-    assert admitted_indices("app", thoughts, 0.45) == [0]
+    assert admitted_indices("app", thoughts, 0.45) == [0, 1]
     assert drop_indices("esc", thoughts, alpha=0.5) == []
     assert drop_indices("specrej", thoughts, alpha=0.5) == [2, 3]
     assert drop_indices("dpts", thoughts, alpha=0.5) == [2, 3]
@@ -62,8 +62,9 @@ def test_prefill_moves_the_cut_before_the_prefix() -> None:
     assert sum(dpts_draft["assigned"].values()) == 2 * 512
     assert sr_draft["avoided_decode"] == 2 * 256
     assert sr["assigned"][2] == 256
-    assert sum(dpts_app["assigned"].values()) == 512
-    assert dpts_app["avoided_decode"] == 512 + 2 * 100
+    assert sum(dpts_app["assigned"].values()) == 2 * 512
+    assert dpts_app["avoided_decode"] == 2 * 100
+    assert dpts_app["admitted"] == dpts_draft["admitted"]
 
 
 def test_clean_mix_only_rank_pruning_still_cuts() -> None:
@@ -82,9 +83,26 @@ def test_alpha_scales_with_fanout() -> None:
     assert len(drop_indices("specrej", thoughts, alpha=0.5)) == 4
     wide = build_thoughts(16, "hopeless")
     assert admitted_indices("draft", wide, 0.45) == list(range(8))
-    assert admitted_indices("app", wide, 0.45) == [0]
+    assert admitted_indices("app", wide, 0.45) == list(range(8))
     assert drop_indices("dpts", wide, alpha=0.5) == list(range(8, 16))
     assert len(drop_indices("specrej", wide, alpha=0.5)) == 8
+
+
+def test_app_keeps_by_score_not_a_fraction_of_k() -> None:
+    """Default APP admits every live thought at 0.45. Other modes stay optional."""
+    for k in (4, 8, 16):
+        thoughts = build_thoughts(k, "hopeless")
+        live = list(range((k + 1) // 2))
+        assert admitted_indices("app", thoughts, 0.45) == live
+        assert admitted_indices("draft", thoughts, 0.45) == live
+    thoughts = build_thoughts(16, "hopeless")
+    assert admitted_indices("app", thoughts, 0.80) == list(range(8))
+    assert admitted_indices("app", thoughts, 0.45, admit_mode="winner") == [0]
+    assert len(admitted_indices("app", thoughts, 0.45, admit_mode="top_m", keep_m=2)) == 2
+    assert 0 in admitted_indices("app", thoughts, 0.45, admit_mode="top_m", keep_m=2)
+    got = admitted_indices("app", thoughts, 0.45, admit_mode="alpha", admit_alpha=0.25)
+    assert len(got) == 4
+    assert 0 in got
 
 
 def test_wide_grid_covers_k8_and_k16() -> None:

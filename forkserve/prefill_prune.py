@@ -175,7 +175,10 @@ class PrefillPruner:
     ) -> PrefillPlan:
         """Rank ``k`` residuals. Winner is never dropped."""
         ship = self.config.disagg_prefill if disagg is None else disagg
-        scores = self._draft.rank(residuals, threshold=threshold)
+        mode = str(getattr(self.config, "admit_mode", "score") or "score")
+        # top_m / alpha replace the score bar; rank everyone, then cap.
+        rank_thresh = 0.0 if mode in ("top_m", "alpha") else threshold
+        scores = self._draft.rank(residuals, threshold=rank_thresh)
         out = PrefillPlan()
         prompts: list[TokenSeq] = []
         for row in scores:
@@ -197,8 +200,8 @@ class PrefillPruner:
             dec.prompt_tokens = prompt
             dec.span = _miss_span(prompt, dec.matched_tokens, dec.work_tokens)
             out.decisions.append(dec)
+        self._apply_admit_cap(out.decisions)
         self._share_prefixes(out.decisions, prompts)
-        self._admit_by_gc(out.decisions)
         for dec in out.decisions:
             n_tok = dec.residual_tokens
             if ship and dec.keep and dec.action is not PrefillAction.HASH_SKIP:
@@ -266,23 +269,45 @@ class PrefillPruner:
             if dec.keep:
                 admitted.append(prompt)
 
-    def _admit_by_gc(self, decisions: list[PrefillDecision]) -> None:
-        """Keep the winner and the next best G/C residuals. The rest never start."""
-        cap = self.config.prefill_keep_m
-        if not self.config.gc_admit or cap <= 0:
+    def _apply_admit_cap(self, decisions: list[PrefillDecision]) -> None:
+        mode = str(getattr(self.config, "admit_mode", "score") or "score")
+        if mode == "top_m":
+            self._admit_by_count(decisions, int(self.config.prefill_keep_m), by="gc")
             return
+        if mode == "alpha":
+            k = max(1, len(decisions))
+            cap = max(1, int(float(getattr(self.config, "admit_alpha", 0.5)) * k))
+            self._admit_by_count(decisions, cap, by="score")
+            return
+        self._admit_by_gc(decisions)
+
+    def _admit_by_count(self, decisions: list[PrefillDecision], cap: int, *, by: str) -> None:
+        """Keep the winner and the next ``cap-1`` siblings. The rest never start."""
+        if cap <= 0:
+            return
+        if by == "gc":
+            key = lambda d: d.score / max(d.work_tokens, 1)
+        else:
+            key = lambda d: d.score
         ranked = sorted(
-            (d for d in decisions if d.keep and d.index != self.winner),
-            key=lambda d: d.score / max(d.work_tokens, 1),
+            (d for d in decisions if d.index != self.winner),
+            key=key,
             reverse=True,
         )
         for dec in ranked[max(0, cap - 1) :]:
             dec.keep = False
             dec.action = PrefillAction.DRAFT_SKIP
-            dec.reason = "marginal_gc"
+            dec.reason = "admit_cap" if by == "score" else "marginal_gc"
             dec.work_tokens = 0
             dec.transfer_tokens = 0
             dec.span = ()
+
+    def _admit_by_gc(self, decisions: list[PrefillDecision]) -> None:
+        """Keep the winner and the next best G/C residuals. The rest never start."""
+        cap = self.config.prefill_keep_m
+        if not self.config.gc_admit or cap <= 0:
+            return
+        self._admit_by_count(decisions, cap, by="gc")
 
     def _decide(
         self,
@@ -291,8 +316,12 @@ class PrefillPruner:
         prompt: TokenSeq,
         residual: str | TokenSeq,
     ) -> PrefillDecision:
+        winner_only = (
+            str(getattr(self.config, "admit_mode", "score") or "score") == "winner"
+            or self.config.skip_known_losers
+        )
         if (
-            self.config.skip_known_losers
+            winner_only
             and self.winner >= 0
             and row.index != self.winner
         ):

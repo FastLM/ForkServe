@@ -22,7 +22,8 @@ Prefill policies run first:
 
 * ``base`` admits every child, so the decoder still pays its prefix.
 * ``draft`` is the text heuristic (illegal / loop never start).
-* ``app`` keeps the winner only (ForkServe+ ``skip_known_losers``).
+* ``app`` admission is selected by ``admit_mode`` (default ``score``):
+  score bar, optional ``winner``, ``top_m``, or ``alpha``.
 
 A child dropped before prefill does not pay that residual or the decoder's
 decision prefix. A child both sides keep still decodes to the budget.
@@ -44,7 +45,7 @@ from typing import Any, Sequence
 from forkserve.adapters.templates import ToolWrappers
 from forkserve.config import ForkServeConfig
 from forkserve.prefill_prune import PrefillPruner
-from forkserve.prune import BranchPruner, plus_config
+from forkserve.prune import BranchPruner, apply_admit_mode, plus_config
 from forkserve.quality import extract_boxed, extract_gsm8k_answer, gsm8k_correct, math_correct
 
 # Published checkpoints. See experiments/prefill_prune_bench.py.
@@ -96,27 +97,50 @@ def build_thoughts(k: int, mix: str, family: str = "grade") -> list[str]:
     return [prefix(i) + body for i, body in enumerate(bodies)]
 
 
-def _policy_config(policy: str, threshold: float) -> ForkServeConfig:
+def _policy_config(
+    policy: str,
+    threshold: float,
+    *,
+    admit_mode: str = "score",
+    keep_m: int = 0,
+    admit_alpha: float = 0.5,
+) -> ForkServeConfig:
     cfg = plus_config(ForkServeConfig(page_size=16))
     cfg.prune_threshold = float(threshold)
     cfg.prune_enabled = True
     if policy == "draft":
-        cfg.skip_known_losers = False
-        cfg.gc_admit = False
-        cfg.prefill_keep_m = 0
+        apply_admit_mode(cfg, "score", threshold=threshold)
     elif policy == "app":
-        cfg.skip_known_losers = True
-        cfg.gc_admit = True
-        cfg.prefill_keep_m = 1
+        apply_admit_mode(
+            cfg,
+            admit_mode,
+            keep_m=keep_m,
+            alpha=admit_alpha,
+            threshold=threshold,
+        )
     elif policy != "base":
         raise ValueError(f"unknown policy {policy}")
     return cfg
 
 
-def admitted_indices(policy: str, thoughts: Sequence[str], threshold: float) -> list[int]:
+def admitted_indices(
+    policy: str,
+    thoughts: Sequence[str],
+    threshold: float,
+    *,
+    admit_mode: str = "score",
+    keep_m: int = 0,
+    admit_alpha: float = 0.5,
+) -> list[int]:
     if policy == "base":
         return list(range(len(thoughts)))
-    cfg = _policy_config(policy, threshold)
+    cfg = _policy_config(
+        policy,
+        threshold,
+        admit_mode=admit_mode,
+        keep_m=keep_m,
+        admit_alpha=admit_alpha,
+    )
     plan = PrefillPruner(cfg, winner=0).plan(list(thoughts))
     return [d.index for d in plan.decisions if d.keep]
 
@@ -238,6 +262,9 @@ def assign_tokens(
     decode_drop: int = 0,
     mild_step: int = 64,
     mild_target: str = "low_score",
+    admit_mode: str = "score",
+    keep_m: int = 0,
+    admit_alpha: float = 0.5,
 ) -> dict[str, Any]:
     """Per-child decode length after prefill admission."""
     if method == "mild":
@@ -250,7 +277,14 @@ def assign_tokens(
             target=mild_target,
         )
     step = decision_step(method, budget=budget, tau=tau, dpts_step=dpts_step)
-    entered = admitted_indices(policy, thoughts, threshold)
+    entered = admitted_indices(
+        policy,
+        thoughts,
+        threshold,
+        admit_mode=admit_mode,
+        keep_m=keep_m,
+        admit_alpha=admit_alpha,
+    )
     drop = drop_indices(method, thoughts, alpha=alpha)
     drop_set = set(drop)
     assigned = {
@@ -313,6 +347,13 @@ def work_key(job: dict[str, Any]) -> tuple[Any, ...]:
         parts.append(str(job["workload"]))
     if job.get("family", "grade") != "grade":
         parts.append(str(job["family"]))
+    if job.get("policy") == "app":
+        mode = str(job.get("admit_mode", "score"))
+        parts.append(mode)
+        if mode == "top_m":
+            parts.append(int(job.get("keep_m", 0)))
+        if mode == "alpha":
+            parts.append(float(job.get("admit_alpha", 0.5)))
     return tuple(parts)
 
 
@@ -330,6 +371,9 @@ def _job(**kwargs: Any) -> dict[str, Any]:
         alpha=0.5,
         threshold=0.45,
         esc_window=0,
+        admit_mode="score",
+        keep_m=0,
+        admit_alpha=0.5,
     )
     base.update(kwargs)
     return base
@@ -480,7 +524,8 @@ def build_wide_jobs(ks: Sequence[int] = (4, 8, 16)) -> list[dict[str, Any]]:
 
     k=4 is the published setting. k=8 and k=16 are the same hopeless mix
     (half live strategies, half loop / illegal) so draft and DPTS cut more
-    losers as the tree widens, while APP still keeps only the winner.
+    losers as the tree widens. APP keeps every residual at or above
+    the score bar, so the live half still starts.
     """
     specs: list[dict[str, Any]] = []
     for k in ks:
@@ -752,6 +797,9 @@ def run_job(
         alpha=float(job["alpha"]),
         prefill_drop=int(job.get("prefill_drop", 0)),
         decode_drop=int(job.get("decode_drop", 0)),
+        admit_mode=str(job.get("admit_mode", "score")),
+        keep_m=int(job.get("keep_m", 0)),
+        admit_alpha=float(job.get("admit_alpha", 0.5)),
         mild_step=int(job.get("mild_step", 64)),
         mild_target=str(job.get("mild_target", "low_score")),
     )
@@ -1195,15 +1243,30 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _stamp_admit(jobs: list[dict[str, Any]], args: argparse.Namespace) -> list[dict[str, Any]]:
+    mode = str(getattr(args, "admit_mode", "score") or "score")
+    keep_m = int(getattr(args, "keep_m", 0) or 0)
+    alpha = float(getattr(args, "admit_alpha", 0.5) or 0.5)
+    for job in jobs:
+        if job.get("policy") != "app":
+            continue
+        job["admit_mode"] = mode
+        job["keep_m"] = keep_m
+        job["admit_alpha"] = alpha
+    return jobs
+
+
 def select_jobs(args: argparse.Namespace) -> list[dict[str, Any]]:
     ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if args.wide else (4,))
     if args.scale:
-        return build_scale_jobs()
-    if args.mild:
-        return build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
-    if args.wide or args.ks:
-        return build_wide_jobs(ks=ks)
-    return build_jobs()
+        jobs = build_scale_jobs()
+    elif args.mild:
+        jobs = build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
+    elif args.wide or args.ks:
+        jobs = build_wide_jobs(ks=ks)
+    else:
+        jobs = build_jobs()
+    return _stamp_admit(jobs, args)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -1230,6 +1293,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="",
         help="comma-separated fan-out, used with --wide or --mild",
     )
+    p.add_argument(
+        "--admit-mode",
+        choices=("score", "winner", "top_m", "alpha"),
+        default=os.environ.get("FORKSERVE_ADMIT_MODE", "score"),
+        help="APP admission: score bar, winner-only, top-m, or αk",
+    )
+    p.add_argument("--keep-m", type=int, default=int(os.environ.get("FORKSERVE_KEEP_M", "0") or 0))
+    p.add_argument(
+        "--admit-alpha",
+        type=float,
+        default=float(os.environ.get("FORKSERVE_ADMIT_ALPHA", "0.5") or 0.5),
+    )
     p.add_argument("--report", default="", help="directory or json to print, no GPU")
     p.add_argument("--max-model-len", type=int, default=4096)
     p.add_argument("--max-batched-tokens", type=int, default=8192)
@@ -1251,6 +1326,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"n={job['n']:<3} k={job['k']:<2} D={job['budget']:<4} "
                 f"tau={job['tau']:<4} step={job['dpts_step']:<4} "
                 f"a={job['alpha']:<4} w={job['esc_window']}"
+                + (
+                    f" admit={job.get('admit_mode', 'score')}"
+                    if job.get("policy") == "app"
+                    else ""
+                )
             )
         return 0
     if args.report:

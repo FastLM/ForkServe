@@ -72,12 +72,19 @@ class ForkServeConfig:
     answer_stop: str = ""
     # Per-request hints (Game24 gold strings), aligned with the decode batch.
     answer_stop_hints: tuple[str, ...] = ()
+    # APP admission rule. ``apply_admit_mode`` is the switch:
+    #   score   — winner + every sibling with draft score >= prune_threshold
+    #   winner  — skip_known_losers (winner only)
+    #   top_m   — winner + next prefill_keep_m-1 by G/C
+    #   alpha   — winner + next floor(admit_alpha * k)-1 by score
+    admit_mode: str = "score"
+    admit_alpha: float = 0.5
     # Harness already picked the winner: do not prefill the other residuals.
     skip_known_losers: bool = False
     hash_prune: bool = False
     # Share a page-aligned residual prefix across siblings (prefill and ship once).
     share_prefixes: bool = False
-    # Admit non-winners by G/C, capped at prefill_keep_m (0 = no cap).
+    # Optional count cap on non-winners (top G/C). 0 = no cap.
     gc_admit: bool = False
     prefill_keep_m: int = 0
     disagg_prefill: bool = False

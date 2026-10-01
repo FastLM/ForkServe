@@ -17,6 +17,15 @@ from typing import Sequence
 from forkserve.config import ForkServeConfig
 from forkserve.types import TokenSeq
 
+ADMIT_MODES = ("score", "winner", "top_m", "alpha")
+_ADMIT_ALIASES = {
+    "winner_only": "winner",
+    "skip": "winner",
+    "topk": "top_m",
+    "keep_m": "top_m",
+    "frac": "alpha",
+}
+
 _REPEAT = re.compile(r"(.{8,40})\1{3,}")
 _ILLEGAL_MATH = re.compile(r"\*{4,}|unk|nan|undefined", re.I)
 
@@ -90,6 +99,48 @@ class BranchPruner:
         return score < self.config.prune_threshold and reason != "ok"
 
 
+def apply_admit_mode(
+    cfg: ForkServeConfig,
+    mode: str = "score",
+    *,
+    keep_m: int = 0,
+    alpha: float = 0.5,
+    threshold: float | None = None,
+) -> ForkServeConfig:
+    """Select one APP admission rule. The others stay off.
+
+    ``score`` keeps every residual at or above ``prune_threshold``.
+    ``winner`` is skip_known_losers. ``top_m`` keeps ``keep_m`` by G/C.
+    ``alpha`` keeps ``floor(alpha * k)`` by draft score, winner included.
+    """
+    raw = str(mode or "score").strip().replace("-", "_")
+    key = _ADMIT_ALIASES.get(raw, raw)
+    if key not in ADMIT_MODES:
+        raise ValueError(f"unknown admit_mode {mode!r}; want {ADMIT_MODES}")
+    cfg.admit_mode = key
+    if threshold is not None:
+        cfg.prune_threshold = float(threshold)
+    if key == "winner":
+        cfg.skip_known_losers = True
+        cfg.gc_admit = False
+        cfg.prefill_keep_m = 0
+    elif key == "top_m":
+        cap = int(keep_m) if keep_m else int(cfg.prefill_keep_m or 0)
+        cfg.skip_known_losers = False
+        cfg.gc_admit = True
+        cfg.prefill_keep_m = cap if cap > 0 else 2
+    elif key == "alpha":
+        cfg.skip_known_losers = False
+        cfg.gc_admit = False
+        cfg.prefill_keep_m = 0
+        cfg.admit_alpha = float(alpha)
+    else:
+        cfg.skip_known_losers = False
+        cfg.gc_admit = False
+        cfg.prefill_keep_m = 0
+    return cfg
+
+
 def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     """Knobs that turn baseline ForkServe into ForkServe+ / APP."""
     cfg = ForkServeConfig() if base is None else replace(base)
@@ -98,12 +149,8 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     cfg.prune_enabled = True
     cfg.hash_prune = True
     cfg.disagg_prefill = True
-    cfg.skip_known_losers = True
     cfg.share_prefixes = True
-    cfg.gc_admit = True
     cfg.slack_fill = True
-    # Winner plus one alternate. Wider fan-outs are draft-skipped, not prefilled.
-    cfg.prefill_keep_m = 2
     cfg.spec_pool_frac = 0.25 if cfg.spec_pool_frac <= 0 else cfg.spec_pool_frac
     # Marker strings cut the answer off (#### before the number, </think>
     # before the R1 reply). Answer-complete stop replaces them.
@@ -113,11 +160,24 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     # FORKSERVE_PRUNE_THRESHOLD.
     raw_thr = os.environ.get("FORKSERVE_PRUNE_THRESHOLD", "").strip()
     cfg.prune_threshold = float(raw_thr) if raw_thr else max(cfg.prune_threshold, 0.45)
+    raw_m = os.environ.get("FORKSERVE_KEEP_M", "").strip()
+    raw_a = os.environ.get("FORKSERVE_ADMIT_ALPHA", "").strip()
+    apply_admit_mode(
+        cfg,
+        os.environ.get("FORKSERVE_ADMIT_MODE", "score").strip() or "score",
+        keep_m=int(raw_m) if raw_m else 0,
+        alpha=float(raw_a) if raw_a else 0.5,
+    )
     flags = os.environ.get("FORKSERVE_PLUS_FLAGS", "").strip()
     if flags:
         want = {p.strip() for p in flags.split(",") if p.strip()}
-        cfg.skip_known_losers = "skip" in want
-        cfg.prune_enabled = bool(want & {"skip", "prune"})
+        if "skip" in want:
+            apply_admit_mode(cfg, "winner")
+        elif "topm" in want or "top_m" in want:
+            apply_admit_mode(cfg, "top_m", keep_m=int(raw_m) if raw_m else 2)
+        elif "alpha" in want:
+            apply_admit_mode(cfg, "alpha", alpha=float(raw_a) if raw_a else 0.5)
+        cfg.prune_enabled = bool(want & {"skip", "prune", "topm", "top_m", "alpha"}) or cfg.prune_enabled
         cfg.hash_prune = "hash" in want or cfg.hash_prune
         cfg.answer_stop = "auto" if "stop" in want else cfg.answer_stop
         cfg.lazy_abort = "lazy" in want or cfg.lazy_abort

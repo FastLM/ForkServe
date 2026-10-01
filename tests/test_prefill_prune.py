@@ -12,7 +12,7 @@ from forkserve.prefill_prune import (
     PrefillPruner,
     app_config,
 )
-from forkserve.prune import plus_config
+from forkserve.prune import apply_admit_mode, plus_config
 
 from experiments.prefill_prune_bench import (
     run_apc,
@@ -53,6 +53,9 @@ def test_app_draft_skips_illegal_keeps_winner() -> None:
     assert plan.draft_skips + plan.early_aborts >= 2
     assert plan.prefill_tokens < 4 * 32
     assert plan.decisions[1].keep is False
+    # Live sibling is above the score bar; APP does not drop it just
+    # because it is not the designated winner.
+    assert plan.decisions[3].keep
 
 
 def test_app_hash_skip_on_replay() -> None:
@@ -174,12 +177,13 @@ def test_prefill_on_decoding_still_cuts_the_wasted_prefix() -> None:
         base = by[method]
         draft = by[f"{method}+draft"]
         app = by[f"{method}+app"]
-        # Text heuristic keeps the two live thoughts. Full APP keeps the winner.
+        # Text heuristic and the APP score bar both keep the two live thoughts
+        # on this mix (illegal / loop sit at 0.02; live strategies sit near 1).
         assert draft.extra["admitted"] == 2
-        assert app.extra["admitted"] == 1
+        assert app.extra["admitted"] == 2
         assert draft.extra["avoided_decode"] > 0
-        assert app.decode_tokens < draft.decode_tokens < base.decode_tokens
-        assert app.extra["e2e_tokens"] < draft.extra["e2e_tokens"] < base.extra["e2e_tokens"]
+        assert app.decode_tokens == draft.decode_tokens < base.decode_tokens
+        assert app.extra["e2e_tokens"] == draft.extra["e2e_tokens"] < base.extra["e2e_tokens"]
     # SR and DPTS already planned to drop those two. Draft only moves the cut
     # earlier, so the survivor count stays 2 and the shorter checkpoint saves less.
     assert by["dpts"].extra["kept"] == by["dpts+draft"].extra["kept"] == 2
@@ -187,9 +191,9 @@ def test_prefill_on_decoding_still_cuts_the_wasted_prefix() -> None:
     assert by["dpts+draft"].extra["avoided_decode"] < by["specrej+draft"].extra["avoided_decode"]
     assert by["specrej+draft"].extra["avoided_decode"] < by["esc+draft"].extra["avoided_decode"]
     # DPTS peak is the two survivors at the budget, so an earlier cut does not
-    # shrink it. APP's single winner does. SR's peak is the four-wide checkpoint.
+    # shrink it. Default APP is the score bar, same two live thoughts as draft.
     assert by["dpts+draft"].peak_kv_tokens == by["dpts"].peak_kv_tokens
-    assert by["dpts+app"].peak_kv_tokens < by["dpts"].peak_kv_tokens
+    assert by["dpts+app"].peak_kv_tokens == by["dpts"].peak_kv_tokens
     assert by["specrej+draft"].peak_kv_tokens < by["specrej"].peak_kv_tokens
     assert by["esc+draft"].peak_kv_tokens < by["esc"].peak_kv_tokens
 
@@ -204,7 +208,7 @@ def test_suite_writes_summary() -> None:
     assert summary["decoding_prune"]["dpts"]["loser_tokens"] > 0
     stacked = summary["prefill_on_decoding"]
     assert stacked["dpts+draft"]["e2e_cut_vs_base"] > 0
-    assert stacked["dpts+app"]["e2e_tokens"] < stacked["dpts+draft"]["e2e_tokens"]
+    assert stacked["dpts+app"]["e2e_tokens"] == stacked["dpts+draft"]["e2e_tokens"]
     assert summary["app_vs_apc_prefill"] > 0.3
     assert summary["app_vs_apc_peak_kv"] > 0.5
     assert conc["tok_s_gain"] > 0.0
@@ -242,8 +246,7 @@ def test_shared_prefix_prefills_the_tail_once() -> None:
 
 def test_gc_admit_drops_low_value_siblings() -> None:
     cfg = plus_config(ForkServeConfig(page_size=8, bytes_per_token=1.0))
-    cfg.skip_known_losers = False
-    cfg.prefill_keep_m = 2
+    apply_admit_mode(cfg, "top_m", keep_m=2)
     plan = PrefillPruner(cfg, winner=0).plan(
         [
             "Thought 1: add the numbers and boxed the answer.",
@@ -257,6 +260,24 @@ def test_gc_admit_drops_low_value_siblings() -> None:
     assert sum(1 for d in plan.decisions if d.keep) == 2
     assert any(d.reason == "marginal_gc" for d in plan.decisions)
     assert plan.prefill_tokens == 64
+
+
+def test_admit_mode_parameter_selects_rule() -> None:
+    thoughts = [
+        "Thought 1: add the numbers and boxed the answer.",
+        "****loop****loop****loop****loop****loop",
+        "undefined nan junk",
+        "Use substitution then combine.",
+    ]
+    score = apply_admit_mode(plus_config(ForkServeConfig(page_size=8)), "score", threshold=0.45)
+    winner = apply_admit_mode(plus_config(ForkServeConfig(page_size=8)), "winner")
+    topm = apply_admit_mode(plus_config(ForkServeConfig(page_size=8)), "top_m", keep_m=2)
+    frac = apply_admit_mode(plus_config(ForkServeConfig(page_size=8)), "alpha", alpha=0.5)
+    kept = lambda cfg: [d.index for d in PrefillPruner(cfg, winner=0).plan(thoughts, token_counts=[32] * 4).decisions if d.keep]
+    assert kept(score) == [0, 3]
+    assert kept(winner) == [0]
+    assert kept(topm) == [0, 3]
+    assert 0 in kept(frac) and len(kept(frac)) == 2
 
 
 def test_app_config_enables_layers() -> None:

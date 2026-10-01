@@ -322,7 +322,7 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
     from forkserve.api import Engine
     from forkserve.config import ForkServeConfig
     from forkserve.engine.vllm_backend import VllmBackend
-    from forkserve.prune import plus_config
+    from forkserve.prune import apply_admit_mode, plus_config
     from forkserve.spec_pool import extra_batched_tokens
 
     bpt = bytes_per_token_from_config(model)
@@ -335,10 +335,15 @@ def _engine(model: str, tp: int, args: argparse.Namespace):
     plus = str(getattr(args, "system", "")) == "forkserve_plus"
     if plus:
         cfg = plus_config(cfg)
+        apply_admit_mode(
+            cfg,
+            getattr(args, "admit_mode", "score"),
+            keep_m=int(getattr(args, "keep_m", 0) or 0),
+            alpha=float(getattr(args, "admit_alpha", 0.5) or 0.5),
+        )
         # Stop only after the step that finished the answer. APC and
         # plain ForkServe still run to max_tokens.
         cfg.answer_stop = "auto"
-        cfg.prefill_keep_m = 1
         cfg.extra["spec_pool_tokens"] = float(
             extra_batched_tokens(cfg.max_batched_tokens, 0.26, cfg.spec_pool_frac)
         )
@@ -2680,6 +2685,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument("--idle-ms", type=float, default=2000.0)
     p.add_argument("--branching", type=int, default=4)
+    p.add_argument(
+        "--admit-mode",
+        choices=("score", "winner", "top_m", "alpha"),
+        default=os.environ.get("FORKSERVE_ADMIT_MODE", "score"),
+        help="ForkServe+ APP admission: score, winner-only, top-m, or αk",
+    )
+    p.add_argument("--keep-m", type=int, default=int(os.environ.get("FORKSERVE_KEEP_M", "0") or 0))
+    p.add_argument(
+        "--admit-alpha",
+        type=float,
+        default=float(os.environ.get("FORKSERVE_ADMIT_ALPHA", "0.5") or 0.5),
+    )
     p.add_argument(
         "--turns",
         type=int,

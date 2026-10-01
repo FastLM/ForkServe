@@ -39,7 +39,7 @@ from forkserve.eval_plus import concurrency_sweep, time_accuracy_curve, tokens_t
 from forkserve.hash_forkserve import HashForkServe
 from forkserve.pages import clone_memory_bytes, cow_memory_bytes
 from forkserve.prefill_prune import PrefillHashIndex, PrefillPruner
-from forkserve.prune import BranchPruner, plus_config
+from forkserve.prune import BranchPruner, apply_admit_mode, plus_config
 
 
 METHODS = ("apc", "forkserve", "hash_prefill", "disagg_prefill", "app")
@@ -507,19 +507,22 @@ def _admission_plan(
     trunk_len: int,
     residual: int,
     policy: str,
+    admit_mode: str = "score",
+    keep_m: int = 0,
+    admit_alpha: float = 0.5,
 ):
     """One session of residual admission.
 
     ``draft`` is the text heuristic only: illegal and loop residuals never
-    start, and the winner is not treated as known. ``app`` is the ForkServe+
-    config used by :func:`run_app`, which also keeps only the winner.
+    start. ``app`` uses ``admit_mode`` (default ``score``); ``winner``,
+    ``top_m``, and ``alpha`` stay available.
     """
     cfg = _cfg(app=True)
     if policy == "draft":
-        cfg.skip_known_losers = False
-        cfg.gc_admit = False
-        cfg.prefill_keep_m = 0
-    elif policy != "app":
+        apply_admit_mode(cfg, "score")
+    elif policy == "app":
+        apply_admit_mode(cfg, admit_mode, keep_m=keep_m, alpha=admit_alpha)
+    else:
         raise ValueError(f"unknown admission policy {policy}")
     index = PrefillHashIndex(cfg.page_size)
     trunk = tuple(range(trunk_len))
@@ -551,9 +554,9 @@ def run_prefill_on_decoding(
     the decoder's decision prefix. A child both sides keep still decodes to
     the budget: the stack does not shorten the survivor.
 
-    ``draft`` withholds only the hopeless residuals. ``app`` is the full
-    ForkServe+ admission (winner only). Both are compared with the survivors
-    still on the same 12 µs/token clock.
+    ``draft`` withholds only the hopeless residuals. ``app`` keeps every
+    residual whose draft score is at or above the ForkServe+ threshold.
+    Both are compared with the survivors still on the same 12 µs/token clock.
     """
     cfg = _cfg()
     if n_losers < 0 or n_losers >= fanout:
