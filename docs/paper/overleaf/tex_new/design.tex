@@ -287,7 +287,7 @@ An earlier draft of this rule treated every score below $\tau$ as a draft skip.
 That rule is not admissible.
 A residual the text score marks illegal still solves contest items once it is decoded, while a repeated loop solves none (\Cref{tab:grow}).
 Draft skip is therefore only the repeated loop: that residual is not submitted to prefill and is not inserted as a hash key.
-The prefill bar is a fixed plug-in, $\tau_{\mathrm{pre}}{=}0.15$, and is not retuned when the host decoder is ESC, Speculative Rejection, or DPTS.
+The default prefill threshold is $\tau_{\mathrm{pre}}{=}0.15$ for ESC, Speculative Rejection, and DPTS.
 The winner, and every other residual whose score is at least $\tau_{\mathrm{pre}}$, is prefilled and decoded to the budget $D$.
 A non-winner that scores below $\tau$ and is not a loop is still prefilled.
 It is then decoded for a probe of $P$ tokens, and the same score is applied to the generated prefix $y_{1:P}$.

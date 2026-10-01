@@ -15,5 +15,5 @@ A two-class scheduler admits speculative prefill only from the budget left after
 
 On Qwen3-14B GSM8K, \sys matches prefix-cache accuracy at $0.72\times$ the median peak KV, cuts modeled fan-out prefill by $74.72\%$ relative to that cache, and raises the concurrency a fixed pool can sustain by $35.53\%$.
 On Qwen3-8B MATH-500, skipping every low-score residual drops any-finished accuracy from $20/32$ to $13/32$ at fan-out $16$; a $128$-token probe that continues only when the generated prefix clears the threshold restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s.
-On Qwen3-8B GSM8K the prefill bar is frozen at $\tau_{\mathrm{pre}}{=}0.15$ and is not retuned per decoder: at $k{=}16$ it keeps $16/16$ any-finished, cuts computed prefill by $23\%$, and reduces ESC time from $17.05$\,s to $14.14$\,s.
-A $0.45$ bar is faster at that width ($10.93$\,s, still $16/16$) but drops two questions at $k{=}4$ and $k{=}8$.
+On Qwen3-8B GSM8K, $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC, Speculative Rejection, or DPTS keeps $16/16$ any-finished at $k{=}16$, cuts computed prefill by $23\%$, and reduces ESC time from $17.05$\,s to $14.14$\,s.
+$\tau_{\mathrm{pre}}{=}0.45$ is faster at that width ($10.93$\,s, still $16/16$) but drops two questions at $k{=}4$ and $k{=}8$.
