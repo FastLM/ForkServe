@@ -1164,7 +1164,8 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
             or (row["method"] == "dpts" and int(row["dpts_step"]) == 100)
         )
     ]
-    emit(
+    if paper:
+        emit(
         "paper  n=16 k=4 budget=512  tau=256  dpts=100  hopeless",
         paper,
         (
