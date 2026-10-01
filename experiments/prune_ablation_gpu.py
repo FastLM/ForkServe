@@ -1086,31 +1086,12 @@ def run_job(
                 llm, sampling_cls, prompt_cls, seqs, lengths
             )
             fanout_ms += elapsed
-            for (pi, branch), how, ntok, hit, seq, ids in zip(
-                owners, hows, n_out, cached, seqs, id_rows, strict=True
+            for (pi, branch), how, text, ntok, hit, seq, ids in zip(
+                owners, hows, texts, n_out, cached, seqs, id_rows, strict=True
             ):
                 decode_tokens += ntok
                 prompt_tokens += len(seq)
                 cached_tokens += hit
-                if how == "full":
-                    text = texts[owners.index((pi, branch))] if False else ""
-                    del text
-                if how == "cont":
-                    full_ids = list(partial[(pi, branch)]) + list(ids)
-                    text = _decode_ids(tok, full_ids)
-                    done = len(full_ids) >= budget
-                else:
-                    # Matched by position, not by searching owners.
-                    text = ""
-                    done = True
-                del done
-        # Re-walk with the texts from this call. The block above only counts
-        # tokens; the texts are filled in the loop that follows when seqs
-        # is non-empty. Rebuild from the same zip by storing on the way.
-        by_problem = [[] for _ in items]
-        if seqs:
-            # The generate already happened. Use the lists still in scope.
-            for (pi, branch), how, text, ids in zip(owners, hows, texts, id_rows, strict=True):
                 if how == "cont":
                     full_ids = list(partial[(pi, branch)]) + list(ids)
                     text = _decode_ids(tok, full_ids)
@@ -1241,7 +1222,12 @@ def run_job(
                 only_hits[hit_branches[0]] += 1
 
     prefill_avoided = len(items) * int(plan["avoided_decode"])
-    if window > 1:
+    if str(job["method"]) == "grow":
+        # Promotion spends more than the probe plan, so charge the tokens
+        # that were actually generated.
+        issued = int(decode_tokens)
+        avoided = len(items) * k * budget - issued
+    elif window > 1:
         # A round that never starts saves a full budget, not just a prefix.
         skipped = len(items) * len(plan["admitted"]) - finished_branches
         avoided = prefill_avoided + skipped * budget
@@ -1277,6 +1263,8 @@ def run_job(
             "marker_branches": int(marker_branches),
             "prefix_cache_aligned": bool(prefix_ok),
             "winner_hash": winner_hash.hexdigest()[:12],
+            "extended": int(grow_extended),
+            "probed": int(grow_probed),
         }
     )
     return row
@@ -1294,7 +1282,7 @@ def run_gpu(args: argparse.Namespace) -> int:
 
     jobs = select_jobs(args)
     if args.smoke:
-        if args.scale:
+        if args.scale or getattr(args, "grow", False):
             picked = list(jobs)
         else:
             picked = [job for job in jobs if job["tag"] in ("paper", "wide")][:3]
@@ -1370,6 +1358,7 @@ def run_gpu(args: argparse.Namespace) -> int:
                 f"k={row['k']} D={row['budget']} e2e={row['e2e_ms']:.0f}ms "
                 f"decode={row['decode_tokens']} avoid={row['avoided_decode']} "
                 f"W={row['winner_correct']}/{row['n']} any={row['survivor_correct']}/{row['n']} "
+                f"grow={row.get('extended', 0)}/{row.get('probed', 0)} "
                 f"({time.perf_counter() - t0:.1f}s)",
                 flush=True,
             )
@@ -1524,6 +1513,24 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
                 [row for row in thresh if int(row["k"]) == k],
                 thresh_cols,
             )
+    grow = _pick(rows, tag="grow")
+    if grow:
+        emit(
+            "grow  MATH-500 level>=4  n=32  budget=1024  probe then extend if the generated prefix scores >= 0.45",
+            grow,
+            (
+                "label",
+                "k",
+                "kept",
+                "probed",
+                "extended",
+                "decode_tokens",
+                "avoided_decode",
+                "e2e_ms",
+                "winner_acc",
+                "surv_acc",
+            ),
+        )
     scale = _pick(rows, tag="scale")
     if scale:
         emit(
@@ -1579,7 +1586,9 @@ def _stamp_admit(jobs: list[dict[str, Any]], args: argparse.Namespace) -> list[d
 
 def select_jobs(args: argparse.Namespace) -> list[dict[str, Any]]:
     ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if (args.wide or args.thresh) else (4,))
-    if args.scale:
+    if getattr(args, "grow", False):
+        jobs = build_grow_jobs()
+    elif args.scale:
         jobs = build_scale_jobs()
     elif args.mild:
         jobs = build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
@@ -1605,6 +1614,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--scale",
         action="store_true",
         help="MATH-500 level 4-5, k=4/8/16, loop-only cuts on Qwen-scale runs",
+    )
+    p.add_argument(
+        "--grow",
+        action="store_true",
+        help="probe uncertain branches, then finish the ones whose generated prefix scores high",
     )
     p.add_argument(
         "--wide",

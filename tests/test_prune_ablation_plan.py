@@ -193,6 +193,25 @@ def test_scale_cuts_loops_and_keeps_illegal_text() -> None:
     assert len({work_key(job) for job in jobs}) == len(jobs)
 
 
+def test_grow_probes_illegal_text_and_can_extend_it() -> None:
+    from experiments.prune_ablation_gpu import build_grow_jobs, plan_grow, should_grow
+
+    thoughts = build_thoughts(8, "hopeless", family="contest")
+    plan = plan_grow(thoughts, budget=1024, probe=128, threshold=0.45, skip_loops=True)
+    assert plan["probe"] == [5, 7]
+    assert plan["assigned"][0] == 1024
+    assert 4 not in plan["admitted"] and 6 not in plan["admitted"]
+    probed = plan_grow(thoughts, budget=1024, probe=128, threshold=0.45, skip_loops=False)
+    assert probed["probe"] == [4, 5, 6, 7]
+    assert should_grow("Solve the equation, then box the value.")
+    assert not should_grow("****loop****loop****loop****loop")
+    assert not should_grow("undefined nan junk residual")
+    jobs = build_grow_jobs()
+    assert len(jobs) == 9
+    assert len({work_key(job) for job in jobs}) == len(jobs)
+    assert all(job["workload"] == "math500" and job["budget"] == 1024 for job in jobs)
+
+
 def test_job_grid_is_unique_and_inside_budget() -> None:
     jobs = build_jobs()
     keys = [work_key(job) for job in jobs]
