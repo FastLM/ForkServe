@@ -45,11 +45,12 @@ from typing import Any, Sequence
 from forkserve.adapters.templates import ToolWrappers
 from forkserve.config import ForkServeConfig
 from forkserve.prefill_prune import PrefillPruner
-from forkserve.prune import BranchPruner, apply_admit_mode, plus_config
+from forkserve.prune import DecodeScorer, apply_admit_mode, plus_config
 from forkserve.quality import extract_boxed, extract_gsm8k_answer, gsm8k_correct, math_correct
 
-# Published checkpoints. See experiments/prefill_prune_bench.py.
-DPTS_SCORE_BAR = 0.45
+# Decode-side default. Prefill uses job["prefill_threshold"], never this.
+DECODE_SCORE_BAR = 0.45
+DPTS_SCORE_BAR = DECODE_SCORE_BAR
 METHODS = ("esc", "specrej", "dpts")
 POLICIES = ("base", "draft", "app")
 
@@ -106,6 +107,7 @@ def _policy_config(
     admit_alpha: float = 0.5,
 ) -> ForkServeConfig:
     cfg = plus_config(ForkServeConfig(page_size=16))
+    cfg.prefill_threshold = float(threshold)
     cfg.prune_threshold = float(threshold)
     cfg.prune_enabled = True
     if policy == "draft":
@@ -145,14 +147,21 @@ def admitted_indices(
     return [d.index for d in plan.decisions if d.keep]
 
 
+def _decode_thought_scores(thoughts: Sequence[str]) -> list[tuple[int, float]]:
+    """Decode prior on residuals. Does not use PrefillScorer."""
+    scorer = DecodeScorer()
+    rows: list[tuple[int, float]] = []
+    for i, text in enumerate(thoughts):
+        score, _reason = scorer.score_thought(text)
+        rows.append((i, score))
+    return rows
+
+
 def _ranked_losers(thoughts: Sequence[str]) -> list[int]:
-    """Non-winners, lowest draft score first. Winner is never a loser."""
-    cfg = ForkServeConfig()
-    cfg.prune_threshold = DPTS_SCORE_BAR
-    rows = BranchPruner(cfg, winner=0).rank(list(thoughts), threshold=DPTS_SCORE_BAR)
-    rows = [row for row in rows if row.index != 0]
-    rows.sort(key=lambda row: (row.score, row.index))
-    return [row.index for row in rows]
+    """Non-winners, lowest decode-prior first. Winner is never a loser."""
+    rows = [(i, score) for i, score in _decode_thought_scores(thoughts) if i != 0]
+    rows.sort(key=lambda row: (row[1], row[0]))
+    return [index for index, _score in rows]
 
 
 def drop_indices(
@@ -160,8 +169,13 @@ def drop_indices(
     thoughts: Sequence[str],
     *,
     alpha: float,
+    decode_threshold: float | None = None,
 ) -> list[int]:
-    """Children the decoder cuts after its checkpoint. Winner stays."""
+    """Children the decoder cuts after its checkpoint. Winner stays.
+
+    Uses ``DecodeScorer`` and ``decode_threshold``. Prefill admission is
+    not consulted.
+    """
     ranked = _ranked_losers(thoughts)
     if method == "esc":
         return []
@@ -169,9 +183,8 @@ def drop_indices(
         n_drop = min(len(ranked), int(alpha * len(thoughts)))
         return ranked[:n_drop]
     if method == "dpts":
-        cfg = ForkServeConfig()
-        rows = BranchPruner(cfg, winner=0).rank(list(thoughts))
-        return [row.index for row in rows if row.index != 0 and row.score < DPTS_SCORE_BAR]
+        bar = DECODE_SCORE_BAR if decode_threshold is None else float(decode_threshold)
+        return [i for i, score in _decode_thought_scores(thoughts) if i != 0 and score < bar]
     raise ValueError(f"unknown method {method}")
 
 
@@ -248,14 +261,12 @@ def assign_mild(
     }
 
 
-def should_grow(text: str, threshold: float = DPTS_SCORE_BAR) -> bool:
+def should_grow(text: str, threshold: float = DECODE_SCORE_BAR) -> bool:
     """True when a generated prefix is healthy enough to finish the budget.
 
-    The early residual score is the wrong instrument for illegal-looking
-    thoughts: the model often writes normal math after them. This scores only
-    the tokens that were actually generated.
+    Decode score only. Prefill residual scores are not used here.
     """
-    score, _reason = BranchPruner(ForkServeConfig(), winner=0).score_text(text or "")
+    score, _reason = DecodeScorer().score_prefix(text or "")
     return score >= float(threshold)
 
 
@@ -277,12 +288,7 @@ def plan_grow(
     """
     if probe <= 0 or probe >= budget:
         raise ValueError(f"probe {probe} must sit inside budget {budget}")
-    cfg = ForkServeConfig()
-    cfg.prune_threshold = float(threshold)
-    scored = {
-        row.index: row.score
-        for row in BranchPruner(cfg, winner=0).rank(list(thoughts), threshold=threshold)
-    }
+    scored = {i: score for i, score in _decode_thought_scores(thoughts)}
     loops = set(loop_indices(thoughts))
     admitted: list[int] = []
     assigned: dict[int, int] = {}
@@ -357,7 +363,12 @@ def assign_tokens(
         keep_m=keep_m,
         admit_alpha=admit_alpha,
     )
-    drop = drop_indices(method, thoughts, alpha=alpha)
+    drop = drop_indices(
+        method,
+        thoughts,
+        alpha=alpha,
+        decode_threshold=decode_threshold,
+    )
     drop_set = set(drop)
     assigned = {
         i: (step if i in drop_set else budget)

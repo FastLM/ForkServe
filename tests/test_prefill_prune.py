@@ -50,11 +50,11 @@ def test_app_draft_skips_illegal_keeps_winner() -> None:
     )
     assert plan.decisions[0].keep
     assert plan.decisions[0].action is PrefillAction.PREFILL
-    assert plan.draft_skips + plan.early_aborts >= 2
+    assert plan.draft_skips + plan.early_aborts >= 1
     assert plan.prefill_tokens < 4 * 32
     assert plan.decisions[1].keep is False
-    # Live sibling is above the score bar; APP does not drop it just
-    # because it is not the designated winner.
+    # Default bar 0.15 keeps illegal text (0.22) and the live sibling.
+    assert plan.decisions[2].keep
     assert plan.decisions[3].keep
 
 
@@ -177,10 +177,10 @@ def test_prefill_on_decoding_still_cuts_the_wasted_prefix() -> None:
         base = by[method]
         draft = by[f"{method}+draft"]
         app = by[f"{method}+app"]
-        # Text heuristic and the APP score bar both keep the two live thoughts
-        # on this mix (illegal / loop sit at 0.02; live strategies sit near 1).
-        assert draft.extra["admitted"] == 2
-        assert app.extra["admitted"] == 2
+        # Default bar 0.15 drops the loop and keeps illegal text plus the
+        # two live thoughts.
+        assert draft.extra["admitted"] == 3
+        assert app.extra["admitted"] == 3
         assert draft.extra["avoided_decode"] > 0
         assert app.decode_tokens == draft.decode_tokens < base.decode_tokens
         assert app.extra["e2e_tokens"] == draft.extra["e2e_tokens"] < base.extra["e2e_tokens"]

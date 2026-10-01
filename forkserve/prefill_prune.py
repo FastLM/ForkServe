@@ -177,7 +177,15 @@ class PrefillPruner:
         ship = self.config.disagg_prefill if disagg is None else disagg
         mode = str(getattr(self.config, "admit_mode", "score") or "score")
         # top_m / alpha replace the score bar; rank everyone, then cap.
-        rank_thresh = 0.0 if mode in ("top_m", "alpha") else threshold
+        # PrefillPruner never reads decode_threshold.
+        if mode in ("top_m", "alpha"):
+            rank_thresh = 0.0
+        elif threshold is not None:
+            rank_thresh = threshold
+        else:
+            rank_thresh = float(
+                getattr(self.config, "prefill_threshold", self.config.prune_threshold)
+            )
         scores = self._draft.rank(residuals, threshold=rank_thresh)
         out = PrefillPlan()
         prompts: list[TokenSeq] = []

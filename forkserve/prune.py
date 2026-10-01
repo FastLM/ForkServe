@@ -1,9 +1,8 @@
-"""Draft-score and early-abort speculative branches before they burn prefill.
+"""Two independent prune scores: prefill admission and decode continuation.
 
-Known-suffix ToT residuals are short; the win is skipping GPU prefill on
-low-mass siblings, not rewriting the winner decode. A draft model is optional:
-without weights we use n-gram / entropy / illegal-trace heuristics so the
-control plane still drops hopeless branches.
+Prefill looks only at the residual thought, before any GPU work. Decoding
+looks at a generated prefix after a checkpoint (and, for the static planner,
+a separate residual prior that does not share weights with prefill).
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ _ADMIT_ALIASES = {
 
 _REPEAT = re.compile(r"(.{8,40})\1{3,}")
 _ILLEGAL_MATH = re.compile(r"\*{4,}|unk|nan|undefined", re.I)
+_ANSWER_MARK = re.compile(r"####\s*-?[\d,]+|\\boxed\{")
 
 
 @dataclass(slots=True)
@@ -39,12 +39,12 @@ class BranchScore:
     early_abort: bool = False
 
 
-@dataclass
-class BranchPruner:
-    """Rank residuals; keep the winner plus any sibling above ``threshold``."""
+class PrefillScorer:
+    """Residual-thought score used only for prefill admission.
 
-    config: ForkServeConfig
-    winner: int = 0
+    Loop is 0.02, illegal text is 0.22, a live strategy is ~1.0. The
+    decoder never calls this.
+    """
 
     def score_text(self, text: str) -> tuple[float, str]:
         raw = text or ""
@@ -53,13 +53,9 @@ class BranchPruner:
         if _REPEAT.search(raw):
             return 0.02, "loop"
         if _ILLEGAL_MATH.search(raw):
-            # Junk text, not a repeat loop. Below the 0.45 contest bar,
-            # above 0.15 so a low threshold still starts it.
             return 0.22, "illegal"
         n = max(len(raw), 1)
-        uniq = len(set(raw))
-        entropy = uniq / n
-        # Collapse whitespace-only thought prefixes.
+        entropy = len(set(raw)) / n
         alpha = sum(ch.isalnum() for ch in raw) / n
         score = 0.55 * min(1.0, alpha * 2.0) + 0.45 * min(1.0, entropy * 8.0)
         return float(min(1.0, max(0.0, score))), "ok"
@@ -69,10 +65,78 @@ class BranchPruner:
             return 0.0, "empty"
         n = len(tokens)
         uniq = len(set(int(t) for t in tokens))
-        # High unique ratio on a short wrapper is fine; long high-entropy junk is not.
         if n >= 16 and uniq / n > 0.95:
             return 0.08, "high_entropy"
         return min(1.0, 0.4 + 0.6 * (uniq / n)), "ok"
+
+
+class DecodeScorer:
+    """Generated-prefix score used only after a decode checkpoint.
+
+    ``score_thought`` is the static planner prior (DPTS / SR) on the
+    residual. Weights are not shared with ``PrefillScorer``.
+    """
+
+    def score_prefix(self, text: str) -> tuple[float, str]:
+        raw = text or ""
+        if not raw.strip():
+            return 0.0, "empty"
+        if _REPEAT.search(raw):
+            return 0.04, "loop"
+        if _ANSWER_MARK.search(raw):
+            return 0.92, "answer"
+        if _ILLEGAL_MATH.search(raw):
+            return 0.16, "illegal"
+        n = max(len(raw), 1)
+        digits = sum(ch.isdigit() for ch in raw) / n
+        ops = sum(ch in "+-*/=()" for ch in raw) / n
+        uniq = len(set(raw)) / n
+        score = (
+            0.40 * min(1.0, digits * 20.0)
+            + 0.35 * min(1.0, ops * 15.0)
+            + 0.25 * min(1.0, uniq * 8.0)
+        )
+        return float(min(1.0, max(0.0, score))), "ok"
+
+    def score_thought(self, text: str) -> tuple[float, str]:
+        raw = text or ""
+        if not raw.strip():
+            return 0.0, "empty"
+        if _REPEAT.search(raw):
+            return 0.04, "loop"
+        if _ILLEGAL_MATH.search(raw):
+            return 0.16, "illegal"
+        n = max(len(raw), 1)
+        entropy = len(set(raw)) / n
+        alpha = sum(ch.isalnum() for ch in raw) / n
+        # Prefill uses 0.55/0.45; decode prior prefers diversity.
+        score = 0.35 * min(1.0, alpha * 2.0) + 0.65 * min(1.0, entropy * 8.0)
+        return float(min(1.0, max(0.0, score))), "ok"
+
+
+@dataclass
+class BranchPruner:
+    """Prefill ranker. Keep the winner plus any sibling above the prefill bar."""
+
+    config: ForkServeConfig
+    winner: int = 0
+
+    def __post_init__(self) -> None:
+        self._prefill = PrefillScorer()
+
+    def score_text(self, text: str) -> tuple[float, str]:
+        return self._prefill.score_text(text)
+
+    def score_tokens(self, tokens: TokenSeq) -> tuple[float, str]:
+        return self._prefill.score_tokens(tokens)
+
+    def _prefill_bar(self, threshold: float | None) -> float:
+        if threshold is not None:
+            return float(threshold)
+        raw = getattr(self.config, "prefill_threshold", None)
+        if raw is not None:
+            return float(raw)
+        return float(self.config.prune_threshold)
 
     def rank(
         self,
@@ -80,7 +144,7 @@ class BranchPruner:
         *,
         threshold: float | None = None,
     ) -> list[BranchScore]:
-        thresh = self.config.prune_threshold if threshold is None else threshold
+        thresh = self._prefill_bar(threshold)
         out: list[BranchScore] = []
         for i, residual in enumerate(residuals):
             if isinstance(residual, str):
@@ -100,7 +164,7 @@ class BranchPruner:
             return False
         cut = max(1, int(math.ceil(len(text) * use)))
         score, reason = self.score_text(text[:cut])
-        return score < self.config.prune_threshold and reason != "ok"
+        return score < self._prefill_bar(None) and reason != "ok"
 
 
 def apply_admit_mode(
@@ -113,7 +177,7 @@ def apply_admit_mode(
 ) -> ForkServeConfig:
     """Select one APP admission rule. The others stay off.
 
-    ``score`` keeps every residual at or above ``prune_threshold``.
+    ``score`` keeps every residual at or above ``prefill_threshold``.
     ``winner`` is skip_known_losers. ``top_m`` keeps ``keep_m`` by G/C.
     ``alpha`` keeps ``floor(alpha * k)`` by draft score, winner included.
     """
@@ -123,6 +187,7 @@ def apply_admit_mode(
         raise ValueError(f"unknown admit_mode {mode!r}; want {ADMIT_MODES}")
     cfg.admit_mode = key
     if threshold is not None:
+        cfg.prefill_threshold = float(threshold)
         cfg.prune_threshold = float(threshold)
     if key == "winner":
         cfg.skip_known_losers = True
@@ -159,11 +224,16 @@ def plus_config(base: ForkServeConfig | None = None) -> ForkServeConfig:
     # Marker strings cut the answer off (#### before the number, </think>
     # before the R1 reply). Answer-complete stop replaces them.
     cfg.decode_stop = ()
-    # 0.15 only drops illegal loops. Contest fan-out uses a higher bar so
-    # low-mass siblings are skipped before prefill. Override with
-    # FORKSERVE_PRUNE_THRESHOLD.
-    raw_thr = os.environ.get("FORKSERVE_PRUNE_THRESHOLD", "").strip()
-    cfg.prune_threshold = float(raw_thr) if raw_thr else max(cfg.prune_threshold, 0.45)
+    # Prefill bar: 0.15 drops loops (0.02) and keeps illegal text (0.22).
+    # Decode bar stays 0.45 unless FORKSERVE_DECODE_THRESHOLD is set.
+    raw_pre = (
+        os.environ.get("FORKSERVE_PREFILL_THRESHOLD", "").strip()
+        or os.environ.get("FORKSERVE_PRUNE_THRESHOLD", "").strip()
+    )
+    cfg.prefill_threshold = float(raw_pre) if raw_pre else 0.15
+    cfg.prune_threshold = cfg.prefill_threshold
+    raw_dec = os.environ.get("FORKSERVE_DECODE_THRESHOLD", "").strip()
+    cfg.decode_threshold = float(raw_dec) if raw_dec else 0.45
     raw_m = os.environ.get("FORKSERVE_KEEP_M", "").strip()
     raw_a = os.environ.get("FORKSERVE_ADMIT_ALPHA", "").strip()
     apply_admit_mode(

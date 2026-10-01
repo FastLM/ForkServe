@@ -63,6 +63,10 @@ class ForkServeConfig:
     lazy_abort: bool = False
     pointer_swap: bool = True
     prune_enabled: bool = False
+    # Prefill admission bar (APP). decode_threshold is the decoder's bar.
+    prefill_threshold: float = 0.15
+    decode_threshold: float = 0.45
+    # Alias of prefill_threshold for older callers.
     prune_threshold: float = 0.15
     early_prune_frac: float = 0.20
     spec_pool_frac: float = 0.0
@@ -73,7 +77,7 @@ class ForkServeConfig:
     # Per-request hints (Game24 gold strings), aligned with the decode batch.
     answer_stop_hints: tuple[str, ...] = ()
     # APP admission rule. ``apply_admit_mode`` is the switch:
-    #   score   — winner + every sibling with draft score >= prune_threshold
+    #   score   — winner + every sibling with prefill score >= prefill_threshold
     #   winner  — skip_known_losers (winner only)
     #   top_m   — winner + next prefill_keep_m-1 by G/C
     #   alpha   — winner + next floor(admit_alpha * k)-1 by score
