@@ -4,6 +4,7 @@
 The GPU measurements share one node and one engine, and they differ by model, tensor-parallel width, and workload.
 \S\ref{sec:eval-gpu} is the full GSM8K forest on Qwen3-14B at $\mathrm{tp}{=}2$.
 \S\ref{sec:eval-app} is a control-plane cost model of \app, with no GPU, against APC, hash prefill, baseline prefill--decode disaggregation, \sys, and three decoding-time pruners.
+\S\ref{sec:eval-prefill} freezes the GSM8K score bar at $\tau_{\mathrm{pre}}{=}0.15$ on Qwen3-8B and reports the accuracy--latency trade-off as a plug-in on ESC, Speculative Rejection, and DPTS.
 \S\ref{sec:eval-plus} runs ForkServe+ on Qwen3-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 \S\ref{sec:eval-mt} is a three-turn Tree-of-Thoughts on Qwen3-4B and Qwen3-8B, one problem per generate.
 \S\ref{sec:eval-multi} repeats the forest on six families at $n{=}40$.
@@ -214,6 +215,82 @@ Any-finished returns to the full fan-out, $20/32$, while end-to-end time falls f
 Probing the loops as well extends none of them and costs $74.4$\,s for the same $20/32$.
 At $k{=}8$ the shorter probe is the one that holds accuracy: grow at $P{=}64$ is $16/32$ in $42.0$\,s, against $15/32$ in $52.5$\,s for the full fan-out.
 At $k{=}4$ the probe does not recover the full fan-out ($9/32$ against $12/32$); skipping the single loop, and decoding the illegal residual to $D$, is $11/32$ in $23.0$\,s.
+
+\paragraph{Fixed score bar, accuracy--speed trade-off.}
+\label{sec:eval-prefill}
+The MATH-500 probe still uses a decode bar $\tau{=}0.45$ on the generated prefix.
+Prefill admission is a different score and a different, frozen bar $\tau_{\mathrm{pre}}{=}0.15$: it drops only the repeated loop ($0.02$) and starts illegal text ($0.22$) and every live strategy ($1.0$).
+We measure that plug-in on Qwen3-8B GSM8K, $n{=}16$, $D{=}512$, the same hopeless mix, four A100-40GB, $\mathrm{tp}{=}1$.
+The host decoder is ESC, so a withheld child never pays residual prefill or a decode slot.
+A denser sweep of the bar collapses to three admission sets; $0.15$ and $0.45$ are the two nonzero operating points.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only.
+Any-finished is exact match on a full-budget branch.
+$\tau_{\mathrm{pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text.
+Time is trunk warm plus fan-out, in seconds.
+Computed prefill falls $23\%$ at $0.15$ and $45\%$ at $0.45$ at every $k$.}
+\label{tab:prefill-bar}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+ESC & $16/16$, $8.65$ & $16/16$, $10.84$ & $16/16$, $17.05$ \\
+\rowcolor{tblalt}
+\app $\tau_{\mathrm{pre}}{=}0.15$ & $15/16$, $8.22$ & \win{$16/16$}, $10.19$ & \win{$16/16$}, $14.14$ \\
+\app $\tau_{\mathrm{pre}}{=}0.45$ & \botn{$14/16$}, $7.89$ & \botn{$14/16$}, $8.60$ & \win{$16/16$}, \win{$10.93$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:prefill-bar} is the trade-off.
+The frozen plug-in $\tau_{\mathrm{pre}}{=}0.15$ keeps $15/16$, $16/16$, $16/16$ and still cuts wall-clock time, more as the tree widens ($-5\%$, $-6\%$, $-17\%$).
+Computed prefill tokens fall from $1320/2624/5008$ to $1018/2020/3848$.
+Raising the bar to $0.45$ is the extra-speed point: $-9\%$, $-21\%$, $-36\%$ end-to-end, and $732/1448/2768$ computed prefill tokens.
+It drops two questions at $k{=}4$ and $k{=}8$.
+At $k{=}16$ both bars stay at $16/16$, so $0.45$ is the faster matched-accuracy setting ($10.93$\,s vs.\ $14.14$\,s).
+We ship $0.15$ as the default because one bar must hold at every $k$.
+
+\begin{table}[t]
+\centering
+\caption{Same GSM8K slice, $k{=}16$, $\tau_{\mathrm{pre}}{=}0.15$ on three host decoders.
+Admitted children and computed prefill tokens are identical across hosts: the plug-in does not read $\tau$, $d_{\mathrm{DPTS}}$, or $\alpha$.
+Any-finished stays $16/16$.}
+\label{tab:plugin}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrrr}
+\rowcolor{tblhead}
+\toprule
+ & adm. & prefill & e2e (s) & any \\
+\midrule
+ESC & $16$ & $5008$ & $17.05$ & $16/16$ \\
+\rowcolor{tblalt}
+ESC+\app & $12$ & \win{$3848$} & \win{$14.14$} & $16/16$ \\
+Spec.\ Rejection & $16$ & $5008$ & $13.14$ & $16/16$ \\
+\rowcolor{tblalt}
+SR+\app & $12$ & \win{$3848$} & $12.47$ & $16/16$ \\
+DPTS & $16$ & $5008$ & $11.86$ & $16/16$ \\
+\rowcolor{tblalt}
+DPTS+\app & $12$ & \win{$3848$} & $11.49$ & $16/16$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:plugin} is the plug-in.
+ESC, Speculative Rejection, and DPTS alone all report $5008$ computed prefill tokens: a decode-time cut still prefills every child.
+Stacking the same $0.15$ bar admits $12$ of $16$ residuals and $3848$ prefill tokens on every host.
+Wall-clock falls $17\%$ on ESC, $5\%$ on Speculative Rejection, and $3\%$ on DPTS, because those last two hosts would have stopped the loop later anyway.
+The accuracy that \Cref{tab:prefill-bar} preserves is unchanged: every row in \Cref{tab:plugin} is $16/16$.
+At $k{=}8$ the same bar is $16/16$ on ESC ($10.84$ to $10.19$\,s) and lifts Speculative Rejection and DPTS from $15/16$ to $16/16$.
 
 \paragraph{Concurrency from measured KV.}
 Our empirical results on DeepSeek-R1 GSM8K ($761$ APC tokens, $561$ \sys tokens, $n{=}16$, $k{=}4$) in an $8$\,GiB pool in \eqref{eq:theta} give $76$ concurrent trees for APC and $103$ for \sys.

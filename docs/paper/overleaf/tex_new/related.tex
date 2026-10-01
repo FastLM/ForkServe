@@ -28,3 +28,4 @@ Speculative Rejection~\cite{specrej} ranks partial generations and halts the low
 Dynamic Parallel Tree Search (DPTS)~\cite{dpts} generates a fixed mini-step on every active node, then early-stops low-confidence children.
 In each method the score is computed from tokens already resident in the KV cache, so the prefill of the candidate and a decode prefix are issued before the drop.
 \app scores a known residual first and withholds that prefill, which also keeps the child off the disaggregated connector (\S\ref{sec:eval-app}).
+The GPU plug-in uses a frozen prefill bar and does not retune when the host is ESC, Speculative Rejection, or DPTS (\S\ref{sec:eval-prefill}).
