@@ -189,42 +189,43 @@ Chips stand in for tokens: a real hit ends on a full page, and each row is a dif
 \label{fig:dragon}
 \end{figure*}
 Hash-local hits stay on the decode instance (the same published blocks are APC-visible there).
-Draft-skipped and early-aborted residuals never enter the buffer.
-\Cref{alg:app} is the per-fan-out plan; \Cref{tab:span} is the first-fan-out span.
+Draft-skipped residuals never enter the buffer.
+The rejected length is a blanket skip. The corrected length is \Cref{alg:app}.
+\begin{equation}
+\label{eq:drej}
+d_i^{\times}=D\cdot[i=0\lor s_i\ge\tau].
+\end{equation}
+Every non-winner with $s_i<\tau$ had $d_i^{\times}=0$: it was not prefilled and not decoded.
+That predicate drops residuals that still solve once generated.
+\Cref{tab:span} remains the first-fan-out span under the actions of \eqref{eq:action}.
 
 \begin{algorithm}[t]
-\caption{PrefillPlan($\{\rho_i\}$, $H$, $\tau$, $P$, winner)}
+\caption{Corrected admission, replacing \eqref{eq:drej}.
+$\Lambda$ is the repeated-loop set.
+$y_i$ is a probe of $t_0$ tokens and $s'_i$ is its draft score.
+Iverson brackets select the decode length.
+Only $\Lambda$ keeps the old skip.}
 \label{alg:app}
 \small
 \begin{algorithmic}[1]
-\REQUIRE residuals, hash index $H$, threshold $\tau$, probe length $P$
-\ENSURE actions $a_i$, work $\Work_i$, transfer $\Xfer_i$
-\FOR{$i=1$ \TO $k$}
-  \STATE $m_i\leftarrow H.\mathrm{lookup}(\mathrm{trunk}\Vert\rho_i)$ \COMMENT{full pages of $\rho_i$}
-  \IF{$m_i=\ell_i$}
-    \STATE $a_i\leftarrow\mathrm{HS}$; $\Work_i\leftarrow 0$ \COMMENT{retrieve}
-  \ELSIF{$0<m_i<\ell_i$}
-    \STATE $a_i\leftarrow\mathrm{HP}$; $\Work_i\leftarrow\ell_i-m_i$
+\REQUIRE $\{\rho_i\}_{i=0}^{k-1}$, threshold $\tau$, probe $t_0$, budget $D$
+\ENSURE action $a_i$, decode length $d_i$, set $\Keep$
+\STATE $\Lambda\leftarrow\{i\neq 0:\mathrm{Loop}(\rho_i)\}$
+\FOR{$i=0$ \TO $k-1$}
+  \STATE $s_i\leftarrow\mathrm{DraftScore}(\rho_i)$
+  \IF{$i\in\Lambda$}
+    \STATE $(a_i,d_i)\leftarrow(\mathrm{DS},\,0)$ \COMMENT{was $d_i^{\times}=0$ for all $s_i<\tau$}
+  \ELSIF{$i=0 \lor s_i\ge\tau$}
+    \STATE $(a_i,d_i)\leftarrow(\mathrm{PF},\,D)$
   \ELSE
-    \STATE $s_i\leftarrow\mathrm{DraftScore}(\rho_i)$ \COMMENT{$m_i=0$, no row to read}
-    \IF{$i=\mathrm{winner}$ \OR $s_i\ge\tau$}
-      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$ \COMMENT{decode to budget $D$}
-    \ELSIF{$\mathrm{IsLoop}(\rho_i)$}
-      \STATE $a_i\leftarrow\mathrm{DS}$; $\Work_i\leftarrow 0$ \COMMENT{repeated loop}
-    \ELSE
-      \STATE $a_i\leftarrow\mathrm{PF}$; $\Work_i\leftarrow\ell_i$ \COMMENT{probe $P$ tokens}
-      \IF{$\mathrm{DraftScore}(y_{1:P})\ge\tau$}
-        \STATE continue decode to $D$
-      \ELSE
-        \STATE stop at $P$
-      \ENDIF
-    \ENDIF
+    \STATE $y_i\leftarrow\mathrm{Dec}(x_u\Vert\rho_i,\,t_0)$
+    \STATE $s'_i\leftarrow\mathrm{DraftScore}(y_i)$
+    \STATE $(a_i,d_i)\leftarrow\big(\mathrm{PF},\; D[s'_i\ge\tau]+t_0[s'_i<\tau]\big)$
   \ENDIF
-  \IF{$i=\mathrm{winner}$ \OR $a_i\in\{\mathrm{HS},\mathrm{HP},\mathrm{PF}\}$}
-    \STATE keep $i$
-  \ENDIF
-  \STATE gate \texttt{insert} by \eqref{eq:xfer}
 \ENDFOR
+\STATE $\Keep\leftarrow\{i:a_i\neq\mathrm{DS}\}$
+\STATE $\Work_i\leftarrow\ell_i\cdot[a_i=\mathrm{PF}]$
+\STATE $\mathrm{DecTokens}\leftarrow\sum_{i=0}^{k-1} d_i$
 \end{algorithmic}
 \end{algorithm}
 
@@ -288,12 +289,12 @@ That rule is not admissible.
 A residual the text score marks illegal still solves contest items once it is decoded, while a repeated loop solves none (\Cref{tab:grow}).
 Draft skip is therefore only the repeated loop: that residual is not submitted to prefill and is not inserted as a hash key.
 The default prefill threshold is $\tau_{\mathrm{pre}}{=}0.15$ for ESC, Speculative Rejection, and DPTS.
-The winner, and every other residual whose score is at least $\tau_{\mathrm{pre}}$, is prefilled and decoded to the budget $D$.
-A non-winner that scores below $\tau$ and is not a loop is still prefilled.
-It is then decoded for a probe of $P$ tokens, and the same score is applied to the generated prefix $y_{1:P}$.
-If that score is at least $\tau$, decode continues from $P$ to $D$; otherwise it stops at $P$.
+\Cref{alg:app} is the correction of \eqref{eq:drej} at the decode bar $\tau$.
+A residual in the loop set $\Lambda$ is still $(\mathrm{DS},0)$.
+The winner, and every residual with $s_i\ge\tau$, is $(\mathrm{PF},D)$.
+Every other non-winner is prefilled, decoded for $t_0$ tokens, and then assigned $d_i=D[s'_i\ge\tau]+t_0[s'_i<\tau]$.
 The probe is a prefix of decode, not the residual early-abort in panel~(f) of \Cref{fig:dragon}.
-On the measurements below, $\tau{=}0.45$ and $P\in\{64,128\}$.
+On the MATH-500 measurements, $\tau{=}0.45$ and $t_0\in\{64,128\}$.
 The control-plane rows in \S\ref{sec:eval-app} still charge the earlier blanket skip, which drops both low-score residuals before prefill.
 
 \paragraph{Gated connector insert.}

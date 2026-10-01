@@ -184,7 +184,7 @@ The winner is residual $0$.
 \caption{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$.
 Any-finished is exact match on a branch that ran the full budget.
 ``Drop $s{<}\tau$'' withholds every low-score residual before prefill.
-``Grow $P$'' skips loops, prefills the other low-score residuals, and continues a probe of $P$ tokens to $D$ only if the generated prefix scores at least $\tau{=}0.45$.
+``Grow $t_0$'' is \Cref{alg:app}: loops stay at $d_i{=}0$; every other low-score residual is probed for $t_0$ tokens and continues to $D$ only if $s'_i\ge\tau{=}0.45$.
 Time is trunk warm plus fan-out, in seconds.}
 \label{tab:grow}
 \scriptsize
@@ -201,8 +201,8 @@ Full fan-out & $12/32$, $25.3$ & $15/32$, $52.5$ & $20/32$, $104.1$ \\
 Drop $s{<}\tau$ & $6/32$, $19.1$ & $11/32$, $25.6$ & $13/32$, $52.1$ \\
 Skip loops only & $11/32$, $23.0$ & $17/32$, $41.5$ & $16/32$, $71.4$ \\
 \rowcolor{tblalt}
-Grow $P{=}64$ & $8/32$, $24.0$ & \win{$16/32$}, $42.0$ & $18/32$, $72.5$ \\
-Grow $P{=}128$ & $9/32$, $24.7$ & $13/32$, $43.3$ & \win{$20/32$}, $72.2$ \\
+Grow $t_0{=}64$ & $8/32$, $24.0$ & \win{$16/32$}, $42.0$ & $18/32$, $72.5$ \\
+Grow $t_0{=}128$ & $9/32$, $24.7$ & $13/32$, $43.3$ & \win{$20/32$}, $72.2$ \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -44,7 +44,8 @@ $L$, $\ell_i$, $\ell_\star$ & $\mathbb{N}$ & trunk; residual $i$; committed resi
 $\rho_i$, $x_u$ & tokens & residual of child $i$; committed trunk \\
 $h_i$ & digest & $\mathrm{hash}(\mathrm{parent},\rho_i[0{:}P),\mathrm{extra})$ \\
 $m_i$ & tokens & full-page prefix of $\rho_i$ in $H$, steps of $P$ \\
-$s_i$, $\tau$ & $[0,1]$ & draft score of $\rho_i$; prune threshold \\
+$s_i$, $s'_i$, $\tau$ & $[0,1]$ & score of $\rho_i$; score of the probe $y_i$; threshold \\
+$t_0$, $D$, $d_i$ & tokens & probe length; decode budget; length assigned to $i$ \\
 $\alpha$ & $(0,1]$ & early-abort prefix fraction ($0.20$) \\
 $p_i$, $q_i$ & $[0,1]$ & admit probability; residual-prefix hit rate \\
 $a_i\in\Act$ & enum & skip / partial / abort / prefill (Eq.~\ref{eq:action}) \\
