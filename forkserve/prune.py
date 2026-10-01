@@ -50,8 +50,12 @@ class BranchPruner:
         raw = text or ""
         if not raw.strip():
             return 0.0, "empty"
-        if _REPEAT.search(raw) or _ILLEGAL_MATH.search(raw):
-            return 0.02, "illegal_or_loop"
+        if _REPEAT.search(raw):
+            return 0.02, "loop"
+        if _ILLEGAL_MATH.search(raw):
+            # Junk text, not a repeat loop. Below the 0.45 contest bar,
+            # above 0.15 so a low threshold still starts it.
+            return 0.22, "illegal"
         n = max(len(raw), 1)
         uniq = len(set(raw))
         entropy = uniq / n

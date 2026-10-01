@@ -248,6 +248,70 @@ def assign_mild(
     }
 
 
+def should_grow(text: str, threshold: float = DPTS_SCORE_BAR) -> bool:
+    """True when a generated prefix is healthy enough to finish the budget.
+
+    The early residual score is the wrong instrument for illegal-looking
+    thoughts: the model often writes normal math after them. This scores only
+    the tokens that were actually generated.
+    """
+    score, _reason = BranchPruner(ForkServeConfig(), winner=0).score_text(text or "")
+    return score >= float(threshold)
+
+
+def plan_grow(
+    thoughts: Sequence[str],
+    *,
+    budget: int,
+    probe: int,
+    threshold: float,
+    skip_loops: bool,
+) -> dict[str, Any]:
+    """High residual scores decode to the budget. Uncertain ones get a probe.
+
+    A repeated loop can be skipped before any GPU work (``skip_loops``).
+    Every other non-winner under ``threshold`` is prefilled for ``probe``
+    tokens. The runner extends that child to ``budget`` only if
+    ``should_grow`` is true on the generated prefix. Live strategies and the
+    winner are never probed.
+    """
+    if probe <= 0 or probe >= budget:
+        raise ValueError(f"probe {probe} must sit inside budget {budget}")
+    cfg = ForkServeConfig()
+    cfg.prune_threshold = float(threshold)
+    scored = {
+        row.index: row.score
+        for row in BranchPruner(cfg, winner=0).rank(list(thoughts), threshold=threshold)
+    }
+    loops = set(loop_indices(thoughts))
+    admitted: list[int] = []
+    assigned: dict[int, int] = {}
+    probe_idx: list[int] = []
+    for i in range(len(thoughts)):
+        if i != 0 and skip_loops and i in loops:
+            continue
+        if i == 0 or scored[i] >= threshold:
+            admitted.append(i)
+            assigned[i] = budget
+        else:
+            admitted.append(i)
+            assigned[i] = probe
+            probe_idx.append(i)
+    avoided = 0
+    for i in range(len(thoughts)):
+        avoided += budget - assigned.get(i, 0)
+    return {
+        "admitted": admitted,
+        "assigned": assigned,
+        "probe": probe_idx,
+        "drop": list(probe_idx),
+        "avoided_decode": avoided,
+        "step": probe,
+        "kept": sum(1 for n in assigned.values() if n == budget),
+        "prefill_skipped": [i for i in range(len(thoughts)) if i not in assigned],
+    }
+
+
 def assign_tokens(
     method: str,
     thoughts: Sequence[str],
@@ -267,6 +331,14 @@ def assign_tokens(
     admit_alpha: float = 0.5,
 ) -> dict[str, Any]:
     """Per-child decode length after prefill admission."""
+    if method == "grow":
+        return plan_grow(
+            thoughts,
+            budget=budget,
+            probe=mild_step,
+            threshold=threshold,
+            skip_loops=mild_target != "probe",
+        )
     if method == "mild":
         return assign_mild(
             thoughts,
@@ -343,6 +415,8 @@ def work_key(job: dict[str, Any]) -> tuple[Any, ...]:
         )
         if job.get("mild_target", "low_score") != "low_score":
             parts.append(str(job["mild_target"]))
+    if method == "grow":
+        parts.extend((int(job.get("mild_step", 128)), str(job.get("mild_target", "loop"))))
     if job.get("workload", "gsm8k") != "gsm8k":
         parts.append(str(job["workload"]))
     if job.get("family", "grade") != "grade":
@@ -384,7 +458,7 @@ def _finalize_jobs(specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[Any, ...]] = set()
     jobs: list[dict[str, Any]] = []
     for spec in specs:
-        if spec["method"] != "mild":
+        if spec["method"] not in ("mild", "grow"):
             decision_step(
                 spec["method"],
                 budget=int(spec["budget"]),
@@ -546,6 +620,57 @@ def build_wide_jobs(ks: Sequence[int] = (4, 8, 16)) -> list[dict[str, Any]]:
     return _finalize_jobs(specs)
 
 
+def parse_thresholds(text: str) -> tuple[float, ...]:
+    vals = tuple(float(part.strip()) for part in text.split(",") if part.strip())
+    if not vals or any(v < 0 or v > 1 for v in vals):
+        raise ValueError(f"thresholds must be in [0, 1], got {text!r}")
+    return vals
+
+
+def build_thresh_jobs(
+    ks: Sequence[int] = (4, 8, 16),
+    thresholds: Sequence[float] = (0.15, 0.45),
+) -> list[dict[str, Any]]:
+    """Native / decode-only vs score APP at each bar.
+
+    0.15 keeps illegal text and drops only the loop. 0.45 also drops
+    illegal text and leaves the live strategies.
+    """
+    specs: list[dict[str, Any]] = []
+    for k in ks:
+        for method in METHODS:
+            specs.append(
+                _job(
+                    tag="thresh",
+                    method=method,
+                    policy="base",
+                    n=16,
+                    k=int(k),
+                    budget=512,
+                    tau=256,
+                    dpts_step=100,
+                    threshold=0.45,
+                    admit_mode="score",
+                )
+            )
+            for thr in thresholds:
+                specs.append(
+                    _job(
+                        tag="thresh",
+                        method=method,
+                        policy="app",
+                        n=16,
+                        k=int(k),
+                        budget=512,
+                        tau=256,
+                        dpts_step=100,
+                        threshold=float(thr),
+                        admit_mode="score",
+                    )
+                )
+    return _finalize_jobs(specs)
+
+
 def label_of(job: dict[str, Any]) -> str:
     named = job.get("mild_label")
     if named:
@@ -648,6 +773,41 @@ def build_scale_jobs() -> list[dict[str, Any]]:
     return _finalize_jobs(specs)
 
 
+def build_grow_jobs() -> list[dict[str, Any]]:
+    """Same MATH-500 slice. Uncertain branches get a short prefill, then grow.
+
+    High-score strategies decode straight to 1024. Loops are skipped, except
+    on ``grow-probe-loops`` where they also receive the probe and continue
+    only if the generated prefix scores at or above 0.45. Illegal text always
+    gets that chance, instead of being dropped with the loops.
+    """
+    specs: list[dict[str, Any]] = []
+
+    def add(k: int, label: str, probe: int, target: str) -> None:
+        specs.append(
+            _job(
+                tag="grow",
+                method="grow",
+                policy="base",
+                mix="hopeless",
+                n=32,
+                k=k,
+                budget=1024,
+                mild_label=f"k{k}/{label}",
+                mild_step=probe,
+                mild_target=target,
+                workload="math500",
+                family="contest",
+            )
+        )
+
+    for k in (4, 8, 16):
+        add(k, "grow@64", 64, "loop")
+        add(k, "grow@128", 128, "loop")
+        add(k, "grow-probe-loops@128", 128, "probe")
+    return _finalize_jobs(specs)
+
+
 def load_job_problems(jobs: Sequence[dict[str, Any]]) -> list[Any]:
     """GSM8K, or the first ``n`` MATH-500 items at level 4 or 5."""
     from forkserve.bench_tasks import load_gsm8k, load_math500
@@ -704,13 +864,17 @@ def _peak_tokens(
     return max(at_cut, after)
 
 
-def _generate(
+def _decode_ids(tok: Any, ids: Sequence[int]) -> str:
+    return tok.decode(list(ids), skip_special_tokens=True)
+
+
+def _generate_rows(
     llm: Any,
     sampling_cls: Any,
     prompt_cls: Any,
     seqs: Sequence[Sequence[int]],
     lengths: Sequence[int],
-) -> tuple[list[str], list[int], list[int], float]:
+) -> tuple[list[str], list[int], list[int], list[list[int]], float]:
     prompts = [prompt_cls(prompt_token_ids=list(seq)) for seq in seqs]
     params = [
         sampling_cls(
@@ -727,11 +891,27 @@ def _generate(
     texts: list[str] = []
     n_out: list[int] = []
     cached: list[int] = []
+    id_rows: list[list[int]] = []
     for out in outs:
         comp = out.outputs[0]
+        ids = [int(tok) for tok in comp.token_ids]
         texts.append(comp.text or "")
-        n_out.append(len(comp.token_ids))
+        n_out.append(len(ids))
         cached.append(int(out.num_cached_tokens or 0))
+        id_rows.append(ids)
+    return texts, n_out, cached, id_rows, elapsed
+
+
+def _generate(
+    llm: Any,
+    sampling_cls: Any,
+    prompt_cls: Any,
+    seqs: Sequence[Sequence[int]],
+    lengths: Sequence[int],
+) -> tuple[list[str], list[int], list[int], float]:
+    texts, n_out, cached, _ids, elapsed = _generate_rows(
+        llm, sampling_cls, prompt_cls, seqs, lengths
+    )
     return texts, n_out, cached, elapsed
 
 
@@ -850,8 +1030,129 @@ def run_job(
     winner_hash = hashlib.sha256()
     # Branches actually launched. Windowed ESC may skip the tail.
     launched = 0
+    grow_extended = 0
+    grow_probed = 0
 
-    if window > 1:
+    if str(job["method"]) == "grow":
+        threshold = float(job["threshold"])
+        probe_set = set(plan["probe"])
+        probe_n = int(plan["step"])
+        partial: dict[tuple[int, int], list[int]] = {}
+        p_seqs = [child_ids[pi][branch] for pi in range(len(items)) for branch in plan["probe"]]
+        p_owners = [(pi, branch) for pi in range(len(items)) for branch in plan["probe"]]
+        if p_seqs:
+            texts, n_out, cached, id_rows, elapsed = _generate_rows(
+                llm, sampling_cls, prompt_cls, p_seqs, [probe_n] * len(p_seqs)
+            )
+            fanout_ms += elapsed
+            for (pi, branch), text, ntok, hit, seq, ids in zip(
+                p_owners, texts, n_out, cached, p_seqs, id_rows, strict=True
+            ):
+                decode_tokens += ntok
+                prompt_tokens += len(seq)
+                cached_tokens += hit
+                grow_probed += 1
+                partial[(pi, branch)] = list(ids)
+                del text
+        extend: list[tuple[int, int, list[int]]] = []
+        stopped: dict[tuple[int, int], str] = {}
+        for key, ids in partial.items():
+            text = _decode_ids(tok, ids)
+            if should_grow(text, threshold) and len(ids) < budget:
+                extend.append((key[0], key[1], ids))
+            else:
+                stopped[key] = text
+        grow_extended = len(extend)
+        seqs = []
+        lengths = []
+        owners = []
+        hows: list[str] = []
+        for pi in range(len(items)):
+            for branch, _ntok in plan["assigned"].items():
+                if branch in probe_set:
+                    continue
+                seqs.append(child_ids[pi][branch])
+                lengths.append(budget)
+                owners.append((pi, branch))
+                hows.append("full")
+        for pi, branch, ids in extend:
+            seqs.append(list(child_ids[pi][branch]) + list(ids))
+            lengths.append(budget - len(ids))
+            owners.append((pi, branch))
+            hows.append("cont")
+        by_problem: list[list[tuple[int, str, bool]]] = [[] for _ in items]
+        if seqs:
+            texts, n_out, cached, id_rows, elapsed = _generate_rows(
+                llm, sampling_cls, prompt_cls, seqs, lengths
+            )
+            fanout_ms += elapsed
+            for (pi, branch), how, ntok, hit, seq, ids in zip(
+                owners, hows, n_out, cached, seqs, id_rows, strict=True
+            ):
+                decode_tokens += ntok
+                prompt_tokens += len(seq)
+                cached_tokens += hit
+                if how == "full":
+                    text = texts[owners.index((pi, branch))] if False else ""
+                    del text
+                if how == "cont":
+                    full_ids = list(partial[(pi, branch)]) + list(ids)
+                    text = _decode_ids(tok, full_ids)
+                    done = len(full_ids) >= budget
+                else:
+                    # Matched by position, not by searching owners.
+                    text = ""
+                    done = True
+                del done
+        # Re-walk with the texts from this call. The block above only counts
+        # tokens; the texts are filled in the loop that follows when seqs
+        # is non-empty. Rebuild from the same zip by storing on the way.
+        by_problem = [[] for _ in items]
+        if seqs:
+            # The generate already happened. Use the lists still in scope.
+            for (pi, branch), how, text, ids in zip(owners, hows, texts, id_rows, strict=True):
+                if how == "cont":
+                    full_ids = list(partial[(pi, branch)]) + list(ids)
+                    text = _decode_ids(tok, full_ids)
+                    done = len(full_ids) >= budget
+                else:
+                    done = True
+                by_problem[pi].append((branch, text, done))
+                if done:
+                    finished_branches += 1
+                    if has_answer_marker(text, workload):
+                        marker_branches += 1
+        for (pi, branch), text in stopped.items():
+            by_problem[pi].append((branch, text, False))
+        wave_peak = 0
+        extended_at = {(pi, branch) for pi, branch, _ids in extend}
+        for pi in range(len(items)):
+            trunk_n = len(trunk_ids[pi])
+            res = _residuals(pi)
+            wave1 = trunk_n + sum(res[b] + probe_n for b in plan["probe"])
+            long_b = [b for b in plan["assigned"] if b not in probe_set]
+            long_b += [b for p, b in extended_at if p == pi]
+            wave2 = trunk_n + sum(res[b] + budget for b in long_b)
+            wave_peak += max(wave1, wave2)
+        peak = wave_peak
+        for pi, item in enumerate(items):
+            rows = sorted(by_problem[pi], key=lambda row: row[0])
+            texts_s = [text for _, text, _ in rows]
+            flags = [flag for _, _, flag in rows]
+            w_hit, s_hit = _score_finished(texts_s, item.answer, flags, workload)
+            winner_hits += int(w_hit)
+            survivor_hits += int(s_hit)
+            hit_branches = []
+            for branch, text, done in rows:
+                if branch == 0:
+                    winner_hash.update(text.encode())
+                ok = bool(done) and answer_correct(text, item.answer, workload)
+                if ok:
+                    branch_hits[branch] += 1
+                    hit_branches.append(branch)
+            if len(hit_branches) == 1:
+                only_hits[hit_branches[0]] += 1
+    elif window > 1:
         # One branch in flight per problem, so the peak is that round, not k-wide.
         first = plan["admitted"][0]
         peak = sum(
@@ -1204,6 +1505,25 @@ def render_report(rows: Sequence[dict[str, Any]]) -> str:
                 [row for row in wide if int(row["k"]) == k],
                 wide_cols,
             )
+    thresh = _pick(rows, tag="thresh")
+    if thresh:
+        thresh_cols = (
+            "label",
+            "k",
+            "threshold",
+            "admitted",
+            "kept",
+            "decode_tokens",
+            "e2e_ms",
+            "winner_acc",
+            "surv_acc",
+        )
+        for k in sorted({int(row["k"]) for row in thresh}):
+            emit(
+                f"thresh  n=16 k={k} budget=512  score APP at 0.15 (loop only) and 0.45 (loop+illegal)",
+                [row for row in thresh if int(row["k"]) == k],
+                thresh_cols,
+            )
     scale = _pick(rows, tag="scale")
     if scale:
         emit(
@@ -1258,11 +1578,13 @@ def _stamp_admit(jobs: list[dict[str, Any]], args: argparse.Namespace) -> list[d
 
 
 def select_jobs(args: argparse.Namespace) -> list[dict[str, Any]]:
-    ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if args.wide else (4,))
+    ks = parse_ks(args.ks) if args.ks else ((4, 8, 16) if (args.wide or args.thresh) else (4,))
     if args.scale:
         jobs = build_scale_jobs()
     elif args.mild:
         jobs = build_mild_jobs(ks=ks if (args.wide or args.ks) else (4,))
+    elif args.thresh:
+        jobs = build_thresh_jobs(ks=ks, thresholds=parse_thresholds(args.thresholds))
     elif args.wide or args.ks:
         jobs = build_wide_jobs(ks=ks)
     else:
@@ -1288,6 +1610,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--wide",
         action="store_true",
         help="paper stack at k=4,8,16 (override with --ks)",
+    )
+    p.add_argument(
+        "--thresh",
+        action="store_true",
+        help="score-bar sweep: native / decode-only vs APP at --thresholds",
+    )
+    p.add_argument(
+        "--thresholds",
+        default="0.15,0.45",
+        help="comma-separated score bars for --thresh",
     )
     p.add_argument(
         "--ks",
@@ -1328,7 +1660,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"tau={job['tau']:<4} step={job['dpts_step']:<4} "
                 f"a={job['alpha']:<4} w={job['esc_window']}"
                 + (
-                    f" admit={job.get('admit_mode', 'score')}"
+                    f" admit={job.get('admit_mode', 'score')} t={job.get('threshold', '')}"
                     if job.get("policy") == "app"
                     else ""
                 )

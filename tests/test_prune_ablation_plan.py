@@ -5,6 +5,7 @@ from experiments.prune_ablation_gpu import (
     assign_tokens,
     build_jobs,
     build_thoughts,
+    build_thresh_jobs,
     build_wide_jobs,
     drop_indices,
     esc_should_stop,
@@ -31,8 +32,10 @@ def test_hopeless_draft_sees_the_two_dead_thoughts() -> None:
     thoughts = build_thoughts(4, "hopeless")
     assert admitted_indices("base", thoughts, 0.45) == [0, 1, 2, 3]
     assert admitted_indices("draft", thoughts, 0.45) == [0, 1]
-    assert admitted_indices("draft", thoughts, 0.15) == [0, 1]
+    # 0.15 drops the loop (0.02) and keeps illegal text (0.22).
+    assert admitted_indices("draft", thoughts, 0.15) == [0, 1, 3]
     assert admitted_indices("app", thoughts, 0.45) == [0, 1]
+    assert admitted_indices("app", thoughts, 0.15) == [0, 1, 3]
     assert drop_indices("esc", thoughts, alpha=0.5) == []
     assert drop_indices("specrej", thoughts, alpha=0.5) == [2, 3]
     assert drop_indices("dpts", thoughts, alpha=0.5) == [2, 3]
@@ -79,7 +82,7 @@ def test_clean_mix_only_rank_pruning_still_cuts() -> None:
 
 def test_alpha_scales_with_fanout() -> None:
     thoughts = build_thoughts(8, "hopeless")
-    assert drop_indices("specrej", thoughts, alpha=0.25) == [4, 5]
+    assert drop_indices("specrej", thoughts, alpha=0.25) == [4, 6]
     assert len(drop_indices("specrej", thoughts, alpha=0.5)) == 4
     wide = build_thoughts(16, "hopeless")
     assert admitted_indices("draft", wide, 0.45) == list(range(8))
@@ -97,6 +100,8 @@ def test_app_keeps_by_score_not_a_fraction_of_k() -> None:
         assert admitted_indices("draft", thoughts, 0.45) == live
     thoughts = build_thoughts(16, "hopeless")
     assert admitted_indices("app", thoughts, 0.80) == list(range(8))
+    # 0.15 keeps live + illegal text (odd dead slots), drops only loops.
+    assert admitted_indices("app", thoughts, 0.15) == [0, 1, 2, 3, 4, 5, 6, 7, 9, 11, 13, 15]
     assert admitted_indices("app", thoughts, 0.45, admit_mode="winner") == [0]
     assert len(admitted_indices("app", thoughts, 0.45, admit_mode="top_m", keep_m=2)) == 2
     assert 0 in admitted_indices("app", thoughts, 0.45, admit_mode="top_m", keep_m=2)
@@ -114,6 +119,9 @@ def test_wide_grid_covers_k8_and_k16() -> None:
     assert len(jobs) == 27
     assert all(job["n"] == 16 and job["budget"] == 512 for job in jobs)
     assert all(job["tag"] == "wide" for job in jobs)
+    thresh = build_thresh_jobs((4, 8, 16), (0.15, 0.45))
+    assert len(thresh) == 27
+    assert {job["threshold"] for job in thresh if job["policy"] == "app"} == {0.15, 0.45}
 
 
 def test_esc_window_needs_the_same_marker() -> None:
