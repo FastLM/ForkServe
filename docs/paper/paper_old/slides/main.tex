@@ -9,6 +9,8 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc}
 \usepackage{adjustbox}
+\usepackage{algpseudocode}
+\algrenewcommand\algorithmicindent{1.05em}
 
 \definecolor{fsspec}{HTML}{FDEBD0}
 \definecolor{fscommit}{HTML}{E5F6EA}
@@ -151,6 +153,22 @@
   }
 \end{frame}
 
+\begin{frame}{ToT 的一步是一棵树，不是一条链}
+  \why{每个矩形是一个 thought。搜索留下绿色节点，丢掉粉色节点。这一步的 thought 要先写出来，搜索才选得了路。}
+  \begin{center}
+    \includegraphics[width=0.98\textwidth,height=0.62\textheight,keepaspectratio]{figs/tot_fig1.png}
+  \end{center}
+  \src{Yao, Yu, Zhao, Shafran, Griffiths, Cao, Narasimhan. \textit{Tree of Thoughts: Deliberate Problem Solving with Large Language Models.} NeurIPS 2023. 图：原文 Figure 1.}
+\end{frame}
+
+\begin{frame}{ToT 先生成 thought，再让 LM 打分}
+  \why{Game of 24 上，propose prompt 先让 LM 写出候选等式，value prompt 再判 sure / maybe / impossible。BFS 每层留 $b{=}5$。分数读的是已经写出来的 thought。}
+  \begin{center}
+    \includegraphics[width=0.92\textwidth,height=0.48\textheight,keepaspectratio]{figs/tot_fig2.png}
+  \end{center}
+  \src{Yao, Yu, Zhao, Shafran, Griffiths, Cao, Narasimhan. \textit{Tree of Thoughts: Deliberate Problem Solving with Large Language Models.} NeurIPS 2023. 图：原文 Figure 2.}
+\end{frame}
+
 \begin{frame}{ESC 要等到什么时候才停？}
   \why{熵为 0 读的是已经生成完的答案。图中窗口 $w{=}5$、计划样本 $L{=}20$。窗口关不上时，每个样本都已经 prefill，并 decode 到预算。}
   \begin{center}
@@ -189,6 +207,53 @@
     \bottomrule
   \end{tabular}}
   \src{Qwen3-8B，GSM8K，$n{=}16$，$D{=}512$，$\mathrm{tp}{=}1$，四张 A100-40GB。\texttt{logs/prune\_ablation\_thresh/all.json}，2026-10-01，policy $=$ base。}
+\end{frame}
+
+\begin{frame}{APC 的 block table 记下的是已经算出的页}
+  \why{Scheduler 把请求交给 worker，KV cache manager 按页记账。命中发生在页已经存在之后。第一次 expand 时 trunk 还没有页，所以 $k$ 份 trunk 都要 prefill。}
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{figs/vllm_fig4.png}
+  \end{center}
+  \src{Kwon, Li, Zhuang, Sheng, Zheng, Yu, Gonzalez, Zhang, Stoica. \textit{Efficient Memory Management for Large Language Model Serving with PagedAttention.} SOSP 2023. 图：原文 Figure 4.}
+\end{frame}
+
+\begin{frame}{RadixAttention 在请求处理之后才把前缀插进树}
+  \why{图里的节点是这一步的输出写回去的。树一开始是空的。第一次 fan-out 的 $k$ 条 residual 都对不上已有节点。}
+  \begin{center}
+    \includegraphics[width=0.86\textwidth,height=0.58\textheight,keepaspectratio]{figs/sglang_fig3.png}
+  \end{center}
+  \src{Zheng, Yin, Xie, Sun, Huang, Yu, Cao, Kozyrakis, Stoica, Gonzalez, Barrett, Sheng. \textit{SGLang: Efficient Execution of Structured Language Model Programs.} NeurIPS 2024. 图：原文 Figure 3.}
+\end{frame}
+
+\begin{frame}{DistServe 的箭头搬的是 prefiller 已经算出的 KV}
+  \why{Controller 把请求先送给 prefill instance，再把 KV cache transfer 到 decoding instance。这条箭头上没有 admission。被丢掉的 residual 如果已经算完，也在这条链路上。}
+  \begin{center}
+    \includegraphics[width=0.62\textwidth]{figs/dist_fig6.png}
+  \end{center}
+  \src{Zhong, Liu, Chen, Hu, Zhu, Liu, Jin, Zhang. \textit{DistServe: Disaggregating Prefill and Decoding for Goodput-optimized Large Language Model Serving.} OSDI 2024. 图：原文 Figure 6.}
+\end{frame}
+
+\begin{frame}{Splitwise 把 prompt 机的 KV 整段交给 token 机}
+  \why{Prompt pool 算完 prompt，再经 KV-cache transfer 送到 token pool。搬运的是已经算出来的页，不是 admission 留下的 $\mathrm{Keep}$。}
+  \begin{center}
+    \includegraphics[width=0.42\textwidth]{figs/split_fig10.png}
+  \end{center}
+  \src{Patel, Choukse, Zhang, Shah, Goiri, Maleki, Bianchini. \textit{Splitwise: Efficient Generative LLM Inference Using Phase Splitting.} ISCA 2024. 图：原文 Figure 10.}
+\end{frame}
+
+\begin{frame}{这些图和 admission 差在哪一步？}
+  \why{ToT、ESC、Speculative Rejection、DPTS 的分数来自已经生成的 token。APC 和 radix 在页算完之后才共享。DistServe 和 Splitwise 把算出的页整段搬走。Admission 在 \texttt{insert} 之前读 residual 文本。}
+  {\footnotesize
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{@{}llrr@{}}
+    \toprule
+    \textbf{账} & \textbf{对照} & \textbf{他们} & \textbf{这里} \\
+    \midrule
+    GPU prefill，$k{=}16$ & ESC / SR / DPTS 单独跑 & \bad{5008} & \good{3848} \\
+    控制面 connector token & DistServe / Splitwise 式 P/D & \bad{11520} & \good{32} \\
+    \bottomrule
+  \end{tabular}}
+  \src{上一行：\texttt{prune\_ablation\_thresh}，$\tau_{\mathrm{pre}}{=}0.15$，精度仍是 $16/16$。下一行：控制面代价模型，10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$，不是 GPU wall clock。}
 \end{frame}
 
 \section{设计}
@@ -237,9 +302,115 @@
 \end{frame}
 
 \begin{frame}{一条规则怎么同时决定 $W$ 和 $X$？}
-  \why{先看 radix 命中 $m_i$。整段命中不进 kernel；部分命中只算 miss；重复 loop 丢掉；其余低分只探前缀；过线才整段 prefill。Index 0 只能是 HS、HP 或 PF。}
-  \paperfig[0.55]{fig_dragon.tex}
-  \src{论文图。绿页在 $H$，橙页是 prefill，灰页是 withheld。}
+  \why{每条 residual 只做一次 first-match。命中的动作同时写下 GPU 要算的 token 和 connector 要搬的 token。Index 0 只能是 HS、HP 或 PF，下一轮才有 spine。}
+  \paperfig[0.50]{fig_dragon.tex}
+  \src{一格是 $P{=}16$ 个 token。绿页已经在 radix $H$ 里，橙页是这次 prefill，灰页 withheld。橙竖线是 HP 和 EA 的切口。}
+\end{frame}
+
+\begin{frame}{为什么是这五个动作，而且必须按这个顺序？}
+  \why{先问「页是不是已经在 $H$ 里」，再问「文本是不是 loop」，最后才整段 prefill。若先判 PF，五条边都会变成整段橙页，账单回到 ESC / Speculative Rejection / DPTS 的 5008。}
+  {\scriptsize
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{tabular}{@{}lp{0.30\textwidth}p{0.22\textwidth}p{0.34\textwidth}@{}}
+    \toprule
+    & \textbf{什么时候} & \textbf{$W$ 和 $X$} & \textbf{为什么停在这里} \\
+    \midrule
+    HS & $m_i{=}\ell_i$，整段已在 $H$ & $W{=}X{=}0$ &
+    页已经发布过。再 prefill 就是把同一条 residual 再算一遍，connector 也没有新页。 \\
+    \addlinespace
+    HP & $0{<}m_i{<}\ell_i$ & $W{=}\ell_i{-}m_i$；留下才 $X{=}W$ &
+    绿页不重算。橙线右边才是新 KV。DistServe / Splitwise 会把绿页也搬走。 \\
+    \addlinespace
+    DS & $m_i{=}0$，$i{\in}\Lambda$，$i{\neq}0$ & $W{=}X{=}0$ &
+    Loop 分数约 $0.02$，看文本就能认。连前缀都不算。连 loop 也 probe，同样 $20/32$，要 $74.4$\,s。 \\
+    \addlinespace
+    EA & $m_i{=}0$，不是 loop，前缀 $F_i{=}1$ & $W{=}\lceil\alpha\ell_i\rceil$，$X{=}0$ &
+    前 $\alpha$ 已经低于 $\tau$。灰页不进 kernel，这段前缀也不 \texttt{insert}。 \\
+    \addlinespace
+    PF & $m_i{=}0$，不是 loop，$\neg F_i$ & $W{=}\ell_i$；留下才 $X{=}W$ &
+    Index 0 和活策略走这里。Connector 搬的就是刚算出来的 miss，不是 trunk，也不是灰页。 \\
+    \bottomrule
+  \end{tabular}}
+  \src{$m_i$ 按整页对齐，所以切口落在格边界上。$X{=}\sum_{i\in\mathrm{Keep},\,a_i\in\{\mathrm{HP},\mathrm{PF}\}}W_i$。控制面里这使 connector 从 11520 降到 32。}
+\end{frame}
+
+\begin{frame}{代码里，prefill 分数怎么打？}
+  \why{Loop 记 $0.02$，低于默认 $0.15$，不进 kernel。Illegal text 记 $0.22$，默认留下。$0.45$ 才会把它一起丢掉。Index 0 永远留。}
+  {\scriptsize
+  \begin{algorithmic}[1]
+    \Function{score\_text}{text}
+      \If{text is blank}
+        \State \Return $0$
+      \ElsIf{an 8--40 character span repeats at least 4 times}
+        \State \Return $0.02$ \Comment{loop}
+      \ElsIf{\texttt{****}, unk, nan, or undefined}
+        \State \Return $0.22$ \Comment{illegal}
+      \Else
+        \State \Return $0.55\min(1,2\alpha)+0.45\min(1,8\cdot\mathrm{entropy})$
+      \EndIf
+    \EndFunction
+    \Function{rank}{residuals, $\tau_{\mathrm{pre}}{=}0.15$}
+      \For{$i \gets 0$ \textbf{to} $k-1$}
+        \State $\mathrm{keep}_i \gets (i{=}0) \lor \Call{score\_text}{\mathrm{text}_i}\ge\tau_{\mathrm{pre}}$
+      \EndFor
+    \EndFunction
+  \end{algorithmic}}
+  \src{\texttt{forkserve/prune.py}：\texttt{PrefillScorer.score\_text}，\texttt{BranchPruner.rank}。}
+\end{frame}
+
+\begin{frame}{五个动作在代码里怎么落到 $W$ 和 $X$？}
+  \why{图上的 first-match 就是 \texttt{\_decide} 的返回。整页命中走 HS / HP；没留下、前缀已经失败走 EA，否则走 DS；剩下的才 PF。$X$ 只累加留下且不是 HS 的 $W$，所以 EA 和 DS 不进 connector。}
+  {\scriptsize
+  \begin{algorithmic}[1]
+    \Function{decide}{$i$, prompt, keep}
+      \State $m \gets \texttt{hash\_index.lookup}(\mathrm{prompt})$ \Comment{只认满页，$P{=}16$}
+      \State $\mathrm{miss} \gets |\mathrm{prompt}|-m$ \textbf{if} $m{>}0$ \textbf{else} $n$
+      \If{$m{>}0 \land \mathrm{miss}{=}0$}
+        \State \Return HS, $W{=}0$, $X{=}0$ \Comment{整段已在 $H$}
+      \ElsIf{$m{>}0 \land \mathrm{miss}{>}0 \land \mathrm{keep}$}
+        \State \Return HP, $W{=}\mathrm{miss}$ \Comment{绿页不算}
+      \ElsIf{$\neg\mathrm{keep} \land \texttt{early\_abort\_prefix}(\mathrm{text})$}
+        \State \Return EA, $W{=}\lceil\alpha n\rceil$, $X{=}0$ \Comment{$\alpha{=}0.20$，不排队}
+      \ElsIf{$\neg\mathrm{keep}$}
+        \State \Return DS, $W{=}0$, $X{=}0$ \Comment{loop，或低分且前缀还没失败}
+      \Else
+        \State \Return PF, $W{=}n$
+      \EndIf
+    \EndFunction
+    \State $X \gets W$ only if disagg, keep, and the action is HP or PF
+    \State HS: 跳过。\quad DS、EA: \texttt{abort}，不 \texttt{queue}。\quad HP、PF: \texttt{queue\_known\_prefill}
+  \end{algorithmic}}
+  \src{\texttt{PrefillPruner.\_decide} 与 \texttt{queue\_fanout\_prefills}。\texttt{early\_abort\_prefix} 读文本前 $\alpha$，分数低于 $\tau_{\mathrm{pre}}$ 且 reason 不是 ok。Index 0 在 \texttt{rank} 里 \texttt{keep} 恒为真，所以到不了 EA / DS。低分即使有部分命中也不走 HP。}
+\end{frame}
+
+\begin{frame}{代码里，probe 和三轮 ToT 怎么接在一起？}
+  \why{Loop 在 prefill 前跳过。其余低于 $\tau$ 的 residual 先 decode $t_0$，生成前缀过线才续到 $D$。每一轮都走 \texttt{queue\_fanout\_prefills}，只留 index 0。}
+  \vspace{-0.25em}
+  {\scriptsize
+  \begin{algorithmic}[1]
+    \Function{plan\_grow}{thoughts, $\tau$, $t_0$, $D$}
+      \For{$i \gets 0$ \textbf{to} $k-1$}
+        \If{$i\neq 0$ and $i$ is a repeated loop}
+          \State skip \Comment{no prefill}
+        \ElsIf{$i{=}0$ or $\mathrm{score}(\mathrm{thought}_i)\ge\tau$}
+          \State prefill; decode to $D$
+        \Else
+          \State prefill; decode $t_0$; extend to $D$ iff $\mathrm{score\_prefix}\ge\tau$
+        \EndIf
+      \EndFor
+    \EndFunction
+    \For{$\mathrm{turn}\gets 0$ \textbf{to} $T-1$}
+      \State thoughts $\gets$ \texttt{tot\_turn\_thoughts}(family, $k$, turn)
+      \State fork each thought on the winner spine
+      \State \texttt{queue\_fanout\_prefills} \Comment{the plan above}
+      \If{turn is not the last}
+        \State \texttt{generate\_nodes}(live children, step $=32$)
+      \EndIf
+      \State keep index 0; abort the rest
+    \EndFor
+    \State generate the answer on the committed spine
+  \end{algorithmic}}
+  \src{\texttt{experiments/prune\_ablation\_gpu.py} \texttt{plan\_grow}；\texttt{forkserve/bench.py} \texttt{run\_tot\_mt\_forest\_forkserve}。最后一轮的 step 是答案，不是 32 token。}
 \end{frame}
 
 \section{结果}

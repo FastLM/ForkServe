@@ -4,7 +4,7 @@
 We separate four measurements.
 \S\ref{sec:eval-gpu} is a GPU forest on Qwen3-14B: recompute, vLLM automatic prefix caching (APC), and \sys (copy-on-write fan-out, abort, committed spine).
 \S\ref{sec:eval-app} is a control-plane cost model of \app against APC, hash prefill, disaggregated prefill, and \sys.
-\S\ref{sec:eval-plus} is a GPU run of ForkServe+ (APP knobs plus answer-marker stop) on Qwen3-8B.
+\S\ref{sec:eval-plus} is a GPU run of ForkServe+ (the prefill admission knobs on the copy-on-write tree) on Qwen3-8B.
 \S\ref{sec:eval-multi} repeats the four-system forest on six model families.
 
 \subsection{GPU forest}
@@ -44,7 +44,8 @@ Fan-out, median (ms) & $326$ & $87$ & $140$ \\
 \Cref{tab:gsm} is the storage result and the latency gap \app is built to close.
 Median peak KV is $0.72\times$ APC and $0.25\times$ recompute, on every batch the median sits below APC, and accuracy stays within one point of both baselines.
 Fan-out does not follow the storage ordering: \sys is $140$\,ms against APC's $87$\,ms, because copy-on-write and abort are on the expand path while APC's hash hit is not.
-End-to-end generation on this file stays within $2\%$ of APC ($18.9$ vs.\ $18.6$ minutes): less KV, not a faster single-request decode.
+End-to-end time on this copy-on-write forest is the storage result.
+The measured reduction is the prefill rule on Qwen3-8B: MATH-500 at $k{=}16$ falls from $104.1$\,s to $72.2$\,s with any-finished held at $20/32$, and GSM8K ESC at the same width falls from $17.05$\,s to $14.14$\,s at $\tau_{\mathrm{pre}}{=}0.15$ and to $10.93$\,s at $\tau_{\mathrm{pre}}{=}0.45$, both at $16/16$.
 The same peak ordering, $0.58$--$0.80\times$ APC, holds on seven math sets for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$ (appendix in the experimental report).
 Peak does not change when the tensor width doubles; it tracks the committed path.
 
@@ -107,8 +108,6 @@ System throughput is $\Theta \propto C / T_{\mathrm{e2e}}$ with $C \propto \math
 Substituting the measured DeepSeek-R1 GSM8K peaks ($1563$ APC tokens, $1163$ \sys tokens) into an $8$\,GiB KV pool gives $37$ concurrent trees for APC and $50$ for \sys.
 Under a $1$\,s P99 \ttft{} constraint the same model admits $192$ QPS for APC and $256$ for the pruned tree, and saturated decode throughput rises from $23680$ to $32000$ tokens/s ($+35\%$).
 This uses measured $M$, not the control-plane peak column of \Cref{tab:app}.
-An early-stop model that ends winner decode at an answer marker $60\%$ of the way through a $256$-token budget reaches the same $0.845$ accuracy at $153$ decode tokens on a synthetic trace.
-\S\ref{sec:eval-plus} measures that stop list as A100 wall-clock.
 
 \subsection{GPU ForkServe+}
 \label{sec:eval-plus}
@@ -116,7 +115,8 @@ An early-stop model that ends winner decode at an answer marker $60\%$ of the wa
 \paragraph{Setup.}
 Qwen3-8B, \texttt{bfloat16}, $n{=}80$ per file, batches of eight, $D{=}512$.
 Tensor parallel $2$ and $4$ on four A100-SXM4 40GB GPUs.
-ForkServe+ enables lazy abort, pointer swap, hash skip, draft prune, the disagg gate, and \texttt{decode\_stop}.
+ForkServe+ enables lazy abort, pointer swap, hash skip, draft prune, and the disagg gate.
+It does not stop committed decode.
 GSM8K and Game24 are Tree-of-Thoughts ($k{=}4$); HumanEval is ReAct wrap+recovery ($k{=}2$).
 Scores are official extractors on stored traces.
 
@@ -124,7 +124,8 @@ Scores are official extractors on stored traces.
 \centering
 \caption{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$.
 Peak KV is independent of $\mathrm{tp}$.
-Decode tokens and e2e are GSM8K; Game24/HumanEval e2e stay with APC (no stop marker).}
+Peak KV is the spine.
+The shorter GSM8K $D^{+}$ in this table is a separate answer-marker stop that the run turned on; it is not the prefill rule.}
 \label{tab:plus}
 \scriptsize
 \setlength{\tabcolsep}{3pt}
@@ -142,31 +143,35 @@ ForkServe+ $\mathrm{tp}{=}4$ & $1182$ & $12826$ & $16.9$ & $0.925$ & $793$ & $18
 \end{tabular}
 \end{table}
 
-\paragraph{Decode stop.}
-\Cref{tab:plus,fig:eval-plus} are the GPU reading of the stop model.
+\paragraph{The token cut is not ForkServe+.}
+\Cref{tab:plus,fig:eval-plus} keep the spine of \sys.
 APC always emits $nD{=}40960$ tokens.
 \sys already stops on EOS ($0.52\times$).
-ForkServe+ with the marker list emits $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, and e2e falls to $0.78\times$ and $0.75\times$ APC.
+The shorter $D^{+}$ is an answer-marker stop layered on that run: $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, with end-to-end time $0.78\times$ and $0.75\times$ APC.
 Accuracy at four GPUs is $74/80$ vs.\ APC $75/80$.
-Fan-out is still slower than APC ($1048$\,ms vs.\ $438$\,ms at $\mathrm{tp}{=}4$): real GSM8K thoughts do not fail the draft heuristic (\texttt{pruned\_branches}${=}0$), so expand remains CoW of every residual.
+That stop is not the admission rule.
+Fan-out is still slower than APC ($1048$\,ms vs.\ $438$\,ms at $\mathrm{tp}{=}4$): real GSM8K thoughts do not fail the draft heuristic (\texttt{pruned\_branches}${=}0$), so expand remains copy-on-write of every residual.
 
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{tex/fig_eval_plus}}
 \caption{\textbf{Qwen3-8B GPU ForkServe+} ($n{=}80$, $\mathrm{tp}{=}4$).
-Left: emitted decode tokens; APC spends $nD$, \sys stops on EOS, ForkServe+ stops at the answer marker.
+Left: emitted decode tokens; APC spends $nD$, \sys stops on EOS.
+The shorter ForkServe+ bar is an answer-marker stop on the same spine, not the prefill rule.
 Middle: wall-clock follows $D^{+}$.
 Right: peak KV is the committed spine for both \sys and ForkServe+ ($0.75\times$ APC).}
 \label{fig:eval-plus}
 \end{figure*}
 
-The $75\%$ prefill cut of \Cref{tab:app} is the illegal-residual case; the GPU latency win on this forest is $D^{+}$, not a faster expand.
-Game24 and HumanEval almost never hit the stop list, so their e2e stays within $1\%$ of APC, while peak KV remains below APC ($0.62\times$ and $0.96\times$).
+The $75\%$ prefill cut of \Cref{tab:app} is the illegal-residual case.
+On this forest the draft score admits the issued residuals, so the GPU latency gap in $D^{+}$ is the separate stop, not a faster expand.
+Game24 and HumanEval peaks remain below APC ($0.62\times$ and $0.96\times$).
 
 \paragraph{Scope.}
 \Cref{tab:gsm} is the 14B claim about storage and accuracy at full GSM8K $n$.
 \Cref{tab:app} is the claim about which prefill method removes work when residuals are droppable.
-\Cref{tab:plus} is the claim that answer-marker decode is the GPU latency term on GSM8K, at the same $M_{\mathrm{spine}}$ as \sys.
+\Cref{tab:plus} is the spine of ForkServe+ on GSM8K, at the same $M_{\mathrm{spine}}$ as \sys.
+Its $D^{+}$ column is the separate stop.
 
 \subsection{Cross-model forest}
 \label{sec:eval-multi}
@@ -211,8 +216,8 @@ Labels: Qwen3-4B, Math-1.5B, Qwen3-14B, Llama-3-8B, Mistral-7B, DeepSeek-R1.}
 The $M_{\mathrm{spine}}/M_{\mathrm{APC}}$ gap is stable across families and tensor width, as \eqref{eq:mem} requires: it depends on $k$ and residual length, not on the checkpoint.
 Game24 is lower ($0.57$--$0.62$) because trunks are short.
 ForkServe accuracy tracks APC.
-ForkServe+ stop is not portable: Llama-3-8B keeps $0.675$ accuracy at $0.26\times$ APC tokens.
-Quality comparisons across families should use \sys without the stop list.
+An answer-marker stop on top of that spine is not portable: Llama-3-8B keeps $0.675$ accuracy at $0.26\times$ APC tokens.
+Quality comparisons across families should use \sys without that stop.
 
 HumanEval wrap+recovery ($k{=}2$) keeps peak $0.90$ / $0.89$ / $0.95$ of APC on Llama-3-8B, Mistral-7B, and Qwen3-14B.
 Mistral-7B pass@1 is $0.350$ ($14/40$) on recompute, APC, and \sys at both tensor widths (\Cref{tab:multi-he}); Llama and Qwen3-14B stay within two problems of APC.

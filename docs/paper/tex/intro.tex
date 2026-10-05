@@ -70,6 +70,6 @@ Across replicas, \sys pins a tree to the worker that holds its trunk and steals 
 \S\ref{sec:eval} reports four measurements that must not be conflated.
 On Qwen3-14B GSM8K, \sys matches APC accuracy at $0.72\times$ median peak KV, and its fan-out is still slower than APC.
 A control-plane study of \app then shows that hash skip, draft prune, and the disagg gate remove most of that prefill on illegal residuals, and that the measured KV gap raises SLO-feasible concurrency by $35\%$.
-A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering and a decode-stop gain on GSM8K ($0.31\times$ decode tokens, $0.75\times$ e2e at $\mathrm{tp}{=}4$).
-A six-model GPU forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC on Qwen, Llama, Mistral, and DeepSeek-R1; answer-marker stop is not portable.
+A Qwen3-8B GPU run of ForkServe+ shows the same KV ordering.
+A six-model GPU forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC on Qwen, Llama, Mistral, and DeepSeek-R1.
 Mistral-7B HumanEval pass@1 is $0.350$ on every system.

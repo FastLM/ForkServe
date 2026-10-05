@@ -310,12 +310,12 @@ Pruned branches and hash-local hits never enter the buffer, so the decode instan
 \texttt{abort} can mark a node dead and defer the residual decref until after winner decode, so reclamation is not on \ttft.
 The HBM released by abort is the capacity term in \S\ref{sec:eval}: fewer bytes per session admit more concurrent sessions on the same GPU.
 
-\paragraph{Decoding acceleration.}
-Prefill pruning changes work $W$ and occupancy $M$; end-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}(D)$.
-ForkServe+ therefore also stops committed decode at an answer marker (\texttt{\#\#\#\#}, \texttt{\textbackslash boxed}, \texttt{</think>}) via vLLM \texttt{stop}, and keeps committed jobs first in the two-class scheduler of \S\ref{sec:schedule}.
-This is not speculative decoding of output tokens: the engine does not draft-and-verify.
-It ends a finished answer instead of padding to the requested budget $D$.
-If item $j$ hits a marker at $t_j$, emitted tokens are $D^{+}=\sum_j\min(t_j,D)\le nD$, and $T_{\mathrm{dec}}$ scales with $D^{+}$ when decode is memory-bandwidth bound.
+\paragraph{Decode length is unchanged.}
+Prefill pruning changes work $W$ and occupancy $M$.
+End-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}(D)$, so dropping a residual before the kernel does not by itself shorten the committed answer.
+ForkServe+ does not stop that decode.
+A last-line answer processor is a separate logits filter, off in the ForkServe+ configuration, and it does not change which residual is admitted.
+Committed jobs stay first in the two-class scheduler of \S\ref{sec:schedule}.
 
 \subsection{Branch-Aware Scheduling}
 \label{sec:schedule}

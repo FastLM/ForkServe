@@ -1,10 +1,8 @@
-# ForkServe on vLLM: storage-efficient branch KV vs APC
+# ForkServe on vLLM: the page contract
 
-Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). This is the vLLM mapping of ForkServe. The goal is not “APC plus a
-`fork()` API”. APC is a **content-addressed** cache of *full* blocks
-discovered *after* tokens exist. Agent fan-out needs a **location-addressed**
-copy-on-write tree of pages that can be aliased *before* the residual
-exists, including the unaligned trunk tail. That is the storage gap.
+Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). This document is mechanism 1 only: how a child aliases the parent’s KV pages on vLLM V1. The per-residual action and the spine on the critical path are specified there, not here.
+
+The goal is not “APC plus a `fork()` API”. APC is a **content-addressed** cache of *full* blocks discovered *after* tokens exist. Agent fan-out needs a **location-addressed** copy-on-write tree of pages that can be aliased *before* the residual exists, including the unaligned trunk tail. That is the storage gap. `fork` does not consult the hash. LCP commit is what publishes full winner pages into it.
 
 The current `install_vllm_cow()` hook extra-pins the parent’s *full*
 blocks and falls back to APC for everything else. It is already better

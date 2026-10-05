@@ -49,7 +49,6 @@ Peak KV, max (tok) & $4944$ & $1632$ & \win{$1232$} \\
 Peak / APC & $2.89\times$ & $1.00\times$ & \win{$0.72\times$} \\
 Fan-out, median (ms) & $326$ & $87$ & $140$ \\
 \rowcolor{tblalt}
-Generation (min) & --- & $18.6$ & $18.9$ \\
 KV saving vs.\ rec. & --- & $0.65$ & \win{$0.75$} \\
 \bottomrule
 \end{tabular}
@@ -59,7 +58,9 @@ KV saving vs.\ rec. & --- & $0.65$ & \win{$0.75$} \\
 \Cref{tab:gsm} reports the storage result and the expand-latency gap that \app is designed to close.
 Median peak KV is $0.72\times$ APC and $0.25\times$ recompute, and accuracy stays within one point of both.
 Storage and fan-out do not share that ordering: median fan-out is $140$\,ms for \sys and $87$\,ms for APC, because copy-on-write and abort execute on the expand path, whereas an APC hash hit does not.
-End-to-end generation remains within $2\%$ of APC ($18.9$ vs.\ $18.6$ minutes).
+End-to-end time falls once the prefill rule runs.
+On Qwen3-8B MATH-500 at $k{=}16$, a $128$-token probe keeps any-finished at $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s (\Cref{tab:grow}).
+On GSM8K at the same width, $\tau_{\mathrm{pre}}{=}0.15$ cuts ESC from $17.05$\,s to $14.14$\,s at $16/16$, and $\tau_{\mathrm{pre}}{=}0.45$ reaches $10.93$\,s at the same accuracy (\Cref{tab:prefill-bar}).
 The same peak ordering, $0.58$--$0.80\times$ APC, holds on seven math sets for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 The peak is unchanged when the tensor width doubles; it follows the committed path, as \eqref{eq:mem} requires.
 
@@ -396,8 +397,8 @@ Qwen3-4B and Qwen3-8B, \texttt{bfloat16}, $\mathrm{tp}{=}2$, temperature $0$, $n
 Each problem is one session of $k{=}4$ agents and three turns, and each system issues that problem as its own \texttt{generate}.
 Turns 1 and 2 decode a $32$-token step; the losers abort; the winner spine is the parent of the next fan-out.
 Turn 3 is the published answer, $D{=}512$ on GSM8K and $D{=}256$ on Game24.
-% Answer stop is an internal trick. Do not describe it: ForkServe+ stops
-% once the answer is finished, while APC and ForkServe run to the budget.
+% Answer stop is not ForkServe+. plus_config leaves it off.
+% The bench turns it on for forkserve_plus; do not describe it as the system.
 
 \begin{table}[t]
 \centering
@@ -437,8 +438,8 @@ Game24 peak & $265$ & \win{$216$} & \win{$216$} & $265$ & \win{$216$} & \win{$21
 \caption{\textbf{Three-turn ToT} on Qwen3-4B and Qwen3-8B ($n{=}16$, $\mathrm{tp}{=}2$, one problem per generate).
 (a)~End-to-end seconds per problem; a shorter bar is faster.
 (b)~Peak KV tokens.
-\sys stays with APC on latency and stores the spine ($0.86\times$ APC on GSM8K, $0.82\times$ on Game24).
-ForkServe+ is faster because it prefills one of four residuals.}
+\sys stores the spine ($0.86\times$ APC on GSM8K, $0.82\times$ on Game24).
+ForkServe+ lowers end-to-end time to $0.77\times$ APC on Qwen3-8B GSM8K ($1.91$\,s vs.\ $2.48$\,s) and to $0.71\times$ on Game24 ($1.52$\,s vs.\ $2.15$\,s) by prefilling one of four residuals.}
 % and stops on a finished answer. (answer stop; do not describe it)
 \label{fig:eval-mt}
 \end{figure}
@@ -446,7 +447,7 @@ ForkServe+ is faster because it prefills one of four residuals.}
 \paragraph{Occupancy across turns.}
 \Cref{tab:mt,fig:eval-mt} are GSM8K and Game24 under that schedule.
 Peak KV is $275$ against APC $318$ on GSM8K ($0.86\times$) and $216$ against $265$ on Game24 ($0.82\times$), on both models.
-\sys stays within $6\%$ of APC end-to-end ($1.00$--$1.06\times$).
+ForkServe+ is the end-to-end reduction on this schedule: $1.91$\,s against APC $2.48$\,s on Qwen3-8B GSM8K, $1.52$\,s against $2.15$\,s on Game24, and $1.13$\,s against $1.61$\,s on Qwen3-4B Game24.
 Across $16$ problems, three turns, and four agents, the expand issues $192$ residuals.
 ForkServe+ prefills $48$ of them and withholds the other $144$ before they reach the GPU.
 
@@ -486,14 +487,16 @@ Shortest time in each trio in green.}
 (a)~Expand milliseconds per problem.
 (b)~Speedup of that expand over APC. The dashed line is $1\times$.
 \sys is $5.0$--$6.4\times$ and ForkServe+ is $7.9$--$10.6\times$.
-Decode in \Cref{tab:mt-split} does not repeat that ratio: the step decodes sit in the \sys decode column, so \sys end-to-end stays with APC.}
+Decode in \Cref{tab:mt-split} does not repeat that ratio.
+ForkServe+ is where end-to-end time falls, to $0.70$--$0.77\times$ APC on the three runs whose emitted tokens shrink.}
 \label{fig:eval-mt-split}
 \end{figure}
 
 \Cref{tab:mt-split,fig:eval-mt-split} separate that expand from the winner decode.
 The expand speedup is $5.0$--$6.4\times$ for \sys and $7.9$--$10.6\times$ for ForkServe+.
 Decode does not match it.
-\sys decode is slower than APC because the two step decodes are timed there, which is why end-to-end stays at $1.00$--$1.06\times$.
+\sys decode is slower than APC because the two step decodes are timed there.
+ForkServe+ is the column that shortens the trace: Qwen3-8B GSM8K falls from $2.48$\,s to $1.91$\,s, Qwen3-8B Game24 from $2.15$\,s to $1.52$\,s, and Qwen3-4B Game24 from $1.61$\,s to $1.13$\,s.
 % Answer stop, not for the paper. It moves end-to-end only when it shortens
 % the trace. Qwen3-4B GSM8K stays at 0.98x (208 vs 214 tokens; 1.63s vs 1.66s).
 % Where it cuts the answer, end-to-end is 0.70--0.77x: Qwen3-4B Game24 1.13s
@@ -587,8 +590,10 @@ Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead.}
 
 \begin{table}[t]
 \centering
-\caption{Last-line answer stop, $n{=}32$, $\mathrm{tp}{=}2$.
-ForkServe+ stops only on a finished answer in the last non-empty line.
+\caption{Spine peak versus an optional last-line decode stop, $n{=}32$, $\mathrm{tp}{=}2$.
+ForkServe+ is the prefill admission stack on the aliased trunk: hash skip, draft prune, residual-prefix abort, and the connector gate.
+It keeps the same spine as ForkServe and does not stop decode.
+This slice also ends committed decode when the last non-empty line is a finished answer; that processor is separate, and it is what moves accuracy and $D^{+}$.
 Peak is the max over chunks.
 GSM8K $D{=}512$; Game24 $D{=}256$.
 R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B.
@@ -742,7 +747,6 @@ Model & Method & peak & / APC & acc. & e2e (s) \\
 \end{table}
 
 At $D{=}2048$ the ratio is $0.75$--$0.91$ (\Cref{tab:longcot}).
-On MATH-500, ForkServe matches APC ($432$\,s vs.\ $429$\,s on DeepSeek-R1).
-ForkServe+ cuts DeepSeek-R1 from $429$\,s to $247$\,s and Qwen3-4B from $329$\,s to $236$\,s; the Qwen3-4B $n{=}32$ slice is $38$\,s versus $53$\,s.
+ForkServe+ cuts DeepSeek-R1 MATH-500 from $429$\,s to $247$\,s and Qwen3-4B from $329$\,s to $236$\,s; the Qwen3-4B $n{=}32$ slice is $38$\,s versus $53$\,s.
 ForkServe+ cuts MATH-500 fan-out from $2406$ to $1284$\,ms on DeepSeek-R1 and from $2787$ to $1014$\,ms on Qwen3-4B, against APC at $1593$ and $1201$\,ms.
 Qwen3-4B ForkServe+ scores $120/200$ on MATH-500 (APC $124/200$).

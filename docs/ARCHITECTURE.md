@@ -1,6 +1,8 @@
 # ForkServe Architecture
 
-Control-plane specification. The vLLM worker/kernel contract is [`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md). Cross-session hashing is [`HASH_FORKSERVE.md`](HASH_FORKSERVE.md).
+Control-plane specification. The vLLM page contract is [`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md). The hash index and the control-plane measurements are [`HASH_FORKSERVE.md`](HASH_FORKSERVE.md).
+
+The serving object is the branch. Its cost is paid for the residual that is committed, and only at the cheapest stage where that rejection is still correct. Three mechanisms implement that decision: a copy-on-write context tree (§2–§4), one action per residual (§10), and the committed spine on the critical path (§5).
 
 ## 1. Problem
 
@@ -215,7 +217,7 @@ Out of tree: prefill/decode disaggregation; HBM $\leftrightarrow$ DRAM tensor mo
 
 ## 8. Hash composition
 
-APC indexes full blocks by $\mathrm{hash}(\mathrm{parent},\;\mathrm{block\_tokens},\;\mathrm{extra})$ after tokens exist. ForkServe aliases by node identity before they exist. HashForkServe keeps both: `fork` does not hash; LCP commit publishes full Commit pages; a later `open` hash-hits. Spec pages are never hashed (invariant 3). `cache_salt` on block 0 is unchanged.
+APC indexes full blocks by $\mathrm{hash}(\mathrm{parent},\;\mathrm{block\_tokens},\;\mathrm{extra})$ after tokens exist. The context tree aliases by node identity before they exist. The two meet at commit: `fork` does not hash; LCP commit publishes full pages of the winner; a later `open` hash-hits. That index is the first stage of §10, not a second system. Spec pages are never hashed (invariant 3). `cache_salt` on block 0 is unchanged.
 
 ## 9. Interface
 
@@ -233,20 +235,36 @@ close(s)
 
 Adapters (`ReAct`, `ToT`, `LangGraph Send`, `OpenHands`) lower harness structure onto these verbs. `Orchestrator.react_turn` forks wrap and recovery at the first parsed tool call, speculates over $T_{\mathrm{idle}}$, then commits $\mathrm{wrap}\Vert\mathrm{obs}$.
 
-## 10. Advanced Prefill Pruning (APP / ForkServe+)
+## 10. One action per residual
 
-Fan-out is a prefill problem. APC (`hash_prefill`) skips *already published* full blocks. vLLM `disagg_prefill` ships whatever the prefill instance computed (it does not raise tokens/sec). APP is the filter between those two: it decides, per branch, whether GPU prefill and KV transfer happen at all. CoW is the storage substrate; APP is the compute/transfer filter. Winner decode still sees only the committed spine.
+Copy-on-write places the trunk. It does not decide which residual enters a kernel, or which KV would cross a prefill–decode connector. `PrefillPruner` makes both decisions. The stages are ordered by cost. The next stage runs only when this one has not rejected the residual. Index 0 is always kept. Speculative pages stay unpublished until LCP commit, so invariant 3 is unchanged.
 
-Skip layers, cheapest first:
+| Action | Condition | GPU work | Transfer |
+|---|---|---|---|
+| `HASH_SKIP` | Published full pages cover the residual | 0 | 0 |
+| `HASH_PARTIAL` | A proper published prefix | Miss tail | That tail, if kept |
+| `DRAFT_SKIP` | Repeated loop (score $0.02 < \tau_{\mathrm{pre}}=0.15$) | 0 | 0 |
+| `EARLY_ABORT` | The first `early_prune_frac` already fails | That prefix, then stop | 0 |
+| `PREFILL` | Otherwise, on the trunk aliased at `fork` | The residual | Miss tail, if kept and disagg is on |
 
-1. **Hash skip.** `PrefillHashIndex` / HashForkServe `hash(parent, block_tokens, extra)`. A replay or a published trunk prefix is not recomputed. Spec pages stay unpublished until LCP commit.
-2. **Draft prune.** `BranchPruner` scores residuals (entropy / illegal / loop, optional draft model). Losers never start prefill (`queue_fanout_prefills`). Winner index 0 is always kept.
-3. **Early abort.** First `early_prune_frac` of a residual already fails → cancel remaining chunks. Models chunked / disagg prefill.
-4. **Disagg gate.** `DisaggPrefillConnector` is vLLM's `insert` / `drop_select` pipe. Only survivors are inserted; losers and hash-local hits never leave the prefill instance.
-5. **Lazy abort + pointer swap.** `abort(..., lazy=True)` marks Dead off TTFT; `generate` drains after the winner batch. `PagePool.pointer_swap` increfs page ids — no KV memcpy on fan-out.
-6. **Spec-pool.** Eq. 9: $\Theta\propto C/T_{\mathrm{e2e}}$, $C\propto\mathrm{HBM}/M$. `plan_spec_pool` turns $M_{\mathrm{CoW}}/M_{\mathrm{clone}}$ into extra slots.
+Illegal text scores $0.22$ and is prefilled. A low score that is not a loop is not a draft skip. That residual is prefilled, decoded for a short probe, and extended to the budget only when the generated prefix clears the decode threshold ($\tau=0.45$). The prefill scorer and the decode scorer do not share weights.
 
-Enable with `plus_config()` / `app_config()` or `--system forkserve_plus`. Evaluation: `forkserve.eval_plus` and `experiments/prefill_prune_bench.py` (APC vs ForkServe vs hash_prefill vs disagg_prefill vs APP; fan-out split, token–accuracy curve, QPS vs P99 TTFT).
+`admit_mode` selects one rule. The others stay off.
+
+| Mode | What is kept |
+|---|---|
+| `score` (default) | Winner, plus every residual at or above $\tau_{\mathrm{pre}}$ |
+| `winner` | The known winner only |
+| `top_m` | Winner plus the next `prefill_keep_m - 1` by $G/C$ |
+| `alpha` | Winner plus the next $\lfloor\alpha k\rfloor - 1$ by score |
+
+`fork` does not walk the hash index. LCP commit publishes full pages of the winner, which is what makes a later session a hash hit. A hash-local hit is not a transfer: those blocks are already visible on the decode instance.
+
+Abort of a rejected residual is lazy: the node is marked dead off the TTFT path, and `generate` reclaims the pages after the winner batch. `PagePool.pointer_swap` increfs page ids. Fan-out does not memcpy the trunk. Slots follow the spine, $C=\lfloor H/M_{\mathrm{spine}}\rfloor$, so the same pool admits more sessions once occupancy is $L+\ell_\star$ rather than the aborted residuals.
+
+Slack fill is the same rule on the next turn. Tokens freed by a dropped residual are a budget. A page-aligned prefix of the next known suffix ($p=1$) is published into that budget, and nothing longer.
+
+Enable with `plus_config()` / `app_config()` or `--system forkserve_plus`. Measurements: `experiments/prefill_prune_bench.py`. Protocol: [`HASH_FORKSERVE_EXPERIMENT.md`](HASH_FORKSERVE_EXPERIMENT.md).
 
 ## 11. Defaults and modules
 
@@ -262,10 +280,10 @@ $P=16$, $C_{\mathrm{spec}}=512$, $\lambda$ such that $1\,\mathrm{ms}$ TBT $\equi
 | `join.JoinExecutor` | trunk + scaffold |
 | `retention.RetentionManager` | node TTL, leaf-first |
 | `router.TreeStickyRouter` | pin root, residual steal |
-| `hash_forkserve` | APC index + CoW pool |
-| `prefill_prune.PrefillPruner` | APP: hash skip ⊕ draft prune ⊕ early abort |
-| `disagg.DisaggPrefillConnector` | P/D pipe; APP gates `insert` |
-| `prune.BranchPruner` | residual score used by APP |
+| `hash_forkserve` | Publish committed full pages; `fork` does not hash |
+| `prefill_prune.PrefillPruner` | One action per residual (§10) |
+| `disagg.DisaggPrefillConnector` | Insert only a kept miss tail |
+| `prune.BranchPruner` | Prefill score; loops fall under $\tau_{\mathrm{pre}}$, illegal text does not |
 | `spec_pool` | extra slots from KV saving |
 | `eval_plus` | fan-out microbench, token–acc, QPS |
 | `engine.protocol.EngineBackend` | L1 |

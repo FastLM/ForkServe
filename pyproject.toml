@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "forkserve"
 version = "0.1.0"
-description = "Branch-aware speculative prefilling and CoW KV state for agentic LLM serving"
+description = "Branch-aware LLM serving: copy-on-write KV, one prefill action per residual, decode on the committed spine"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }

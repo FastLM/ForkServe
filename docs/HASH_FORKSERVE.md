@@ -1,8 +1,10 @@
-# HashForkServe — APC ⊕ ForkServe
+# Hash index
 
-Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). vLLM mapping: [`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md).
+Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md) §8 and §10. vLLM page contract: [`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md).
 
-## Why combine them
+The hash index is the first stage of the per-residual decision. It is not a second system bolted onto the context tree. `fork` aliases by node identity and does not walk hashes. LCP commit publishes full pages of the winner. A later session that never forked from this one can then hash-hit those pages.
+
+## What each index is for
 
 | &nbsp; | vLLM Automatic Prefix Caching | ForkServe |
 | --- | --- | --- |
@@ -13,11 +15,7 @@ Control-plane architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md). vLLM mapping: 
 | Eviction | LRU free-queue of cached blocks | Leaf-first (spec → idle → spine) |
 | Partial block | Never cached | Residual pages OK |
 
-They are complementary, not alternatives:
-
-* APC alone serializes fan-out as independent requests → Θ(k) trunk clones until the second request arrives and hashes match.
-* ForkServe alone cannot reuse a trunk published by a *different* session that never forked from you.
-* **HashForkServe** forks within a session, then **publishes committed full pages into the APC index** so the next session can hash-hit them.
+A prefix cache used alone serializes a fan-out as independent requests, so the first expand clones the trunk until a later request publishes a hash. The context tree used alone cannot reuse a trunk published by a different session. Commit is the join: the session forks by reference, then publishes the committed full pages.
 
 ```
                     ┌─────────────────────────────┐
@@ -47,19 +45,25 @@ They are complementary, not alternatives:
 4. Eviction: prefer dropping speculative / unhashed free pages; among hashed free pages use APC LRU order.
 5. `cache_salt` isolates tenants exactly as in APC.
 
-## APP composition
+## The rest of the decision
 
-Hash skip is layer 1 of Advanced Prefill Pruning (`forkserve/prefill_prune.py`). A published trunk or replayed residual is not sent to the GPU. Draft/early prune then drops hopeless siblings *before* they become hash keys. vLLM `disagg_prefill` is layer 4: only APP survivors are `insert`ed into the KV pipe, so the decode instance never sees loser pages. Stock disagg does not raise throughput; APP + disagg does, because the prefill instance computes and ships less.
+After the hash probe, one residual still has one action (`forkserve/prefill_prune.py`, [`ARCHITECTURE.md`](ARCHITECTURE.md) §10):
+
+* A full hit is a retrieval. No kernel, and no transfer: the same blocks are already visible on the decode instance.
+* A proper prefix prefills the miss tail only.
+* A repeated loop (score $0.02 < \tau_{\mathrm{pre}}=0.15$) never starts prefill and is never inserted as a hash key.
+* Illegal text scores $0.22$ and is prefilled. A low score that is not a loop is not a skip.
+* The connector inserts only the miss tail of a residual that is kept. Stock disaggregation transfers the computed span, including the $k$-way trunk.
 
 ```
-  residuals ──► hash lookup ──► draft/early prune ──► GPU prefill (miss tail)
-                      │                  │
-                      skip               skip
-                      ▼                  ▼
-                 hash-local         not inserted ──► disagg connector ──► decode
+  residual ──► hash probe ──► loop? ──► early prefix ──► prefill miss tail
+                  │              │            │
+                  full hit       skip         stop
+                  ▼              ▼            ▼
+             stay local     not inserted   not inserted ──► kept tail may insert
 ```
 
-Compare APC / ForkServe / hash_prefill / disagg_prefill / APP: `experiments/prefill_prune_bench.py`. Full protocol (unit tests, control-plane suite, GPU): [`HASH_FORKSERVE_EXPERIMENT.md`](HASH_FORKSERVE_EXPERIMENT.md).
+Compare APC / ForkServe / hash_prefill / disagg_prefill / the cascade: `experiments/prefill_prune_bench.py`. Protocol: [`HASH_FORKSERVE_EXPERIMENT.md`](HASH_FORKSERVE_EXPERIMENT.md).
 
 ## Code
 
@@ -91,6 +95,6 @@ Hybrid keeps CoW’s low live-page count on fan-out **and** APC’s cross-sessio
 | ForkServe | fan-out | 3840 | 46.1 | 0 | 47.1 | 3840 | 0 |
 | hash_prefill | fan-out | 11520 | 138.2 | 0 | 139.0 | 11520 | 0 |
 | disagg_prefill | fan-out | 11520 | 138.2 | 11520 | 162.1 | 11520 | 0 |
-| **APP** | fan-out | **2912** | **34.9** | **352** | **35.9** | **2880** | 20 |
+| Cascade | fan-out | **3232** | **38.8** | **672** | **40.3** | **2880** | 10 |
 
-APP vs APC: prefill −74.7%, fan-out −74.2%, peak KV −75.0%. Replay hash-skips the published winner (0 prefill tokens). Decode-token curve: 84.5% acc at 256 tokens (APC) vs 153 (APP). Eq. 9 concurrency: P99≤1s QPS 192 → 256, tokens/s +35.1%.
+Against APC on this fan-out: prefill −71.9%, fan-out −71.0%, peak KV −75.0%. The ten prunes are the repeated loop, one per session. Illegal text is kept. Replay hash-skips the published winner (0 prefill tokens). The synthetic decode curve still reaches 84.5% at 256 tokens (APC) and 153 (cascade). Concurrency from the spine formula: P99 ≤ 1s QPS 192 → 256, tokens/s +35.1%. These rows are the token-cost model, not a GPU trace.

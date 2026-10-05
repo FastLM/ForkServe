@@ -1,11 +1,11 @@
-# HashForkServe / APP — 完整实验
+# 控制面与 GPU 实验
 
-对照设计说明：[`HASH_FORKSERVE.md`](HASH_FORKSERVE.md)。控制面：[`ARCHITECTURE.md`](ARCHITECTURE.md) §10。vLLM 映射：[`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md)。
+对照设计说明：[`HASH_FORKSERVE.md`](HASH_FORKSERVE.md)。控制面：[`ARCHITECTURE.md`](ARCHITECTURE.md) §10。vLLM 页契约：[`FORKSERVE_VLLM_DESIGN.md`](FORKSERVE_VLLM_DESIGN.md)。
 
-新方法是两层：
+一次 fan-out 只有一个决定，不是两套系统叠在一起。
 
-* **HashForkServe**：会话内 `fork` 仍是 O(1) 别名；`commit` 之后把已提交的整页发布进 APC 哈希索引，下一会话才能命中。投机页在 LCP / `commit` 之前不进哈希。
-* **APP**（Advanced Prefill Pruning，系统名 `forkserve_plus`）：在 CoW 之上按便宜到贵过滤 prefill。层序是 hash skip → draft / early prune → 只对 miss tail 做 GPU prefill → disagg 只 `insert` 幸存者。
+* 会话内 `fork` 是 O(1) 别名，不走哈希。`commit` 把已提交的整页发布进索引，下一会话才能命中。投机页在 LCP / `commit` 之前不进哈希。
+* 每条残差在第一个能拒绝它的阶段退出：整页命中、部分命中只算 miss tail、重复循环（分数 0.02，低于 \(\tau_{\mathrm{pre}}=0.15\)）不启动 prefill、残差前缀已经失败则提前停、否则在别名主干上 prefill。非法文本分数 0.22，会 prefill。连接器只插入被保留残差的 miss tail。系统名 `forkserve_plus` 打开这一整条，而不是再加一个剪枝器。
 
 实验分三档。前两档不需要 GPU，数字来自令牌代价模型，用来核对控制面不变量。第三档才是墙上时间、显存和任务分数。
 
@@ -48,7 +48,7 @@ bash scripts/download_benchmarks.sh
 | sessions × branching | 10 × 4 | 第一阶段 fan-out |
 | replays | 20 | 第二阶段重放已提交赢家 |
 
-APP 开关来自 `plus_config()`（`--system forkserve_plus` 走同一组）：`lazy_abort`、`pointer_swap`、`prune_enabled`、`hash_prune`、`disagg_prefill`，`spec_pool_frac=0.25`，`decode_stop=("####", "\\boxed", "</think>")`。草稿剪枝阈值 `prune_threshold=0.15`，早停看残差前 `early_prune_frac=0.20`。赢家下标 0 始终保留。
+`plus_config()`（`--system forkserve_plus` 走同一组）打开的是这一条决定：`lazy_abort`、`pointer_swap`、`prune_enabled`、`hash_prune`、`disagg_prefill`、`share_prefixes`、`slack_fill`，`spec_pool_frac=0.25`。`decode_stop` 为空。答案完整才停是单独的 `answer_stop`，不属于这条 prefill 决定。Prefill 阈值 `prefill_threshold=0.15`（循环 0.02 丢掉，非法文本 0.22 保留），decode 阈值 `0.45`，早停看残差前 `early_prune_frac=0.20`。赢家下标 0 始终保留。同一时刻只开一种 `admit_mode`：默认 `score`。
 
 ## 1. 单测（档 0）
 
@@ -62,8 +62,8 @@ python -m pytest tests/test_hash_forkserve.py tests/test_prefill_prune.py -q
 * `fork` 不在关键路径上做哈希遍历。
 * `commit` 后整页可被下一次 `open` 命中；`cache_salt` 把租户隔开。
 * 已发布前缀被 `HASH_SKIP`（重放 0 个 prefill token）或 `HASH_PARTIAL`（只算残差）。
-* 非法 / 循环残差被 draft skip；赢家保留。
-* `DisaggPrefillConnector.gate` 只把幸存者送进 P/D 管道。
+* 重复循环被 draft skip；非法文本（0.22）和赢家保留。
+* `DisaggPrefillConnector.gate` 只把保留下来的 miss tail 送进 P/D 管道。哈希本地命中不传。
 
 ## 2. 控制面套件（档 1）
 
@@ -119,7 +119,7 @@ stdout 列：`prefill_tok`、`prefill_ms`、`xfer_tok`、`fanout_ms`、`peak_kv`
 | `forkserve` | `fork` 别名主干；四条残差都 prefill；同步 abort。 |
 | `hash_prefill` | 只有 APC 索引（`HashForkServe.materialize`）。第一次 fan-out 仍付克隆；replay 跳过已发布整块。 |
 | `disagg_prefill` | prefill 与 APC 相同，然后把全部活 KV 发给 decode。库存 disagg 不剪枝，所以 `xfer_tok = prefill_tok`。 |
-| `app` | CoW + hash skip + draft/early prune + 只运送幸存者 + lazy abort。 |
+| `app` | 别名主干；整页命中不重算；只丢掉重复循环；只运送保留残差的 miss tail；abort 标在 TTFT 之外。 |
 
 参考快照（10×4，trunk 256，residual 32，只列 `fanout`）：
 
@@ -129,15 +129,15 @@ stdout 列：`prefill_tok`、`prefill_ms`、`xfer_tok`、`fanout_ms`、`peak_kv`
 | ForkServe | 3840 | 46.1 | 0 | 47.1 | 3840 | 0 |
 | hash_prefill | 11520 | 138.2 | 0 | 139.0 | 11520 | 0 |
 | disagg_prefill | 11520 | 138.2 | 11520 | 162.1 | 11520 | 0 |
-| APP | 2912 | 34.9 | 352 | 35.9 | 2880 | 20 |
+| APP | 3232 | 38.8 | 672 | 40.3 | 2880 | 10 |
 
 核对（脚本打印的相对量，允许浮点末位差）：
 
-* APP vs APC：prefill −74.7%，fan-out −74.2%，peak KV −75.0%。
+* APP vs APC：prefill −71.9%，fan-out −71.0%，peak KV −75.0%。
 * APP 的 peak KV = 10 × (256 + 32) = 2880（只留主干加赢家残差）。APC peak = 10 × 4 × (256 + 32) = 11520。
-* `pruned = 20`：10 个会话 × 2 条无望思路（循环、非法）。
+* `pruned = 10`：10 个会话各丢掉 1 条重复循环。非法文本分数 0.22，高于 0.15，会 prefill。
 * replay 阶段 APP 的 `prefill_tokens = 0`（整段已发布提示被 hash skip）。`hash_prefill` 的 replay 命中主干，但第一次 fan-out 没有 CoW。
-* `disagg_prefill` 的 fan-out ms 高于 APC，差额是 11520 token 的传输。APP 只运 352 token。
+* `disagg_prefill` 的 fan-out ms 高于 APC，差额是 11520 token 的传输。APP 只运 672 token（三条被保留残差的 miss tail，含非法文本）。
 
 JSON 里另外两块不要当成 GSM8K 实测：
 
@@ -153,7 +153,7 @@ JSON 里另外两块不要当成 GSM8K 实测：
 | `pruned_branches` | > 0 |
 | `prefilled_branches` | < branching |
 | `hash_skips` | replay / 已发布主干上 > 0 |
-| `early_aborts` | 残差前缀已经无望时 > 0 |
+| `early_aborts` | 残差前缀已经低于 prefill 阈值时 > 0；整段循环走 draft skip，不走这一档 |
 | `transfer_tokens` | 小于「全部活 KV」 |
 | `abort_mark_ms` | lazy abort 标在 TTFT 之外；`abort_reclaim` 不进 fan-out |
 | `pointer_swaps` | fan-out 是 incref，不是 KV memcpy |
@@ -238,7 +238,7 @@ DeepSeek-R1 distill 权重会自动设 `FORKSERVE_CHAT_STYLE=deepseek_r1`（路�
 2. **fan-out 拆分**：`fanout_ms ≈ cow_ms + prefill_ms + abort_mark_ms`（外加 disagg 传输）。`abort_reclaim_ms` 在解码之后，不进 TTFT。`pointer_swaps > 0` 且 fan-out 不是按 k 份主干 memcpy。
 3. **剪枝没有改赢家语义**：`task_score`（GSM8K exact match、HumanEval pass 等）相对 `forkserve` 不因多剪赢家而崩。`quality_collapsed` 应为 false。`quality_delta` 是相对参照系统的分差。
 4. **传输**：`forkserve_plus.transfer_tokens` 只计幸存者。库存 disagg 路径会把 fan-out 的全部活 KV 发出；APP 行应明显更小。`hash_skips` 在重复主干（多 session、chunk 间共享前缀）上增加。
-5. **解码令牌**：`decode_tokens` 是各题之和，`decode_per_item` 是每题预算。APP 的 `decode_stop` 可以在 `####` / `\boxed` 处提前停；准确率持平则每题 token 应 ≤ APC。
+5. **解码令牌**：`decode_tokens` 是各题之和，`decode_per_item` 是每题预算。Prefill 决定不改解码长度。`answer_stop` 是另一条开关，只在答案已经完整时停（`####` 后的数字、闭合的 `\boxed`），默认关闭。准确率持平则这条开关才会让每题 token ≤ APC。
 6. **准确率曲线**（有 `task_correct` 的行）可以事后画，不必重跑：
 
 ```bash
@@ -310,7 +310,7 @@ PYTHONPATH=. python -m forkserve.bench \
 | `fork` 不走哈希 | 档 0；档 1 `fork_aliases` 在 fan-out，`hash_hits` 在 replay |
 | 提交后的整页可被下一会话命中 | 档 1 replay 行 `prefill_tokens` |
 | 不满的块不进 APC；残差页 CoW 可以留 | 档 0 `HASH_PARTIAL`；档 1 ForkServe 活页 < APC |
-| 无望兄弟在成为哈希键之前丢掉 | 档 1 `pruned`；档 2 `pruned_branches` |
+| 重复循环在成为哈希键之前丢掉；非法文本保留 | 档 0；档 1 `pruned = 10`；档 2 `pruned_branches` |
 | 库存 disagg 不提高吞吐；APP 少算少传 | 档 1 `disagg_prefill.xfer_tok` vs `app.xfer_tok` |
 | 赢家 decode 只看见提交脊 | 档 2 `task_score` 不塌；峰值 KV 不含输家残差 |
 | 多轮 ToT 脊变长时 CoW 仍只付残差 | 档 1 `tot_multiturn_bench`；档 2 `--turns 3 --chunk 1` |
