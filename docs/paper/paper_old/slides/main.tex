@@ -250,10 +250,10 @@
     \textbf{账} & \textbf{对照} & \textbf{他们} & \textbf{这里} \\
     \midrule
     GPU prefill，$k{=}16$ & ESC / SR / DPTS 单独跑 & \bad{5008} & \good{3848} \\
-    控制面 connector token & DistServe / Splitwise 式 P/D & \bad{11520} & \good{32} \\
+    控制面 connector token & DistServe / Splitwise 式 P/D & \bad{11520} & \good{672} \\
     \bottomrule
   \end{tabular}}
-  \src{上一行：\texttt{prune\_ablation\_thresh}，$\tau_{\mathrm{pre}}{=}0.15$，精度仍是 $16/16$。下一行：控制面代价模型，10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$，不是 GPU wall clock。}
+  \src{上一行：\texttt{prune\_ablation\_thresh}，$\tau_{\mathrm{pre}}{=}0.15$，精度仍是 $16/16$。下一行：控制面代价模型，10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$，不是 GPU wall clock。P/D 搬整份克隆，\fsplus{} 少搬 $94\%$（$17\times$）。}
 \end{frame}
 
 \section{设计}
@@ -331,7 +331,7 @@
     Index 0 和活策略走这里。Connector 搬的就是刚算出来的 miss，不是 trunk，也不是灰页。 \\
     \bottomrule
   \end{tabular}}
-  \src{$m_i$ 按整页对齐，所以切口落在格边界上。$X{=}\sum_{i\in\mathrm{Keep},\,a_i\in\{\mathrm{HP},\mathrm{PF}\}}W_i$。控制面里这使 connector 从 11520 降到 32。}
+  \src{$m_i$ 按整页对齐，所以切口落在格边界上。$X{=}\sum_{i\in\mathrm{Keep},\,a_i\in\{\mathrm{HP},\mathrm{PF}\}}W_i$。控制面里这使 connector 从 11520 降到 672。}
 \end{frame}
 
 \begin{frame}{代码里，prefill 分数怎么打？}
@@ -470,19 +470,20 @@
 \end{frame}
 
 \begin{frame}{P/D 分离之后，pruning 少搬了多少？}
-  \why{Connector 搬的是已经 prefill 的页。$\mathrm{Keep}$ 定在 \texttt{insert} 之前，丢掉的 residual 不进这条链路。}
+  \why{少搬 $10848$ 个 token。P/D 把整份克隆 $11520$ 送过 connector；\fsplus{} 只送留下的 miss tail $672$，少 $17\times$。$\mathrm{Keep}$ 定在 \texttt{insert} 之前，丢掉的 loop 不进这条链路。}
   {\footnotesize
   \setlength{\tabcolsep}{8pt}
   \begin{tabular}{@{}lrrrr@{}}
     \toprule
     & \textbf{APC} & \textbf{P/D} & \textbf{\sys} & \textbf{\fsplus} \\
     \midrule
-    Prefill tokens $W$ & \bad{11520} & \bad{11520} & 3840 & \good{2592} \\
-    Connector tokens $X$ & 0 & \bad{11520} & 0 & \good{32} \\
-    Fan-out & 139\,ms & \bad{162\,ms} & 47\,ms & \good{31.4\,ms} \\
+    Prefill tokens $W$ & \bad{11520} & \bad{11520} & 3840 & \good{3232} \\
+    Connector tokens $X$ & 0 & \bad{11520} & 0 & \good{672} \\
+    传输时间 & 0 & \bad{23.0\,ms} & 0 & \good{1.3\,ms} \\
+    Fan-out & 139.0\,ms & \bad{162.1\,ms} & 47.1\,ms & \good{40.3\,ms} \\
     \bottomrule
   \end{tabular}}
-  \src{控制面代价模型，不是 GPU wall clock。10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$。论文 tab:app。DistServe、Splitwise、PagedAttention 的完整引用在背景页。}
+  \src{控制面代价模型，不是 GPU wall clock。\texttt{prefill\_prune\_bench}，10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$。只丢重复 loop（$10$ 条）；$672{=}32+20{\times}32$，第一轮赢家的 miss，加上每轮两条留下的残差。赢家发布后另外 $9$ 轮不再过 connector。DistServe、Splitwise、PagedAttention 的完整引用在背景页。}
 \end{frame}
 
 \begin{frame}{三轮 ToT 的 expand 为什么比 APC 快？}
