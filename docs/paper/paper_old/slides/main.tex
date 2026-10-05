@@ -115,7 +115,7 @@
     \end{column}
     \begin{column}{0.32\textwidth}
       \textbf{\color{fsblue}问题 3}\\[0.25em]
-      {\small Expand 快了约 $10\times$，端到端为什么只降一点？}
+      {\small 哪些 ToT 应用的端到端降了 $15\%$ 以上？}
     \end{column}
   \end{columns}
 \end{frame}
@@ -501,20 +501,73 @@
   \src{\texttt{logs/tot\_mt}，2026-09-29，$n{=}16$，$k{=}4$，$\mathrm{tp}{=}2$，\texttt{fanout\_ms}/16。\fsplus{} / APC 是 $7.9$--$10.6\times$。}
 \end{frame}
 
-\begin{frame}{Expand 快了约 $10\times$，端到端为什么只降一点？}
-  \why{端到端里还有两步 32-token decode。发出的 token 几乎不变时，端到端几乎不变。}
+\begin{frame}{哪些 ToT 应用的端到端降了 $15\%$ 以上？}
+  \why{降幅来自 prefill 准入：没被选中的 residual 不进 kernel。下表只留端到端降幅至少 $15\%$ 的运行。三轮 ToT 的每题时间是 16 题总时间除以 16。}
   {\footnotesize
-  \setlength{\tabcolsep}{7pt}
-  \begin{tabular}{@{}lrrrr@{}}
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}llrrrr@{}}
     \toprule
-    & \textbf{APC 端到端} & \textbf{\fsplus{} 端到端} & \textbf{APC token} & \textbf{\fsplus{} token} \\
+    \textbf{应用} & \textbf{设置} & \textbf{对照} & \textbf{\fsplus{} / probe} & \textbf{降幅} & \textbf{精度} \\
     \midrule
-    8B GSM8K & 2.48\,s & \good{1.91\,s} & 3594 & \good{2485} \\
-    8B Game24 & 2.15\,s & \good{1.52\,s} & 2943 & \good{1750} \\
-    4B GSM8K & 1.66\,s & 1.63\,s & 3421 & 3334 \\
+    Game of 24 & Qwen3-4B，三轮 & 1.61\,s & \good{1.13\,s} & \good{$30\%$} & $6/16\to 9/16$ \\
+    Game of 24 & Qwen3-8B，三轮 & 2.15\,s & \good{1.52\,s} & \good{$29\%$} & $9/16\to 10/16$ \\
+    GSM8K & Qwen3-8B，三轮 & 2.48\,s & \good{1.91\,s} & \good{$23\%$} & $16/16\to 15/16$ \\
+    MATH-500 & $k{=}16$，probe $t_0{=}128$ & 104.1\,s & \good{72.2\,s} & \good{$31\%$} & $20/32\to 20/32$ \\
+    MATH-500 & $k{=}8$，probe $t_0{=}64$ & 52.5\,s & \good{42.0\,s} & \good{$20\%$} & $15/32\to 16/32$ \\
+    GSM8K & ESC，$k{=}16$，$\tau_{\mathrm{pre}}{=}0.45$ & 17.05\,s & \good{10.92\,s} & \good{$36\%$} & $16/16\to 16/16$ \\
+    GSM8K & ESC，$k{=}16$，$\tau_{\mathrm{pre}}{=}0.15$ & 17.05\,s & \good{14.13\,s} & \good{$17\%$} & $16/16\to 16/16$ \\
     \bottomrule
   \end{tabular}}
-  \src{同一批 \texttt{tot\_mt}。4B GSM8K 的 token 几乎没变，端到端就几乎没变。Qwen3-8B GSM8K 的 \texttt{transfer\_tokens} 是 1402。}
+  \src{前三行：\texttt{logs/tot\_mt}，2026-09-29，$n{=}16$，$k{=}4$，$\mathrm{tp}{=}2$，\fsplus{} 只 prefill $48/192$。MATH-500：full fan-out 对 probe。GSM8K 两行：\texttt{prune\_ablation\_thresh}，loop 在 kernel 前丢掉。4B GSM8K 三轮是 1.66\,s 对 1.63\,s，不到 $15\%$，不列入。}
+\end{frame}
+
+\begin{frame}{Game of 24：为什么端到端能降约 $30\%$？}
+  \why{这是 Yao 等人 ToT 的原任务。每轮先 propose 一条等式（凑 $8{\times}3$、$6{\times}4$，或把剩下两张牌收成 1），再估价，只提交一条。另外三条 thought 不 prefill。三轮 192 条 residual 里 \fsplus{} 只 prefill 48 条。}
+  {\footnotesize
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    & \textbf{APC} & \textbf{\fsplus} & \textbf{prefill} & \textbf{做对} \\
+    \midrule
+    Qwen3-4B & 1.61\,s & \good{1.13\,s} & \good{$48/192$} & \good{$6/16\to 9/16$} \\
+    Qwen3-8B & 2.15\,s & \good{1.52\,s} & \good{$48/192$} & \good{$9/16\to 10/16$} \\
+    \bottomrule
+  \end{tabular}}
+  \src{同一批 \texttt{tot\_mt}。4B 降 $30\%$，8B 降 $29\%$。\texttt{pruned\_branches}${=}144$，\texttt{prefilled\_branches}${=}48$。}
+\end{frame}
+
+\begin{frame}{GSM8K：8B 的三轮策略树为什么降 $23\%$？}
+  \why{三轮分别是起手策略、沿赢家续写、收成 \texttt{\#\#\#\#} 数字。起手包括列方程、倒推、先估算再精算。重复 loop 在 prefill 前丢掉，192 条 residual 里只 prefill 48 条，端到端从 2.48\,s 降到 1.91\,s。}
+  {\footnotesize
+  \setlength{\tabcolsep}{7pt}
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    \textbf{Qwen3-8B，GSM8K，$n{=}16$} & \textbf{APC} & \textbf{\sys} & \textbf{\fsplus} \\
+    \midrule
+    每题端到端 & 2.48\,s & 2.56\,s & \good{1.91\,s} \\
+    Expand / 题 & 597\,ms & 94\,ms & \good{58\,ms} \\
+    做对 & $16/16$ & $15/16$ & $15/16$ \\
+    \bottomrule
+  \end{tabular}}
+  \src{\texttt{logs/tot\_mt/qwen3\_8b}。降幅 $23\%$。\fsplus{} 的 \texttt{transfer\_tokens} 是 1402，prefill 仍是 $48/192$。}
+\end{frame}
+
+\begin{frame}{MATH-500：竞赛题为什么要 probe，而不是整段丢掉？}
+  \why{竞赛包的 thought 是代数化、找对称、先做小例子。Loop 分数约 $0.02$，可以在 kernel 前丢掉。Illegal text 约 $0.22$，要先 decode $t_0$ 再打分，否则对的分支一起没了。}
+  {\footnotesize
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    \textbf{Qwen3-8B，MATH-500，$n{=}32$} & \textbf{any} & \textbf{时间} & \textbf{降幅} \\
+    \midrule
+    $k{=}16$，full fan-out & $20/32$ & 104.1\,s &  \\
+    \good{$k{=}16$，probe $t_0{=}128$} & \good{$20/32$} & \good{72.2\,s} & \good{$31\%$} \\
+    $k{=}16$，一刀切丢掉 $s{<}\tau$ & \bad{$13/32$} & \bad{52.1\,s} &  \\
+    $k{=}8$，full fan-out & $15/32$ & 52.5\,s &  \\
+    \good{$k{=}8$，probe $t_0{=}64$} & \good{$16/32$} & \good{42.0\,s} & \good{$20\%$} \\
+    \bottomrule
+  \end{tabular}}
+  \src{论文 tab:grow 与 2026-10-01 的 grow shard。$k{=}16$、$t_0{=}128$ 的 decode token 从 524288 降到 393216。}
 \end{frame}
 
 \begin{frame}{剪完之后，做对的题还在吗？}
@@ -572,7 +625,7 @@
     \vspace{0.55em}
     \item \textbf{为什么默认是 $0.15$？} $k{=}16$ 上 $0.45$ 更快（ESC 10.92\,s，仍是 $16/16$），但 $k{=}4$ 和 $k{=}8$ 掉到 $14/16$。MATH-500 上一刀切是 $13/32$，$t_0{=}128$ 回到 $20/32$，104.1\,s 到 72.2\,s。
     \vspace{0.55em}
-    \item \textbf{Expand 快了，端到端为什么只降一点？} 8B GSM8K 的 expand 从 597\,ms 到 58\,ms，端到端从 2.48\,s 到 1.91\,s，因为发出 token 从 3594 降到 2485。4B GSM8K 的 token 从 3421 到 3334，端到端从 1.66\,s 到 1.63\,s。
+    \item \textbf{哪些应用的端到端降了 $15\%$ 以上？} 降的是 prefill，不是把答案提前停掉。Game of 24 上 4B $1.61\to 1.13$\,s（$30\%$），8B $2.15\to 1.52$\,s（$29\%$）。GSM8K 8B 三轮从 2.48\,s 到 1.91\,s（$23\%$），只 prefill $48/192$。MATH-500 $k{=}16$ 的 probe 从 104.1\,s 到 72.2\,s（$31\%$），$20/32$ 不变。GSM8K ESC 在 $k{=}16$ 从 17.05\,s 到 10.92\,s（$\tau_{\mathrm{pre}}{=}0.45$）和 14.13\,s（$0.15$），都是 $16/16$。
   \end{enumerate}
 \end{frame}
 

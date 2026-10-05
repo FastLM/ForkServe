@@ -489,9 +489,8 @@ def run_decoding_prune(
 def _loser_indices(fanout: int, n_drop: int) -> tuple[int, ...]:
     """Lowest draft scores, never the designated winner.
 
-    The same two hopeless thoughts (loop / illegal) are the children DPTS
-    and Speculative Rejection cut, and the ones a text draft can see
-    before any token is decoded.
+    Decoding-time pruners cut the two lowest scores (the loop, then the
+    illegal text). The prefill bar is narrower: it drops only the loop.
     """
     cfg = _cfg(app=True)
     cfg.skip_known_losers = False
@@ -516,9 +515,9 @@ def _admission_plan(
 ):
     """One session of residual admission.
 
-    ``draft`` is the text heuristic only: illegal and loop residuals never
-    start. ``app`` uses ``admit_mode`` (default ``score``); ``winner``,
-    ``top_m``, and ``alpha`` stay available.
+    ``draft`` and ``app`` both use the prefill bar: a repeated loop never
+    starts, illegal text does. ``app`` also takes ``admit_mode`` (default
+    ``score``); ``winner``, ``top_m``, and ``alpha`` stay available.
     """
     cfg = _cfg(app=True)
     if policy == "draft":
@@ -557,9 +556,8 @@ def run_prefill_on_decoding(
     the decoder's decision prefix. A child both sides keep still decodes to
     the budget: the stack does not shorten the survivor.
 
-    ``draft`` withholds only the hopeless residuals. ``app`` keeps every
-    residual whose draft score is at or above the ForkServe+ threshold.
-    Both are compared with the survivors still on the same 12 µs/token clock.
+    ``draft`` and ``app`` both withhold a repeated loop and keep illegal
+    text. Survivors still decode on the same 12 µs/token clock.
     """
     cfg = _cfg()
     if n_losers < 0 or n_losers >= fanout:

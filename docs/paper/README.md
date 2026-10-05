@@ -10,7 +10,7 @@ cd docs/paper && make new    # revised draft → main_new.pdf
 
 Produces `main.pdf` or `main_new.pdf`. The bibliography is the checked-in `*.bbl` (numeric citations). Do not run `bibtex` unless `refs.bib` is restored.
 
-`main_new.tex` is the condensed (≤12pp) revision: richer Figure 1 panel 2, a pipeline-style Figure 2 for APP+P/D, formal work/transfer spans, and the control-plane / GPU / cross-model numbers.
+`main_new.tex` is the condensed (≤12pp) revision: the three mechanisms in Figure 1, the per-residual cascade in Figure 2, the work/transfer spans, and the control-plane / GPU / cross-model numbers.
 
 ## Structure
 
@@ -20,5 +20,5 @@ Produces `main.pdf` or `main_new.pdf`. The bibliography is the checked-in `*.bbl
 4. Evaluation — Qwen3-14B GSM8K forest; control-plane APC / hash prefill / disagg / cascade
 5. Related work and conclusion
 
-GPU numbers are the A100 forests: Qwen3-14B GSM8K (peak KV, accuracy, fan-out) and Qwen3-8B ForkServe+ (APP knobs plus decode-stop).
-Control-plane APP fan-out and transfer numbers are setting L of `docs/exp_report/report_en.tex`.
+GPU numbers are the A100 forests: Qwen3-14B GSM8K (peak KV, accuracy, fan-out) and Qwen3-8B with the prefill threshold in front of ESC, Speculative Rejection, and DPTS. Decode length is a separate answer-stop, not part of the cascade.
+Control-plane fan-out and transfer numbers are setting L of `docs/exp_report/report_en.tex`. The in-repo cost model (`experiments/prefill_prune_bench.py`) now drops only the repeated loop, so its percentages are not the blanket-skip rows in that report.

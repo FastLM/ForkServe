@@ -6,12 +6,13 @@ problem. Every turn fans out k=4 residuals on a growing winner spine:
 * ``apc`` — hash after tokens exist. Turn t pays k × spine unless the
   spine was published last turn; residuals always miss.
 * ``forkserve`` — CoW alias; every residual prefills; losers abort.
-* ``app`` — CoW + draft prune (keep winner + 1) + slack-fill the next
-  winner thought into the budget the losers just freed.
+* ``app`` — same alias, then one action per residual: the repeated loop
+  is not prefilled, illegal text is. Slack fill publishes the next
+  known suffix into the budget that loop just freed.
 
 The gap widens with depth: APC's live KV is k × spine, ForkServe's is
-spine + residuals, APP skips the hopeless siblings and hits the next
-turn's known suffix.
+the spine plus every residual, and the cascade drops only the loop
+before it pins the next turn's known suffix.
 """
 
 from __future__ import annotations
