@@ -105,17 +105,31 @@
   \titlepage
   \vspace{1.1em}
   \begin{columns}[T]
-    \begin{column}{0.32\textwidth}
-      \textbf{\color{fsblue}问题 1}\\[0.25em]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{fsblue}问题 1}\\[0.2em]
       {\small Decode-time pruning 为什么省不了 prefill？}
     \end{column}
-    \begin{column}{0.32\textwidth}
-      \textbf{\color{fsblue}问题 2}\\[0.25em]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{fsblue}问题 2}\\[0.2em]
+      {\small 为什么 prefill 和 decode 不能共用一条 threshold？}
+    \end{column}
+  \end{columns}
+  \vspace{0.45em}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{fsblue}问题 3}\\[0.2em]
       {\small 为什么默认阈值是 $0.15$，不是 $0.45$？}
     \end{column}
-    \begin{column}{0.32\textwidth}
-      \textbf{\color{fsblue}问题 3}\\[0.25em]
+    \begin{column}{0.48\textwidth}
+      \textbf{\color{fsblue}问题 4}\\[0.2em]
       {\small 哪些 ToT 应用的端到端降了 $15\%$ 以上？}
+    \end{column}
+  \end{columns}
+  \vspace{0.45em}
+  \begin{columns}[T]
+    \begin{column}{0.96\textwidth}
+      \textbf{\color{fsblue}问题 5}\\[0.2em]
+      {\small 只 decoding、只 pruning、两者一起，差在哪？}
     \end{column}
   \end{columns}
 \end{frame}
@@ -431,6 +445,89 @@
   \src{同一 JSON。$k{=}8$ 上 SR 和 DPTS 单独跑是 $15/16$，加上 $0.15$ 后是 $16/16$。ESC 的 decode token 从 131072 降到 98304。}
 \end{frame}
 
+\begin{frame}{只 decoding、只 pruning、两者一起，差在哪？}
+  \why{只换 decoding 算法，prefill 不动，都是 5008：ESC 的窗口关不上，SR 在 256 token 停 8 条，DPTS 在 100 token 停 8 条。只 pruning 用 ESC 当 host，因为它的 decode 切点是空的，留下的人仍跑到预算。$\tau_{\mathrm{pre}}{=}0.45$ 叠上去以后，decoder 要停的人已经没进 kernel，三种算法的 decode 都收到 65536。每一行都是 $16/16$。}
+  {\footnotesize
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{$k{=}16$} & \textbf{admit} & \textbf{prefill} & \textbf{decode} & \textbf{e2e} \\
+    \midrule
+    只 decoding，ESC & 16 & \bad{5008} & 131072 & 17.05\,s \\
+    只 decoding，SR & 16 & \bad{5008} & 98304 & 13.14\,s \\
+    只 decoding，DPTS & 16 & \bad{5008} & 78336 & 11.86\,s \\
+    \midrule
+    只 pruning，$\tau_{\mathrm{pre}}{=}0.15$ & 12 & \good{3848} & 98304 & 14.13\,s \\
+    只 pruning，$\tau_{\mathrm{pre}}{=}0.45$ & 8 & \good{2768} & 65536 & \good{10.92\,s} \\
+    \midrule
+    SR $+$ $0.15$ & 12 & \good{3848} & 81920 & 12.47\,s \\
+    DPTS $+$ $0.15$ & 12 & \good{3848} & 71936 & 11.49\,s \\
+    三种 host $+$ $0.45$ & 8 & \good{2768} & 65536 & \good{10.80--10.92\,s} \\
+    \bottomrule
+  \end{tabular}}
+  \src{只 pruning 的 host 是 ESC：\texttt{dropped\_at\_cut}${}=0$，step 仍是 512。SR$+0.15$ 在 admission 之后再停 4 条；DPTS$+0.15$ 再停 4 条。$+0.45$ 的 decode 侧 drop 是 0。\texttt{prune\_ablation\_thresh}，Qwen3-8B，GSM8K，$n{=}16$，$D{=}512$。}
+\end{frame}
+
+\begin{frame}{三轮 ToT 上，这两刀各接在哪一行？}
+  \why{Game of 24 和 GSM8K 没有跑 ESC、SR、DPTS。Thought 在 kernel 之前就写好。Pruning 是 \texttt{queue\_fanout\_prefills}：没留下的 residual 不 \texttt{queue}。Decoding 是之后的 \texttt{generate\_nodes}，只发给已经 live 的孩子，步长 32；最后一轮改在 spine 上生成答案。这批 ForkServe+ 是只 pruning，192 条里 48 条进 kernel。}
+  {\scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}lp{0.28\textwidth}p{0.52\textwidth}@{}}
+    \toprule
+    & \textbf{调用} & \textbf{这一轮的 thought} \\
+    \midrule
+    第 0 轮 & \texttt{tot\_turn\_thoughts} &
+    Game24：凑成 24 的一对、拆 $8{\times}3$ 或 $6{\times}4$、试 $(a{\times}b){-}(c{-}d)$、最大的数当乘数，每条以 \texttt{Equation:} 结尾。GSM8K：列方程、倒推、按顺序命名中间量、先列表再运算。 \\
+    \addlinespace
+    第 1 轮 & 同上，接在赢家 spine &
+    Game24：用剩下两张牌、把乘积倒过来、加括号、换乘数。GSM8K：检查上一步、换恒等式、从已知重推、丢掉死路。 \\
+    \addlinespace
+    第 2 轮 & 不跑 step $=32$ &
+    Game24：写出用全四张牌的等式。GSM8K：把剩余代数收成最后一行的数字。然后 \texttt{generate\_many} 只在已提交的 spine 上出答案。 \\
+    \bottomrule
+  \end{tabular}}
+  \vspace{0.15em}
+  {\footnotesize
+  \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{Qwen3-8B，$n{=}16$} & \textbf{prefill 条} & \textbf{Game24} & \textbf{GSM8K} & \textbf{decode token} \\
+    \midrule
+    APC & 算完才共享 & 2.15\,s & 2.48\,s & 2943 / 3594 \\
+    ForkServe & \bad{192} & 2.15\,s & 2.56\,s & 2853 / 3652 \\
+    \fsplus & \good{48} & \good{1.52\,s} & \good{1.91\,s} & \good{1750 / 2485} \\
+    \bottomrule
+  \end{tabular}}
+  \src{Decode token 是 16 题合计，斜线左边 Game24、右边 GSM8K。四条策略句分数都 $\ge 0.15$（GSM8K 第一条含 unknown，记 $0.22$）。日志 \texttt{pruned}${=}144$、\texttt{early\_aborts}${=}0$，所以 $48/192$ 是只 queue index 0。\texttt{run\_tot\_mt\_forest\_forkserve}。}
+\end{frame}
+
+\begin{frame}{为什么 prefill 和 decode 不能共用一条 threshold？}
+  \why{两条分数不在同一个缝里。Residual 上 loop 是 $0.02$、illegal 是 $0.22$，所以 $\tau_{\mathrm{pre}}{=}0.15$ 只丢 loop。生成前缀上，仍是 illegal 的文本是 $0.16$，写出 \texttt{\#\#\#\#} 或 \texttt{\textbackslash boxed} 是 $0.92$，所以续写线是 $0.45$。把 $0.45$ 用到 prefill 上，会把 $0.22$ 的 illegal 挡在 kernel 前；把 $0.15$ 用到前缀上，$0.16$ 仍然过线，probe 会续满预算。}
+  {\footnotesize
+  \setlength{\tabcolsep}{7pt}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    & \textbf{loop} & \textbf{illegal} & \textbf{活的文本} \\
+    \midrule
+    prefill 分，residual & $0.02$ & $0.22$ & $1.00$ \\
+    decode 分，生成前缀 & $0.04$ & $0.16$ & $0.92$ \\
+    \bottomrule
+  \end{tabular}}
+  \vspace{0.45em}
+  {\footnotesize
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    \textbf{MATH-500，$k{=}16$，$D{=}1024$} & \textbf{any} & \textbf{时间} \\
+    \midrule
+    full fan-out & $20/32$ & 104.1\,s \\
+    一条 $0.45$，低分不 prefill & \bad{$13/32$} & 52.1\,s \\
+    \good{两层：$\tau_{\mathrm{pre}}{=}0.15$ 只丢 loop，前缀 $\ge 0.45$ 才续} & \good{$20/32$} & \good{72.2\,s} \\
+    \bottomrule
+  \end{tabular}}
+  \src{分数：\texttt{PrefillScorer.score\_text}、\texttt{DecodeScorer.score\_prefix}。表：Qwen3-8B，$n{=}32$，$D{=}1024$。full 与一条 $0.45$ 是 \texttt{logs/prune\_ablation\_scale} 的 \texttt{k16/full}、\texttt{k16/prefill-all-dead}。两层是 \texttt{logs/prune\_ablation\_grow} 的 \texttt{k16/grow@128}，128 条 illegal 全部续写。Loop 也拿 probe 时是 256 次里续写 128 次，$20/32$，74.4\,s。没有单独扫 decode threshold 的 GPU run。}
+\end{frame}
+
 \begin{frame}{为什么默认是 $0.15$，不是更快的 $0.45$？}
   \why{$0.45$ 把分数约 $0.22$ 的 illegal text 和 loop 一起丢掉。$k{=}16$ 上还 admit 8 条，精度守住；$k{=}4$ 和 $k{=}8$ 上不够。}
   {\footnotesize
@@ -620,13 +717,17 @@
   \src{论文测到的 peak 与并发扫描。}
 \end{frame}
 
-\begin{frame}{三个问题，各用一组数回答}
+\begin{frame}{五个问题，各用一组数回答}
   \begin{enumerate}
-    \item \textbf{为什么三篇的 prefill 一样？} 分数来自已经 resident 的 token。$k{=}16$ 时 ESC、Speculative Rejection、DPTS 的 prefill 都是 5008。加上 $\tau_{\mathrm{pre}}{=}0.15$ 后是 3848，ESC 从 17.05\,s 到 14.13\,s，仍是 $16/16$。
-    \vspace{0.55em}
-    \item \textbf{为什么默认是 $0.15$？} $k{=}16$ 上 $0.45$ 更快（ESC 10.92\,s，仍是 $16/16$），但 $k{=}4$ 和 $k{=}8$ 掉到 $14/16$。MATH-500 上一刀切是 $13/32$，$t_0{=}128$ 回到 $20/32$，104.1\,s 到 72.2\,s。
-    \vspace{0.55em}
-    \item \textbf{哪些应用的端到端降了 $15\%$ 以上？} 降的是 prefill，不是把答案提前停掉。Game of 24 上 4B $1.61\to 1.13$\,s（$30\%$），8B $2.15\to 1.52$\,s（$29\%$）。GSM8K 8B 三轮从 2.48\,s 到 1.91\,s（$23\%$），只 prefill $48/192$。MATH-500 $k{=}16$ 的 probe 从 104.1\,s 到 72.2\,s（$31\%$），$20/32$ 不变。GSM8K ESC 在 $k{=}16$ 从 17.05\,s 到 10.92\,s（$\tau_{\mathrm{pre}}{=}0.45$）和 14.13\,s（$0.15$），都是 $16/16$。
+    \item \textbf{为什么三篇的 prefill 一样？} 分数来自已经 resident 的 token。$k{=}16$ 时 ESC、SR、DPTS 的 prefill 都是 5008。加上 $\tau_{\mathrm{pre}}{=}0.15$ 后是 3848，ESC 从 17.05\,s 到 14.13\,s，仍是 $16/16$。
+    \vspace{0.18em}
+    \item \textbf{为什么不能共用一条 threshold？} Residual 上 illegal 是 $0.22$，生成前缀上仍是 illegal 是 $0.16$。MATH-500 $k{=}16$ 把 $0.45$ 用到 prefill 上是 $13/32$、$52.1$\,s；两层回到 $20/32$、$72.2$\,s。Full fan-out 是 $20/32$、$104.1$\,s。
+    \vspace{0.18em}
+    \item \textbf{为什么默认是 $0.15$？} $k{=}16$ 上 $0.45$ 更快（ESC 10.92\,s，仍是 $16/16$），但 $k{=}4$ 和 $k{=}8$ 掉到 $14/16$。
+    \vspace{0.18em}
+    \item \textbf{哪些应用降了 $15\%$ 以上？} Game of 24 上 4B $1.61\to 1.13$\,s，8B $2.15\to 1.52$\,s。GSM8K 8B 三轮 $2.48\to 1.91$\,s，只 prefill $48/192$。MATH-500 $k{=}16$ 的 probe $104.1\to 72.2$\,s，$20/32$ 不变。
+    \vspace{0.18em}
+    \item \textbf{只 decoding、只 pruning、两者一起？} 只换算法时 prefill 仍是 5008：ESC 17.05\,s，SR 13.14\,s，DPTS 11.86\,s。只 pruning（ESC，$\tau{=}0.15$）是 14.13\,s。DPTS$+0.15$ 是 11.49\,s。三轮 ToT 没接这三种算法：先 \texttt{queue\_fanout\_prefills}，live 孩子再 decode 32 token，只 prefill $48/192$。
   \end{enumerate}
 \end{frame}
 
