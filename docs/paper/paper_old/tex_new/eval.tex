@@ -3,8 +3,8 @@
 
 The GPU measurements share one node and one engine, and they differ by model, tensor-parallel width, and workload.
 \S\ref{sec:eval-gpu} is the full GSM8K forest on Qwen3-14B at $\mathrm{tp}{=}2$.
-\S\ref{sec:eval-app} is the earlier blanket-skip cost model of \app, with no GPU, against APC, hash prefill, baseline prefill--decode disaggregation, \sys, and three decoding-time pruners; \S\ref{sec:eval-grow} replaces that skip.
-\S\ref{sec:eval-prefill} measures the GSM8K prefill threshold $\tau_{\mathrm{pre}}{=}0.15$ on Qwen3-8B and the accuracy--latency trade-off when that rule sits in front of ESC, Speculative Rejection, and DPTS.
+\S\ref{sec:eval-app} is the earlier blanket-skip cost model of \app, with no GPU, against APC, hash prefill, baseline prefill--decode disaggregation, \sys, and three decoding-time pruners; \S\ref{sec:eval-grow} supersedes that predicate.
+\S\ref{sec:eval-prefill} measures the GSM8K prefill threshold $\tau_{\mathrm{pre}}{=}0.15$ on Qwen3-8B and the accuracy--latency trade-off when that threshold precedes ESC, Speculative Rejection, and DPTS.
 \S\ref{sec:eval-plus} runs ForkServe+ on Qwen3-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
 \S\ref{sec:eval-mt} is a three-turn Tree-of-Thoughts on Qwen3-4B and Qwen3-8B, one problem per generate.
 \S\ref{sec:eval-multi} repeats the forest on six families at $n{=}40$.
@@ -67,7 +67,8 @@ The peak is unchanged when the tensor width doubles; it follows the committed pa
 \label{sec:eval-app}
 
 \paragraph{Setup.}
-This subsection is the earlier blanket-skip cost model, not the GPU rule of \S\ref{sec:eval-grow,sec:eval-prefill}.
+This subsection reports the earlier blanket-skip cost model.
+The GPU admission rule is \S\ref{sec:eval-grow,sec:eval-prefill}.
 Control plane, no GPU.
 Ten sessions, $k{=}4$, $L{=}256$, $\ell{=}32$.
 Two of four residuals fail the draft score and are withheld before prefill; the winner is index $0$.
@@ -107,7 +108,7 @@ Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
 \end{table}
 
 \paragraph{Fan-out.}
-\Cref{tab:app} is the comparison the GPU gap motivates.
+\Cref{tab:app} is the comparison motivated by the GPU latency gap.
 % and \Cref{fig:eval-stack} shows occupancy over the expand--abort--decode phase.
 On the first expand, hash prefill matches APC: the blocks are unpublished, so the hash probe does not remove the cloned trunks.
 Baseline disaggregation exceeds APC ($162$ vs.\ $139$\,ms) because it transfers that clone.
@@ -123,10 +124,10 @@ Speculative Rejection is charged its partial-reward horizon $\tau{=}256$ and the
 DPTS early-stops after its $100$-token mini-step.
 The two low-score children are the ones removed, and the winner is kept.
 Decoded tokens use the same $12\,\mu\mathrm{s}/\mathrm{token}$ clock.
-DPTS is the earliest cut of the three and still decodes $4000$ tokens before the drop, $2000$ of them on losers, reaching the cut at $78.7$\,ms.
-\app has already withheld those residuals: $0$ tokens on losers and $T_{\mathrm{fan}}{=}31.4$\,ms.
-That row is the blanket skip.
-\S\ref{sec:eval-grow} replaces it: only a repeated loop is withheld before prefill.
+DPTS is the earliest of the three and still decodes $4000$ tokens before the drop, $2000$ of them on the rejected children, reaching the cut at $78.7$\,ms.
+Under this cost model \app has already withheld those residuals: $0$ tokens on rejected children and $T_{\mathrm{fan}}{=}31.4$\,ms.
+That row is the blanket skip of \eqref{eq:drej}.
+\S\ref{sec:eval-grow} supersedes it: only a repeated loop is withheld before prefill.
 
 \begin{table}[t]
 \centering
@@ -169,15 +170,15 @@ Percentages are the share of the stacked live tokens.}
 \end{figure*}
 \fi
 
-\paragraph{Probe-then-grow.}
+\paragraph{Probe admission.}
 \label{sec:eval-grow}
-The blanket skip is the wrong cut once the residual is not a loop.
-We measure the rule in \Cref{alg:app} on Qwen3-8B, one GPU each, four A100-40GB, $\mathrm{tp}{=}1$.
+\eqref{eq:drej} is inadmissible once the residual is not a loop.
+We measure \Cref{alg:app} on Qwen3-8B, one GPU each, four A100-40GB, $\mathrm{tp}{=}1$.
 The slice is the first $32$ MATH-500 problems at level $4$ or $5$.
 Temperature is $0$, EOS is ignored, prefix caching is on, and the decode budget is $D{=}1024$.
 Half of the $k$ residuals are contest strategies.
 The other half alternates a repeated loop with illegal text.
-A question counts when some branch that ran all $1024$ tokens matches the gold answer.
+A problem counts when some branch that ran all $1024$ tokens matches the reference answer.
 The winner is residual $0$.
 
 \begin{table}[t]
@@ -250,13 +251,13 @@ ESC & $16/16$, $8.65$ & $16/16$, $10.84$ & $16/16$, $17.05$ \\
 \end{tabular}
 \end{table}
 
-\Cref{tab:prefill-bar} is the trade-off.
-$\tau_{\mathrm{pre}}{=}0.15$ keeps $15/16$, $16/16$, $16/16$ and still cuts wall-clock time, more as the tree widens ($-5\%$, $-6\%$, $-17\%$).
+\Cref{tab:prefill-bar} is the accuracy--latency trade-off.
+$\tau_{\mathrm{pre}}{=}0.15$ attains $15/16$, $16/16$, $16/16$ and reduces wall-clock time as the tree widens ($-5\%$, $-6\%$, $-17\%$).
 Computed prefill tokens fall from $1320/2624/5008$ to $1018/2020/3848$.
-Raising $\tau_{\mathrm{pre}}$ to $0.45$ is the extra-speed point: $-9\%$, $-21\%$, $-36\%$ end-to-end, and $732/1448/2768$ computed prefill tokens.
-It drops two questions at $k{=}4$ and $k{=}8$.
-At $k{=}16$ both thresholds stay at $16/16$, so $0.45$ is the faster matched-accuracy setting ($10.93$\,s vs.\ $14.14$\,s).
-The default is $0.15$ because it holds accuracy at every $k$.
+Raising $\tau_{\mathrm{pre}}$ to $0.45$ reduces end-to-end time by $-9\%$, $-21\%$, $-36\%$, with $732/1448/2768$ computed prefill tokens.
+Accuracy falls by two problems at $k{=}4$ and $k{=}8$.
+At $k{=}16$ both thresholds remain at $16/16$, so $0.45$ is the faster matched-accuracy setting ($10.93$\,s vs.\ $14.14$\,s).
+The default is $0.15$ because accuracy holds at every $k$.
 
 \begin{table}[t]
 \centering
@@ -419,7 +420,7 @@ ForkServe+ is faster because it prefills one of four residuals.}
 \label{fig:eval-mt}
 \end{figure}
 
-\paragraph{Depth keeps one spine.}
+\paragraph{Occupancy across turns.}
 \Cref{tab:mt,fig:eval-mt} are GSM8K and Game24 under that schedule.
 Peak KV is $275$ against APC $318$ on GSM8K ($0.86\times$) and $216$ against $265$ on Game24 ($0.82\times$), on both models.
 \sys stays within $6\%$ of APC end-to-end ($1.00$--$1.06\times$).

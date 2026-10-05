@@ -9,8 +9,8 @@ Prefill--decode disaggregation isolates \ttft{} from inter-token latency; it doe
 
 \paragraph{Program- and SLO-aware scheduling.}
 Autellix~\cite{autellix} schedules by program-level attained service; JITServe~\cite{jitserve} allocates just-enough bandwidth under heterogeneous SLOs.
-Hermes~\cite{hermes}, ThunderAgent~\cite{thunderagent}, and SAGA~\cite{saga} raise the atom to the program or workflow.
-These systems leave KV unforked and unissued children unprefilled.
+Hermes~\cite{hermes}, ThunderAgent~\cite{thunderagent}, and SAGA~\cite{saga} raise the scheduling unit to the program or workflow.
+These systems leave KV unshared across children and leave unissued children unprefilled.
 
 \paragraph{KV retention and overlap.}
 InferCept~\cite{infercept}, Continuum~\cite{continuum}, MORI~\cite{mori}, and ConServe~\cite{conserve} keep the \emph{current} context alive or placed.
@@ -28,5 +28,5 @@ Speculative Rejection~\cite{specrej} ranks partial generations and halts the low
 Dynamic Parallel Tree Search (DPTS)~\cite{dpts} generates a fixed mini-step on every active node, then early-stops low-confidence children.
 In each method the score is computed from tokens already resident in the KV cache, so the prefill of the candidate and a decode prefix are issued before the drop.
 \app scores a known residual first.
-A repeated loop is withheld before prefill, which also keeps that child off the disaggregated connector; any other low-score residual is probed and extended only when the generated prefix clears the threshold (\S\ref{sec:eval-app}).
-The same $\tau_{\mathrm{pre}}$ sits in front of ESC, Speculative Rejection, or DPTS (\S\ref{sec:eval-prefill}).
+A repeated loop is withheld before prefill and therefore stays off the disaggregated connector; any other low-score residual is probed and extended only when the generated prefix clears the threshold (\S\ref{sec:eval-app}).
+The same $\tau_{\mathrm{pre}}$ precedes ESC, Speculative Rejection, or DPTS (\S\ref{sec:eval-prefill}).

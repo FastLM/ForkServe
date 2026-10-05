@@ -1,8 +1,8 @@
 \section{Design}
 \label{sec:design}
 
-\sys is placed between the agent runtime and the LLM engine (\Cref{fig:system}).
-The harness announces structure; the control plane admits, prunes, binds, and retains; the backend moves pages and tokens.
+\sys lies between the agent runtime and the LLM engine (\Cref{fig:system}).
+The harness exposes branch structure; the control plane admits, prunes, binds, and retains; the backend moves pages and tokens.
 
 \subsection{API}
 \label{sec:overview}
@@ -20,9 +20,9 @@ The harness announces structure; the control plane admits, prunes, binds, and re
 \bottomrule
 \end{tabular}
 \end{center}
-\texttt{commit} is the only verb on the critical path of user-visible tokens.
+\texttt{commit} is the only operator on the critical path of user-visible tokens.
 
-\subsection{Forkable Branch State}
+\subsection{Copy-on-Write Context Tree}
 \label{sec:state}
 
 \begin{definition}[Context tree]
@@ -54,7 +54,7 @@ LCP commit publishes $x_\star$ into $H$~\textcircled{4}\textcircled{6}.
 \label{sec:speculate}
 A candidate of parent $u$ is a pair $(x^{\mathrm{k}},\hat{x}^{\mathrm{o}})$ with admit probability $p$ and prefix-hit rate $q$.
 Known suffixes ($p{=}q{=}1$) precede observation residuals ($q{<}1$), subject to $\Idle(u)$, residual HBM, and branch cap $m$.
-The object is an input prefix, not a draft output token~\cite{speculative,medusa}.
+Admission stores a future prompt prefix rather than draft output tokens~\cite{speculative,medusa}.
 
 \paragraph{LCP commit.}
 On prompt $x$ at $u$,
@@ -70,15 +70,15 @@ Committed decode attends only $\mathrm{KV}(x_{v^\star})$, so the emitted tokens 
 \subsection{Cost-Ordered Prefill Pruning and Transfer Gating}
 \label{sec:app}
 
-Copy-on-write fixes trunk placement.
-It does not decide which residual enters a GPU kernel, nor which KV crosses the prefill--decode connector.
+Copy-on-write determines trunk placement.
+Per-residual admission determines which residual enters a GPU kernel and which KV crosses the prefill--decode connector.
 \app makes both decisions per residual, $(\Work_i,\Xfer_i)$, by a cascade whose stage cost is strictly increasing (\Cref{fig:app}).
 The stages are a block-hash probe, a CPU draft score, a prefix of the prefill kernel, the miss-tail prefill, and a connector \texttt{insert}.
 Stage $i{+}1$ runs only when stage $i$ does not reject $\rho_i$.
 The committed winner is exempt: index $0$ is forced into $\Keep$, and speculative pages stay unpublished until \eqref{eq:lcp}.
-CoW remains the storage substrate; \app is the filter on compute and on transfer.
-On the Qwen3-14B GSM8K forest, copy-on-write already stores less KV than APC, yet median fan-out is $140$\,ms against APC's $87$\,ms: the $k$ residuals are still submitted to prefill.
-The cascade is the stage that removes that work.
+CoW remains the storage substrate; \app filters compute and transfer.
+On the Qwen3-14B GSM8K forest, copy-on-write stores less KV than APC, yet median fan-out is $140$\,ms against APC's $87$\,ms: the $k$ residuals are still submitted to prefill.
+The cascade removes that prefill.
 
 \begin{figure*}[t]
 \centering
@@ -153,11 +153,11 @@ d_i^{\times}=D\cdot[i=0\lor s_i\ge\tau].
 \Cref{tab:span} is the resulting first-expand span.
 
 \begin{algorithm}[t]
-\caption{Corrected admission, replacing \eqref{eq:drej}.
+\caption{Probe admission, replacing \eqref{eq:drej}.
 $\Lambda$ is the repeated-loop set.
 $y_i$ is a probe of $t_0$ tokens and $s'_i$ is its draft score.
 Iverson brackets select the decode length.
-Only $\Lambda$ keeps the old skip.}
+$\mathrm{DS}$ applies only to $\Lambda$.}
 \label{alg:app}
 \small
 \begin{algorithmic}[1]
@@ -167,7 +167,7 @@ Only $\Lambda$ keeps the old skip.}
 \FOR{$i=0$ \TO $k-1$}
   \STATE $s_i\leftarrow\mathrm{DraftScore}(\rho_i)$
   \IF{$i\in\Lambda$}
-    \STATE $(a_i,d_i)\leftarrow(\mathrm{DS},\,0)$ \COMMENT{was $d_i^{\times}=0$ for all $s_i<\tau$}
+    \STATE $(a_i,d_i)\leftarrow(\mathrm{DS},\,0)$ \COMMENT{\eqref{eq:drej} set $d_i^{\times}{=}0$ for all $s_i{<}\tau$}
   \ELSIF{$i=0 \lor s_i\ge\tau$}
     \STATE $(a_i,d_i)\leftarrow(\mathrm{PF},\,D)$
   \ELSE
@@ -231,15 +231,15 @@ A hash-local hit is already APC-visible on the decoder, hence $\Xfer_i{=}0$.
 On a miss, $\mathrm{DS}$ is only $i{\in}\Lambda$.
 Every other $s_i{<}\tau$ is prefilled, decoded for $t_0$ tokens, and extended iff $s'_i{\ge}\tau$ (\Cref{alg:app}); that probe is not the $\mathrm{EA}$ edge.
 Default $\tau_{\mathrm{pre}}{=}0.15$; MATH-500 uses $\tau{=}0.45$ and $t_0{\in}\{64,128\}$.
-Baseline disaggregation ships \eqref{eq:xfer-stock}.
-\app ships \eqref{eq:xfer}.
+Baseline disaggregation transfers \eqref{eq:xfer-stock}.
+\app transfers \eqref{eq:xfer}.
 \begin{equation}
 \label{eq:tfan}
 T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}}.
 \end{equation}
 $T_{\mathrm{CoW}}$ is a pointer swap.
-The blanket-skip model of \S\ref{sec:eval-app} gives $139$\,ms (APC), $162$\,ms (baseline disaggregation), $47$\,ms (copy-on-write), and $31.4$\,ms.
-The GPU rule withholds only the loop and cuts computed prefill by $23\%$ (\S\ref{sec:eval-prefill}).
+The blanket-skip model of \S\ref{sec:eval-app} evaluates to $139$\,ms (APC), $162$\,ms (baseline disaggregation), $47$\,ms (copy-on-write), and $31.4$\,ms.
+Under the GPU admission rule only the loop is withheld, and computed prefill falls by $23\%$ (\S\ref{sec:eval-prefill}).
 
 \iffalse
 \paragraph{Orthogonal decode-length stop.}
@@ -251,14 +251,14 @@ If item $j$ hits a marker at $t_j$, emitted tokens are $D^{+}=\sum_j\min(t_j,D)\
 The stop ends a finished answer; it does not draft output tokens, and it does not change which residual was admitted.
 \fi
 
-\subsection{The Spine on the Critical Path}
+\subsection{Critical-Path Placement}
 \label{sec:schedule}
-After \app, fan-out is the prefill of the kept residual.
-End-to-end time is still $T_{\mathrm{fan}}+T_{\mathrm{dec}}$, and $T_{\mathrm{dec}}$ is the long term.
+After \app, fan-out is the prefill of the retained residual.
+End-to-end time remains $T_{\mathrm{fan}}+T_{\mathrm{dec}}$, and $T_{\mathrm{dec}}$ dominates.
 Three placements put the spine on that sum.
-A fixed chunk width and a fan-out barrier leave the freed KV and the pruned queue off the path.
+A fixed chunk width and a fan-out barrier leave the freed KV and the pruned queue off that path.
 
-\paragraph{Slots follow the spine.}
+\paragraph{Decode slots.}
 Let $H$ be the KV pool after weights.
 A live tree occupies $M_{\mathrm{spine}}=b(L+\ell_\star)$.
 APC still holds the aborted residuals until they expire, so its live set is the larger $M_{\mathrm{APC}}$.
@@ -268,34 +268,34 @@ The number of concurrent decode slots is
 C=\bigl\lfloor H/M\bigr\rfloor,
 \end{equation}
 with $M=M_{\mathrm{spine}}$ for \sys and $M=M_{\mathrm{APC}}$ for the prefix cache.
-$C$ is not a constant chunk size.
+$C$ scales with $1/M$.
 A request that finishes its current decode step releases the slot, and the next queued spine takes it.
 Throughput is
 \begin{equation}
 \label{eq:theta}
 \Theta\;\propto\; C/T_{\mathrm{e2e}}.
 \end{equation}
-The same $H$ therefore admits more sessions once occupancy is the spine, and the wall clock of a batch is the number of waves $n/C$, not $n$ divided by a fixed width.
+The same pool therefore admits more sessions once occupancy is the spine, and the wall-clock of a batch is the number of waves $n/C$.
 
-\paragraph{Prefill the next winner during decode.}
+\paragraph{Overlap with decode.}
 Each tick $t$ has a token budget $B_t$ from the chunked-prefill cap~\cite{sarathi}.
-JITServe's margin~\cite{jitserve} gives each committed request $r$ a minimum token rate $\underline{s}_r$.
+JITServe's margin~\cite{jitserve} assigns each committed request $r$ a minimum token rate $\underline{s}_r$.
 \begin{align}
 B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t}\max(\underline{s}_r\Delta,\;1)\Bigr), \label{eq:bc}\\
 B^{\mathrm{s}}_t &= B_t-B^{\mathrm{c}}_t. \label{eq:bs}
 \end{align}
 $B^{\mathrm{c}}_t$ is committed decode.
-$B^{\mathrm{s}}_t$ is not spent on the $k{-}1$ residuals \app already rejected.
-It prefills the miss tail of the next winner, in the same step as the running decode.
+$B^{\mathrm{s}}_t$ is not applied to residuals already rejected by \app.
+It prefills the miss tail of the next winner in the same step as the running decode.
 If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted.
-The fan-out of losers is not a generate that must finish before any decode token.
+Rejected residuals are not a barrier preceding the first decode token.
 A tree-sticky router pins the trunk to the worker that prefills the root; only residual work may migrate.
 
-\paragraph{Hide the known suffix in the tool pause.}
-A candidate with $p{=}1$ is an exact wrapper, not a guess.
-If $\Pref(|w|)\le\Idle(u)$, that prefill runs while the tool is in flight, including when the parent is still marked committed.
-The pause is the deadline.
-A suffix that would finish after $\Idle(u)$ is rejected, as is any observation residual the pause cannot cover.
+\paragraph{Known-suffix prefill.}
+A candidate with $p{=}1$ is an exact suffix.
+If $\Pref(|w|)\le\Idle(u)$, that prefill runs during the tool interval, including while the parent remains committed.
+$\Idle(u)$ is the deadline.
+A suffix that would finish after $\Idle(u)$ is rejected, as is any observation residual the interval cannot cover.
 When the observation arrives, LCP commit checks the pinned prefix and the committed prefill is the unmatched tail.
 Under P/D the same suffix is prefiller work tagged $\texttt{soft-deadline}=\Idle(u)$ and is inserted once, onto the trunk owner.
-Speculative tokens still do not enter the sampler, as under \eqref{eq:lcp}.
+Speculative tokens remain outside the sampler, as under \eqref{eq:lcp}.

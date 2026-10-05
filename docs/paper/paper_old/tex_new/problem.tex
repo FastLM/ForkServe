@@ -5,16 +5,16 @@
 Autoregressive inference has two mechanically different phases~\cite{orca,distserve,splitwise}.
 \emph{Prefill} consumes the prompt in parallel and is compute-bound; \emph{decode} emits one token (or a small chunk) per step and is memory-bandwidth bound.
 PagedAttention~\cite{vllm} stores KV in non-contiguous pages; RadixAttention~\cite{sglang} indexes pages by token prefix so concurrent requests that share a system prompt hit a common trunk.
-Two consequences matter for agents.
+Two consequences follow for agent workloads.
 First, next-turn \ttft{} is the prefill of tokens that miss the cache, plus queuing.
-Second, a memory-bound decode batch rarely saturates the tensor cores that a concurrent chunked prefill could use~\cite{sarathi}.
-Agent serving adds a third fact: the prompt of turn $i{+}1$ is a \emph{delta} on turn $i$, applied after a tool pause of highly variable length~\cite{continuum,mori}.
+Second, a memory-bound decode batch rarely saturates the tensor cores that a concurrent chunked prefill can use~\cite{sarathi}.
+For agents, the prompt of turn $i{+}1$ is a delta on turn $i$, applied after a tool interval of highly variable length~\cite{continuum,mori}.
 
 \subsection{Traditional Methods on a Fan-out}
 \label{sec:traditional}
-We use \emph{traditional methods} for the mechanisms a production stack already applies to one fan-out: prefix caching, hash-indexed prefill, prefill--decode disaggregation, and decode-time pruning.
-They share the trunk or they drop a child, and they do so at a stage that is fixed in advance.
-\Cref{tab:trad} is that stage.
+We group under \emph{traditional methods} the mechanisms a production stack already applies to one fan-out: prefix caching, hash-indexed prefill, prefill--decode disaggregation, and decode-time pruning.
+Each either shares the trunk or rejects a child, and the stage of that operation is fixed.
+\Cref{tab:trad} records the stage.
 
 \begin{table*}[t]
 \centering
@@ -39,7 +39,7 @@ ESC, Speculative Rejection, DPTS & every residual & after a generated prefix & K
 \end{table*}
 
 \paragraph{First-expand cost.}
-APC indexes a full block by $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ after those tokens exist~\cite{vllm}; RadixAttention walks the same prefix~\cite{sglang}.
+APC indexes a full block by $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ after those tokens exist~\cite{vllm}; RadixAttention indexes the same prefix~\cite{sglang}.
 A same-batch expansion therefore misses and clones $k$ trunks,
 $\Work_{\mathrm{APC}}=kL+\sum_i\ell_i$,
 while a later replay of $x_\star$ is a hit ($\Work{=}0$).
@@ -73,7 +73,7 @@ $M_{\mathrm{CoW}}$ is one shared trunk with every residual live;
 $M_{\mathrm{spine}}$ is the footprint after abort.
 $\Work$ is the token count issued to a prefill kernel before $\star$ is known;
 $\Xfer$ is the token count inserted on the P/D connector.
-\Cref{tab:notation} fixes the remaining symbols.
+\Cref{tab:notation} lists the remaining symbols.
 
 \begin{table}[t]
 \centering

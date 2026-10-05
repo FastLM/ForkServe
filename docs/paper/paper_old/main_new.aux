@@ -92,9 +92,9 @@
 \newlabel{fig:app}{{3}{6}{\textbf {Cost-ordered prefill pruning and the critical path.} (a)~A residual exits at the first decisive stage. Only a kept miss tail reaches \texttt {insert}. (b)~APC and baseline disaggregation clone the trunk. CoW aliases $L$. \app {} keeps the winner. The overlap row prefills that next winner in the decode step. The tool-idle row pins a known suffix during the pause and leaves the observation tail}{figure.3}{}}
 \newlabel{fig:app@cref}{{[figure][3][]3}{[1][4][]6}{}{}{}}
 \newlabel{eq:bc}{{12}{6}{}{equation.12}{}}
-\newlabel{eq:bc@cref}{{[equation][12][]12}{[1][6][]6}{}{}{}}
+\newlabel{eq:bc@cref}{{[equation][12][]12}{[1][5][]6}{}{}{}}
 \newlabel{eq:bs}{{13}{6}{}{equation.13}{}}
-\newlabel{eq:bs@cref}{{[equation][13][]13}{[1][6][]6}{}{}{}}
+\newlabel{eq:bs@cref}{{[equation][13][]13}{[1][5][]6}{}{}{}}
 \newlabel{sec:eval}{{4}{6}{}{section.4}{}}
 \newlabel{sec:eval@cref}{{[section][4][]4}{[1][6][]6}{}{}{}}
 \newlabel{fig:tree}{{4}{7}{\textbf {Staged CoW along many paths, threshold abort, cascade abort, shared prefixes.} (a)~Each edge is one CoW: the child aliases the parent's pages and allocates only a residual ($+$r). Live paths A1b1x, A3a2x, and B2a1y share the trunk; the first two also share $+$r$_A$. Fork C has depth 2: at CoW-3 all four leaves die, so abort cascades through C1 and C2, then C; it stops at Root, which still has live children A and B. (b)~KV stacks of the three live leaves, layers aligned: a shared layer is one physical page set with refcount ${>}1$, not $N$ copies. Aborting A1b1y or B2a1x frees only that leaf residual; cascade-aborting C also frees $+$r$_{C1}$, $+$r$_{C2}$, and $+$r$_C$}{figure.4}{}}
@@ -177,13 +177,13 @@
 \newlabel{sec:related@cref}{{[section][5][]5}{[1][12][]12}{}{}{}}
 \newlabel{fig:eval-mt-split}{{9}{12}{\textbf {Expand versus APC} on the same four runs as \Cref {tab:mt-split}. (a)~Expand milliseconds per problem. (b)~Speedup of that expand over APC. The dashed line is $1\times $. \sys is $5.0$--$6.4\times $ and ForkServe+ is $7.9$--$10.6\times $. Decode in \Cref {tab:mt-split} does not repeat that ratio: the step decodes sit in the \sys decode column, so \sys end-to-end stays with APC}{figure.9}{}}
 \newlabel{fig:eval-mt-split@cref}{{[figure][9][]9}{[1][10][]12}{}{}{}}
+\bibcite{infercept}{{1}{}{{}}{{}}}
 \newlabel{fig:eval-radar}{{10}{13}{\textbf {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better. (a)~GSM8K. (b)~Game24. \Cref {fig:eval-radar} shows that \sys and ForkServe+ lower peak KV below APC on both workloads ($0.75\times $ on GSM8K, $0.62\times $ on Game24) while GSM8K quality stays with APC, and that ForkServe+ also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s}{figure.10}{}}
 \newlabel{fig:eval-radar@cref}{{[figure][10][]10}{[1][10][]13}{}{}{}}
 \newlabel{sec:conclusion}{{6}{13}{}{section.6}{}}
 \newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][13][]13}{}{}{}}
 \newlabel{tab:longcot}{{15}{13}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage and shortest end-to-end time in green}{table.15}{}}
 \newlabel{tab:longcot@cref}{{[table][15][]15}{[1][11][]13}{}{}{}}
-\bibcite{infercept}{{1}{}{{}}{{}}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
@@ -194,12 +194,12 @@
 \bibcite{idlespec}{{9}{}{{}}{{}}}
 \bibcite{contextrot}{{10}{}{{}}{{}}}
 \bibcite{conserve}{{11}{}{{}}{{}}}
+\bibcite{pie}{{12}{}{{}}{{}}}
+\bibcite{saga}{{13}{}{{}}{{}}}
 \newlabel{fig:eval-hist}{{11}{14}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and ForkServe+. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.11}{}}
 \newlabel{fig:eval-hist@cref}{{[figure][11][]11}{[1][10][]14}{}{}{}}
 \newlabel{fig:eval-branch}{{12}{14}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.12}{}}
 \newlabel{fig:eval-branch@cref}{{[figure][12][]12}{[1][11][]14}{}{}{}}
-\bibcite{pie}{{12}{}{{}}{{}}}
-\bibcite{saga}{{13}{}{{}}{{}}}
 \bibcite{metagpt}{{14}{}{{}}{{}}}
 \bibcite{swebench}{{15}{}{{}}{{}}}
 \bibcite{thunderagent}{{16}{}{{}}{{}}}
