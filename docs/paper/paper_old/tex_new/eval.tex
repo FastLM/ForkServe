@@ -75,8 +75,8 @@ Two of four residuals fail the draft score and are withheld before prefill; the 
 Prefill time is $\ell\times 12\,\mu\mathrm{s}/\mathrm{token}$; P/D transfer is $2\,\mu\mathrm{s}/\mathrm{token}$.
 APC and hash prefill publish blocks only after a request materializes them, so the first fan-out clones $k$ trunks.
 Baseline disaggregation uses that prefill and then transfers the live token span.
-\sys aliases the trunk by pointer swap and prefills the $k$ residuals.
-\app adds hash skip, draft prune, early abort, lazy abort, and a connector that inserts only retained residuals.
+\sys aliases the trunk and prefills the $k$ residuals.
+ForkServe+ applies the residual action under the stricter predicate \eqref{eq:drej}: every $s_i{<}\tau$ is withheld before the kernel, and the connector carries only $\Keep$.
 
 \begin{table}[t]
 \centering
@@ -324,7 +324,7 @@ Annotated $\times$ is $M_{\mathrm{spine}}/M_{\mathrm{APC}}$: $0.72$--$0.75\times
 
 \paragraph{Setup.}
 Qwen3-8B, \texttt{bfloat16}, $n{=}80$, $D{=}512$, $\mathrm{tp}{=}2$ and $4$ on four A100-SXM4 40GB GPUs.
-ForkServe+ enables lazy abort, pointer swap, hash skip, draft prune, and the P/D gate.
+ForkServe+ is the admission rule of \S\ref{sec:app} on the aliased trunk.
 GSM8K and Game24 are ToT ($k{=}4$); HumanEval is ReAct wrap+recovery ($k{=}2$).
 
 \begin{table}[t]
