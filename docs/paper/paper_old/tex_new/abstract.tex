@@ -1,21 +1,17 @@
-Agentic LLM serving expands one trunk into several short residuals and retains a single committed path.
-Prefix caching and radix sharing reuse a trunk only after its tokens exist and a hash hits, so the first fan-out copies that trunk once per child.
-Prefill--decode disaggregation separates time-to-first-token from decode latency, and the connector transfers every page the prefiller computed, including residuals later aborted.
-Decode-time pruners---early-stopping self-consistency (ESC), Speculative Rejection, and dynamic parallel tree search (DPTS)---score a child only after that child has been prefilled and a prefix has been generated.
+Agentic serving expands one trunk of length $L$ into $k$ residuals and retains one spine.
+A prefix cache copies $L$ once per child on the first fan-out, because a block hash exists only after the tokens do.
+Disaggregation then transfers every page that was computed, including residuals the harness aborts.
+Decode-time pruning (ESC, Speculative Rejection, DPTS) scores a child only after that prefill.
 
-\sys assigns each residual an action of increasing cost before the disaggregated connector moves any KV.
-A block-hash probe reuses published pages.
-A repeated loop is draft-skipped before a kernel starts.
-Any other low-score residual is prefilled and decoded for a short probe, and continues to the budget only if the generated prefix clears the threshold.
-The connector inserts only the miss tail of a retained residual.
-A copy-on-write context tree is the substrate: \texttt{fork} aliases the parent's KV pages, and abort releases the residual alone, so decode attends the committed spine.
-Longest-common-prefix commit binds the harness prompt.
-Speculative tokens do not enter the sampler, so committed outputs match a baseline that prefills only committed tokens.
-Speculative prefill is admitted only from the budget remaining after committed requests meet their latency margins.
+\sys charges residual $i$ only for the suffix absent from the radix index, and only when rejection is not yet admissible.
+Let $m_i$ be the longest full-page prefix of $\rho_i$ already published.
+If $m_i=\ell_i$, no kernel runs and nothing is transferred.
+If $0<m_i<\ell_i$, prefill and transfer cover $\ell_i-m_i$.
+If $m_i=0$, a repeated loop is withheld before the kernel; every other residual is prefilled, and a score below $\tau$ continues past a $t_0$-token probe only when the generated prefix meets $\tau$.
+The connector inserts exactly that work on the retained set.
+The trunk is an alias, so $L$ is absent from both the kernel and the transfer, and abort leaves the spine.
 
-On Qwen3-8B GSM8K ($n{=}16$, $D{=}512$), $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC, Speculative Rejection, or DPTS admits $12$ of $16$ residuals, cuts computed prefill from $5008$ to $3848$ tokens ($-23\%$), keeps $16/16$ any-finished at $k{=}16$, and reduces ESC time from $17.05$\,s to $14.14$\,s.
-Disaggregation transfers that admitted span.
+On Qwen3-8B GSM8K ($n{=}16$, $D{=}512$), $\tau_{\mathrm{pre}}{=}0.15$ ahead of ESC, Speculative Rejection, or DPTS admits $12$ of $16$ residuals, cuts computed prefill from $5008$ to $3848$ tokens ($-23\%$), holds $16/16$ any-finished at $k{=}16$, and reduces ESC time from $17.05$\,s to $14.14$\,s.
 $\tau_{\mathrm{pre}}{=}0.45$ reaches $10.93$\,s at the same $16/16$ and loses two problems at $k{=}4$ and $k{=}8$.
-On Qwen3-8B MATH-500, dropping every residual below $\tau$ cuts any-finished accuracy from $20/32$ to $13/32$ at fan-out $16$; a $128$-token probe that continues only when the generated prefix clears the threshold restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s.
-On the Qwen3-14B GSM8K forest the committed spine matches prefix-cache accuracy at $0.72\times$ the median peak KV.
-An earlier control-plane model that withholds every low-score residual before prefill cuts modeled fan-out prefill by $74.72\%$ and raises pool concurrency by $35.53\%$; the GPU measurements replace that predicate with the probe above.
+On Qwen3-8B MATH-500, withholding every residual with score below $\tau$ drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; continuing after a $128$-token probe restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s.
+On Qwen3-14B GSM8K the spine matches prefix-cache accuracy at $0.72\times$ the median peak KV.

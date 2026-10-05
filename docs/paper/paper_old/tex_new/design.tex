@@ -67,18 +67,17 @@ Pages of the LCP become committed; the unmatched tail is a committed prefill; ev
 A job tagged $g\neq g_u$ drops in $O(1)$.
 Committed decode attends only $\mathrm{KV}(x_{v^\star})$, so the emitted tokens match a baseline that prefills committed tokens only.
 
-\subsection{Cost-Ordered Prefill Pruning and Transfer Gating}
+\subsection{Admission Rule}
 \label{sec:app}
 
-Copy-on-write determines trunk placement.
-Per-residual admission determines which residual enters a GPU kernel and which KV crosses the prefill--decode connector.
-\app makes both decisions per residual, $(\Work_i,\Xfer_i)$, by a cascade whose stage cost is strictly increasing (\Cref{fig:app}).
-The stages are a block-hash probe, a CPU draft score, a prefix of the prefill kernel, the miss-tail prefill, and a connector \texttt{insert}.
-Stage $i{+}1$ runs only when stage $i$ does not reject $\rho_i$.
-The committed winner is exempt: index $0$ is forced into $\Keep$, and speculative pages stay unpublished until \eqref{eq:lcp}.
-CoW remains the storage substrate; \app filters compute and transfer.
-On the Qwen3-14B GSM8K forest, copy-on-write stores less KV than APC, yet median fan-out is $140$\,ms against APC's $87$\,ms: the $k$ residuals are still submitted to prefill.
-The cascade removes that prefill.
+One action $a_i$ fixes the pair $(\Work_i,\Xfer_i)$ for residual $\rho_i$ (\Cref{fig:app}).
+$a_i$ reads $m_i$ first, because a radix match costs no model FLOPs.
+On a miss it reads $i{\in}\Lambda$, because a repeated loop is known before a kernel.
+Only a miss outside $\Lambda$ enters the kernel, and $F_i$ stops that kernel at $\lceil\alpha\ell_i\rceil$.
+$\Xfer_i$ equals $\Work_i$ on $\Keep$ and is zero otherwise, so the connector moves the unmatched suffix of retained residuals.
+Index $0$ is in $\Keep$; pages stay out of $H$ until \eqref{eq:lcp}.
+The alias of \S\ref{sec:state} is what removes $L$ from both quantities.
+On Qwen3-14B GSM8K the alias already stores less KV than APC, while median fan-out is $140$\,ms against $87$\,ms because every residual is still prefilled; $a_i$ is the term that removes that prefill.
 
 \begin{figure*}[t]
 \centering
@@ -225,21 +224,21 @@ Spec pages are never hashed; LCP commit publishes full blocks of $x_\star$.
 On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}=\Work_{\mathrm{PD}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$, with strict inequality in $\Work$ whenever at least one repeated loop is draft-skipped, and strict inequality in $\Xfer$ whenever $\Keep\neq[k]$ or any kept residual is a hash hit.
 \end{lemma}
 
-\paragraph{Hash, probe, and transfer.}
-The index key is $\mathrm{hash}(\mathrm{parent},\;\mathrm{block\_tokens},\;\mathrm{extra})$~\cite{vllm}; only full pages enter $H$, so $m_i$ steps by $P$, and \eqref{eq:lcp} is what later yields $m_i{=}\ell_i$.
-A hash-local hit is already APC-visible on the decoder, hence $\Xfer_i{=}0$.
-On a miss, $\mathrm{DS}$ is only $i{\in}\Lambda$.
-Every other $s_i{<}\tau$ is prefilled, decoded for $t_0$ tokens, and extended iff $s'_i{\ge}\tau$ (\Cref{alg:app}); that probe is not the $\mathrm{EA}$ edge.
-Default $\tau_{\mathrm{pre}}{=}0.15$; MATH-500 uses $\tau{=}0.45$ and $t_0{\in}\{64,128\}$.
-Baseline disaggregation transfers \eqref{eq:xfer-stock}.
-\app transfers \eqref{eq:xfer}.
+\paragraph{From the action to the wire.}
+The index key is $\mathrm{hash}(\mathrm{parent},\;\mathrm{block\_tokens},\;\mathrm{extra})$~\cite{vllm}, and only full pages enter $H$, so $m_i$ in \eqref{eq:mi} steps by $P$.
+\eqref{eq:lcp} is what later sets $m_i{=}\ell_i$.
+A hit is already visible on the decoder, hence $\Xfer_i{=}0$ when $a_i{=}\mathrm{HS}$.
+\eqref{eq:drej} withholds every $s_i{<}\tau$; \Cref{alg:app} restricts that withhold to $i{\in}\Lambda$ and continues any other low score past $t_0$ iff $s'_i{\ge}\tau$.
+The $t_0$ probe is a decode prefix; $F_i$ is a prefill prefix.
+Defaults are $\tau_{\mathrm{pre}}{=}0.15$, and on MATH-500 $\tau{=}0.45$, $t_0{\in}\{64,128\}$.
+Baseline disaggregation moves \eqref{eq:xfer-stock}; the rule moves \eqref{eq:xfer}.
 \begin{equation}
 \label{eq:tfan}
 T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}}.
 \end{equation}
 $T_{\mathrm{CoW}}$ is a pointer swap.
-The blanket-skip model of \S\ref{sec:eval-app} evaluates to $139$\,ms (APC), $162$\,ms (baseline disaggregation), $47$\,ms (copy-on-write), and $31.4$\,ms.
-Under the GPU admission rule only the loop is withheld, and computed prefill falls by $23\%$ (\S\ref{sec:eval-prefill}).
+\S\ref{sec:eval-app} evaluates \eqref{eq:drej} at $139$\,ms (APC), $162$\,ms (baseline disaggregation), $47$\,ms (alias only), and $31.4$\,ms.
+\S\ref{sec:eval-prefill} uses \Cref{alg:app} and cuts computed prefill by $23\%$.
 
 \iffalse
 \paragraph{Orthogonal decode-length stop.}
@@ -253,49 +252,22 @@ The stop ends a finished answer; it does not draft output tokens, and it does no
 
 \subsection{Critical-Path Placement}
 \label{sec:schedule}
-After \app, fan-out is the prefill of the retained residual.
-End-to-end time remains $T_{\mathrm{fan}}+T_{\mathrm{dec}}$, and $T_{\mathrm{dec}}$ dominates.
-Three placements put the spine on that sum.
-A fixed chunk width and a fan-out barrier leave the freed KV and the pruned queue off that path.
-
-\paragraph{Decode slots.}
-Let $H$ be the KV pool after weights.
-A live tree occupies $M_{\mathrm{spine}}=b(L+\ell_\star)$.
-APC still holds the aborted residuals until they expire, so its live set is the larger $M_{\mathrm{APC}}$.
-The number of concurrent decode slots is
+Abort under the rule leaves $M_{\mathrm{spine}}=b(L+\ell_\star)$, so the same pool admits
 \begin{equation}
 \label{eq:slots}
-C=\bigl\lfloor H/M\bigr\rfloor,
+C=\bigl\lfloor H/M\bigr\rfloor
 \end{equation}
-with $M=M_{\mathrm{spine}}$ for \sys and $M=M_{\mathrm{APC}}$ for the prefix cache.
-$C$ scales with $1/M$.
-A request that finishes its current decode step releases the slot, and the next queued spine takes it.
-Throughput is
+sessions, with $M=M_{\mathrm{spine}}$ for \sys and $M=M_{\mathrm{APC}}$ while a prefix cache still holds aborted residuals.
 \begin{equation}
 \label{eq:theta}
 \Theta\;\propto\; C/T_{\mathrm{e2e}}.
 \end{equation}
-The same pool therefore admits more sessions once occupancy is the spine, and the wall-clock of a batch is the number of waves $n/C$.
-
-\paragraph{Overlap with decode.}
-Each tick $t$ has a token budget $B_t$ from the chunked-prefill cap~\cite{sarathi}.
-JITServe's margin~\cite{jitserve} assigns each committed request $r$ a minimum token rate $\underline{s}_r$.
+On tick $t$ the chunk budget~\cite{sarathi} splits by the committed rate $\underline{s}_r$~\cite{jitserve},
 \begin{align}
 B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t}\max(\underline{s}_r\Delta,\;1)\Bigr), \label{eq:bc}\\
 B^{\mathrm{s}}_t &= B_t-B^{\mathrm{c}}_t. \label{eq:bs}
 \end{align}
-$B^{\mathrm{c}}_t$ is committed decode.
-$B^{\mathrm{s}}_t$ is not applied to residuals already rejected by \app.
-It prefills the miss tail of the next winner in the same step as the running decode.
-If $B^{\mathrm{s}}_t=0$, no speculative chunk is admitted.
-Rejected residuals are not a barrier preceding the first decode token.
-A tree-sticky router pins the trunk to the worker that prefills the root; only residual work may migrate.
-
-\paragraph{Known-suffix prefill.}
-A candidate with $p{=}1$ is an exact suffix.
-If $\Pref(|w|)\le\Idle(u)$, that prefill runs during the tool interval, including while the parent remains committed.
-$\Idle(u)$ is the deadline.
-A suffix that would finish after $\Idle(u)$ is rejected, as is any observation residual the interval cannot cover.
-When the observation arrives, LCP commit checks the pinned prefix and the committed prefill is the unmatched tail.
-Under P/D the same suffix is prefiller work tagged $\texttt{soft-deadline}=\Idle(u)$ and is inserted once, onto the trunk owner.
-Speculative tokens remain outside the sampler, as under \eqref{eq:lcp}.
+$B^{\mathrm{c}}_t$ decodes the spine.
+$B^{\mathrm{s}}_t$ prefills the next miss tail, or a known suffix ($p{=}1$) when $\Pref(|w|)\le\Idle(u)$.
+The observation then pays only the unmatched tail under \eqref{eq:lcp}.
+Speculative tokens stay outside the sampler.

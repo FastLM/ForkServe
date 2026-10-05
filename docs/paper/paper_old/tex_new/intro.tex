@@ -28,34 +28,16 @@ After abort the live occupancy is the spine; the same pool admits $76{\to}103$ s
 \end{figure*}
 
 \paragraph{This work.}
-We present \sys (\Cref{fig:system}).
-Prefill pruning decides which residual is computed; disaggregation then moves only that residual.
-Three mechanisms implement the rule.
+\sys is one admission rule on a shared trunk (\Cref{fig:system}, \S\ref{sec:app}).
+For residual $\rho_i$, $m_i$ is the longest page-aligned prefix already in the radix index.
+That length fixes both the prefill $\Work_i$ and the transfer $\Xfer_i$: a full hit moves nothing, a partial hit moves the miss, a repeated loop ($i{\in}\Lambda$) is withheld, and every other miss is prefilled.
+A score below $\tau$ extends past $t_0$ tokens only if the probe meets $\tau$.
+Index $0$ stays in $\Keep$, so the connector carries the miss tail of the retained set rather than the $k$-way trunk~\cite{distserve,splitwise}.
+The trunk is aliased at \texttt{fork} (\S\ref{sec:state}), which is why $L$ is absent from $\Work_i$ and from $\Xfer_i$; abort leaves $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+Decode slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$, and any further prefill uses the budget left after committed decode (\S\ref{sec:schedule}).
+\eqref{eq:lcp} binds the observed prompt; speculative tokens stay out of the sampler.
 
-\smallskip\noindent\textbf{(1) A copy-on-write context tree (\S\ref{sec:state}).}
-Each session is a tree of committed and speculative nodes.
-\texttt{fork} creates a child that inherits the parent's pages by reference; writes allocate residual blocks.
-\texttt{abort} drops a subtree and decrements residual refcounts only, so live occupancy collapses to the spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.
-APC discovers the same sharing only after the tokens exist; the alias exists at \texttt{fork}, which is why a pruned residual never allocates a second trunk for the connector to ship.
-
-\smallskip\noindent\textbf{(2) Prefill pruning and a gated connector (\S\ref{sec:app}).}
-\app assigns each residual $\rho_i$ one action $a_i\in\Act$ and a pair $(\Work_i,\Xfer_i)$.
-A published prefix of length $m_i$ is retrieved: $m_i=\ell_i$ is a hash skip and $0{<}m_i{<}\ell_i$ prefills the miss tail.
-A miss has no row in the index.
-A repeated loop is draft-skipped before a kernel starts.
-Any other low-score residual is prefilled and decoded for a probe of $t_0$ tokens, and continues to the budget only if the generated prefix clears the threshold.
-Index $0$ is forced into $\Keep$.
-Baseline disaggregation inserts the span it computed, including the $k$-way trunk~\cite{distserve,splitwise}.
-\app inserts only the miss tail of $\Keep$.
-The same threshold precedes ESC, Speculative Rejection, or DPTS: those decoders still choose the stopping time, and a rejected child is absent from the connector.
-LCP commit binds the observed prompt; speculative tokens never enter the sampler.
-
-\smallskip\noindent\textbf{(3) Critical-path placement (\S\ref{sec:schedule}).}
-Decode slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$.
-On tick $t$ the budget splits as $B_t=B^c_t+B^s_t$: $B^c_t$ decodes the committed spine and $B^s_t$ prefills the next winner's miss tail in the same step.
-A known suffix with $p(w){=}1$ and $\Pref(|w|)\le\Idle(u)$ is pinned during the tool pause; the observation arrives as the unmatched tail.
-
-\S\ref{sec:eval} reports the GPU admission rule, then the earlier cost model it supersedes.
+\S\ref{sec:eval} measures that rule.
 On Qwen3-8B GSM8K, $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC, Speculative Rejection, or DPTS admits $12$ of $16$ residuals, cuts computed prefill by $23\%$ ($5008$ to $3848$), keeps $16/16$ any-finished at $k{=}8$ and $k{=}16$, and reduces ESC time from $17.05$\,s to $14.14$\,s; $\tau_{\mathrm{pre}}{=}0.45$ is faster at $k{=}16$ ($10.93$\,s, still $16/16$) and loses two problems at smaller fan-out (\Cref{tab:prefill-bar,tab:plugin}).
 On Qwen3-8B MATH-500, a blanket skip of every low score drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; a $128$-token probe restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s (\Cref{tab:grow}).
 On a three-turn Tree-of-Thoughts, ForkServe+ prefills $48$ of $192$ residuals and expands $7.9$--$10.6\times$ faster than APC (\Cref{tab:mt,tab:mt-split}).
