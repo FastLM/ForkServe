@@ -1,21 +1,17 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-Disaggregated prefill moves every page the prefiller computed, including residuals a Tree-of-Thoughts fan-out will abort.
-Prefix caches retain those residuals until they expire.
-We introduced \sys, which prunes the fan-out before that transfer: a repeated loop is dropped before the kernel, any other low-score residual continues only after a short probe clears the threshold, and the connector inserts only the miss tail that remains.
-The copy-on-write tree is the substrate that makes the pruned residual the only new KV.
+Disaggregated prefill transfers every computed page, and a prefix cache retains aborted residuals until eviction.
+\sys replaces both with one action per residual: prefill and transfer equal the suffix absent from the radix index, a repeated loop is omitted, and a score below $\tau$ continues past $t_0$ tokens only when the generated prefix meets $\tau$.
+Because the trunk is an alias, that suffix excludes $L$, and abort leaves the spine $b(L+\ell_\star)$.
 
-On Qwen3-8B GSM8K ($n{=}16$, $D{=}512$), $\tau_{\mathrm{pre}}{=}0.15$ is the accuracy-preserving point in front of ESC, Speculative Rejection, and DPTS: $15/16$, $16/16$, $16/16$ at $k{=}4,8,16$, a $23\%$ cut in computed prefill ($5008$ to $3848$ at $k{=}16$), and $-5\%$, $-6\%$, $-17\%$ end-to-end against native ESC ($17.05$\,s to $14.14$\,s at $k{=}16$).
-$\tau_{\mathrm{pre}}{=}0.45$ is the lower-latency point ($-36\%$ at $k{=}16$, $10.93$\,s, still $16/16$) and loses two problems at small fan-out ($14/16$).
-On Qwen3-8B MATH-500 ($n{=}32$, $D{=}1024$), dropping every residual below $\tau$ cuts any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$, while a $128$-token probe restores $20/32$ and lowers end-to-end time from $104.1$\,s to $72.2$\,s.
-On the Qwen3-14B GSM8K forest the spine is $0.72\times$ the median APC peak at matched accuracy ($0.845$ vs.\ $0.844$).
-The earlier blanket-skip cost model cuts modeled fan-out prefill by $74.72\%$ and raises the concurrency a fixed pool can sustain by $35.53\%$; the GPU measurements use the probe in place of that predicate.
-% On Qwen3-8B the same stack emits $0.31\times$ the GSM8K decode tokens of the prefix cache and finishes in $0.75\times$ the time at four GPUs.
-Across six families the GSM8K spine stays at $0.72$--$0.75\times$ that peak, and the ratio falls from $0.89$--$0.90\times$ at $k{=}2$ to $0.53$--$0.55\times$ at $k{=}8$.
-At a $2048$-token budget the ratio remains $0.75$--$0.91\times$, and ForkServe+ MATH-500 fan-out is $1284$\,ms against the prefix cache at $1593$\,ms on DeepSeek-R1 and $1014$\,ms against $1201$\,ms on Qwen3-4B.
-The contributions are: (i)~prefill pruning, which draft-skips repeated loops at $\tau_{\mathrm{pre}}{=}0.15$ before any host decoder runs, then a probe that extends any other low-score residual only when the generated prefix clears the decode threshold; (ii)~a disaggregated transfer gate that inserts only the miss tail of a residual that is kept; (iii)~a copy-on-write context tree that turns \texttt{fork} into an alias of the parent's KV pages and frees only the residual on abort, so live occupancy is the spine $b(L+\ell_\star)$; and (iv)~longest-common-prefix commit together with a scheduler that admits speculative prefill only from the slack left by committed requests.
+On Qwen3-8B GSM8K ($n{=}16$, $D{=}512$), $\tau_{\mathrm{pre}}{=}0.15$ ahead of ESC, Speculative Rejection, and DPTS attains $15/16$, $16/16$, $16/16$ at $k{=}4,8,16$, cuts computed prefill by $23\%$ ($5008$ to $3848$ at $k{=}16$), and reduces ESC time from $17.05$\,s to $14.14$\,s at $k{=}16$.
+$\tau_{\mathrm{pre}}{=}0.45$ reaches $10.93$\,s at $k{=}16$ with the same $16/16$ and loses two problems at $k{=}4$ and $k{=}8$.
+On MATH-500 ($n{=}32$, $D{=}1024$), withholding every score below $\tau$ drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; a $128$-token probe restores $20/32$ and lowers end-to-end time from $104.1$\,s to $72.2$\,s.
+The Qwen3-14B spine is $0.72\times$ the median APC peak at matched accuracy ($0.845$ vs.\ $0.844$).
+Across six families the ratio stays in $0.72$--$0.75\times$ and falls from $0.89$--$0.90\times$ at $k{=}2$ to $0.53$--$0.55\times$ at $k{=}8$.
+At a $2048$-token budget it remains $0.75$--$0.91\times$.
 
-Subsequent measurements should vary the probe length with fan-out width, close the loop on the analytical concurrency gain, and extend the forests to full Game24 and HumanEval sets, deeper trees, and $32$K contexts.
-Branch cost is incurred for the committed residual, and only at the first admissible stage: occupancy is set by $k$ and residual length, independent of tensor-parallel width.
-As fan-out width, tree depth, and context length grow against a fixed KV pool, each new branch aliases the trunk and abort returns only the residual, so the tokens that occupy HBM are the spine the decoder attends.
+The same action sets the kernel, the connector payload, and the KV that remains.
+Occupancy depends on $k$ and residual length, not on tensor-parallel width.
+As fan-out, depth, and context grow against a fixed pool, each new branch aliases the trunk and abort returns only its residual.

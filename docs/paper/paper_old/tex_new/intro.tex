@@ -18,12 +18,12 @@ Once KV retention has removed trunk recompute~\cite{continuum,mori}, the remaini
 \centering
 \resizebox{\textwidth}{!}{\input{tex_new/fig_arch}}
 \caption{\textbf{\sys{} architecture.}
-(1)~$\sigma_u$ holds one read-only trunk; \texttt{fork} aliases it in $O(1)$; LCP binds the winner.
-(2)~A residual exits at the first decisive action.
-$m_i=\ell_i$ is $\mathrm{HS}$ ($\Work{=}0$); $0{<}m_i{<}\ell_i$ is $\mathrm{HP}$; a repeated loop is $\mathrm{DS}$; the first $\alpha\ell_i$ failing is $\mathrm{EA}$; otherwise $\mathrm{PF}$ prefills $\ell_i$ on the alias, and a low score that is not a loop is probed for $t_0$ tokens before it may continue.
-Index $0$ stays in $\Keep$, and $\Xfer$ sums $\Work_i$ only over that kept set.
-(3)~Slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$; $B^c_t$ runs beside $B^s_t$, and a known suffix is pinned when $p{=}1$ and $\Pref\le\Idle$.
-After abort the live occupancy is the spine; the same pool admits $76{\to}103$ sessions.}
+(1)~$\sigma_u$ aliases one trunk; \texttt{fork} is $O(1)$; \eqref{eq:lcp} binds the winner.
+(2)~One action $a_i$ (\eqref{eq:action}), fixed by the page-aligned match $m_i$.
+$m_i=\ell_i$ issues no kernel; $0{<}m_i{<}\ell_i$ prefills the miss; $i{\in}\Lambda$ is withheld; every other miss is prefilled.
+$\Xfer$ sums $\Work_i$ over $\Keep$.
+(3)~$C=\lfloor H/M_{\mathrm{spine}}\rfloor$.
+After abort the live set is the spine, and the same pool admits $76{\to}103$ sessions.}
 \label{fig:system}
 \end{figure*}
 
@@ -39,8 +39,6 @@ Decode slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$, and any further prefil
 
 \S\ref{sec:eval} measures that rule.
 On Qwen3-8B GSM8K, $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC, Speculative Rejection, or DPTS admits $12$ of $16$ residuals, cuts computed prefill by $23\%$ ($5008$ to $3848$), keeps $16/16$ any-finished at $k{=}8$ and $k{=}16$, and reduces ESC time from $17.05$\,s to $14.14$\,s; $\tau_{\mathrm{pre}}{=}0.45$ is faster at $k{=}16$ ($10.93$\,s, still $16/16$) and loses two problems at smaller fan-out (\Cref{tab:prefill-bar,tab:plugin}).
-On Qwen3-8B MATH-500, a blanket skip of every low score drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; a $128$-token probe restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s (\Cref{tab:grow}).
-On a three-turn Tree-of-Thoughts, ForkServe+ prefills $48$ of $192$ residuals and expands $7.9$--$10.6\times$ faster than APC (\Cref{tab:mt,tab:mt-split}).
-The Qwen3-14B forest still matches APC accuracy at $0.72\times$ median peak KV.
-An earlier control-plane model that withholds every low-score residual cuts fan-out prefill by $74.72\%$ against APC and raises SLO-feasible concurrency by $35.5\%$; \S\ref{sec:eval-grow} supersedes that predicate.
-A six-model forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC.
+On Qwen3-8B MATH-500, withholding every score below $\tau$ drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; a $128$-token probe restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s (\Cref{tab:grow}).
+Across three turns, $48$ of $192$ residuals are prefilled and expand time is $7.9$--$10.6\times$ below APC (\Cref{tab:mt,tab:mt-split}).
+The Qwen3-14B spine matches APC accuracy at $0.72\times$ median peak KV, and six model families stay in $0.72$--$0.75\times$ ($n{=}40$).

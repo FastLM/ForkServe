@@ -82,10 +82,10 @@ On Qwen3-14B GSM8K the alias already stores less KV than APC, while median fan-o
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{tex_new/fig_pipeline}}
-\caption{\textbf{Cost-ordered prefill pruning and the critical path.}
-(a)~A residual exits at the first decisive stage. Only a kept miss tail reaches \texttt{insert}.
-(b)~APC and baseline disaggregation clone the trunk. CoW aliases $L$. \app{} keeps the winner.
-The overlap row prefills that next winner in the decode step. The tool-idle row pins a known suffix during the pause and leaves the observation tail.}
+\caption{\textbf{The admission rule and where it sits on the path.}
+(a)~$a_i$ is the first match of \eqref{eq:action}. Only $\Work_i$ for $i{\in}\Keep$ reaches \texttt{insert}.
+(b)~APC and baseline disaggregation copy the trunk. The alias removes $L$ from $\Work$ and from $\Xfer$.
+The overlap row prefills the next miss during decode. The tool-interval row prefills a suffix with $p{=}1$ while $\Pref\le\Idle$.}
 \label{fig:app}
 \end{figure*}
 
@@ -140,7 +140,7 @@ Green pages are in $H$; orange pages are prefilled; gray pages are withheld.
 (c)~$\mathrm{EA}$: $m_i{=}0$, $F_i{=}1$, $\Work_i{=}\lceil\alpha\ell_i\rceil$, $\Xfer_i{=}0$.
 (d)~$\mathrm{PF}$: $m_i{=}0$, $i{\notin}\Lambda$, $\neg F_i$, $\Work_i{=}\ell_i$.
 (e)~$\mathrm{DS}$: $i{\in}\Lambda$, $\Work_i{=}\Xfer_i{=}0$.
-A low score with $i{\notin}\Lambda$ is not (e); it is prefilled and probed (\Cref{alg:app}).}
+A score below $\tau$ with $i{\notin}\Lambda$ is prefilled and probed (\Cref{alg:app}).}
 \label{fig:radix}
 \end{figure*}
 \begin{equation}

@@ -3,9 +3,8 @@
 
 \paragraph{Request-level serving.}
 Orca~\cite{orca} introduced iteration-level scheduling; vLLM~\cite{vllm} paged the KV cache and hashes full blocks for APC; SGLang~\cite{sglang} added radix prefix sharing; Sarathi~\cite{sarathi,sarathisplit} chunked prefills; DistServe and Splitwise~\cite{distserve,splitwise} disaggregated prefill from decode.
-Prefix caching discovers sharing after tokens exist.
-Prefill--decode disaggregation isolates \ttft{} from inter-token latency; it does not select which branch to compute, and it transfers every page the prefiller produced.
-\app uses both mechanisms as filters: the hash as a skip, the connector as a gate.
+Prefix caching discovers sharing after tokens exist, and prefill--decode disaggregation transfers every page the prefiller produced.
+\eqref{eq:action} uses the hash as $m_i$ and the connector as $\Xfer_i$: both are instances of one residual action.
 
 \paragraph{Program- and SLO-aware scheduling.}
 Autellix~\cite{autellix} schedules by program-level attained service; JITServe~\cite{jitserve} allocates just-enough bandwidth under heterogeneous SLOs.
@@ -17,8 +16,8 @@ InferCept~\cite{infercept}, Continuum~\cite{continuum}, MORI~\cite{mori}, and Co
 Sutradhara~\cite{sutradhara} overlaps tool execution with prefill of one linear tool-independent prefix.
 SmoothAgent~\cite{smoothagent} lookahead-transforms context; IdleSpec~\cite{idlespec} drafts plans for accuracy, not KV.
 Classical speculative decoding~\cite{speculative,medusa,eagledraft} drafts \emph{output} tokens.
-ForkKV~\cite{forkkv} CoW-splits LoRA residuals.
-We represent the future as a \emph{set} of CoW children, speculate several known suffixes, commit by LCP, prune losers before prefill, and gate P/D \texttt{insert}.
+ForkKV~\cite{forkkv} copy-on-write splits LoRA residuals.
+\eqref{eq:action} likewise aliases the shared prefix, then sets $\Work_i$ and $\Xfer_i$ from the unmatched suffix.
 
 \paragraph{Decoding-time pruning.}
 A second line drops a candidate after the model has generated it.
@@ -26,7 +25,5 @@ Beam search in Tree-of-Thoughts~\cite{tot} scores a finished step and keeps the 
 Early-stopping self-consistency (ESC)~\cite{esc} draws a window of complete samples and skips later samples only once that window agrees.
 Speculative Rejection~\cite{specrej} ranks partial generations and halts the lower quantile.
 Dynamic Parallel Tree Search (DPTS)~\cite{dpts} generates a fixed mini-step on every active node, then early-stops low-confidence children.
-In each method the score is computed from tokens already resident in the KV cache, so the prefill of the candidate and a decode prefix are issued before the drop.
-\app scores a known residual first.
-A repeated loop is withheld before prefill and therefore stays off the disaggregated connector; any other low-score residual is probed and extended only when the generated prefix clears the threshold (\S\ref{sec:eval-app}).
-The same $\tau_{\mathrm{pre}}$ precedes ESC, Speculative Rejection, or DPTS (\S\ref{sec:eval-prefill}).
+In each method the score is computed from tokens already resident, so the prefill and a decode prefix precede the drop.
+\eqref{eq:action} withholds $i{\in}\Lambda$ before that prefill and continues every other low score past $t_0$ only if $s'_i{\ge}\tau$ (\S\ref{sec:eval-prefill}).
