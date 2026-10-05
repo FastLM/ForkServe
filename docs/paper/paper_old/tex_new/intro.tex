@@ -1,0 +1,64 @@
+\section{Introduction}
+\label{sec:intro}
+
+LLM serving began as a single-turn problem: a prompt arrives, the engine prefills, and tokens are streamed~\cite{orca,vllm,sglang}.
+Production agents---coding assistants~\cite{sweagent,openhands}, computer-use systems~\cite{webarena}, and multi-agent workflows~\cite{autogen,metagpt}---execute programs of LLM calls interleaved with tools~\cite{react,compoundai}.
+Tree-of-Thoughts and MCTS expand sibling thoughts that share a prefix and diverge in a short residual~\cite{tot,hive}.
+The serving unit is a \emph{branching execution}: one trunk of length $L$, $k$ residuals $\ell_i$, and one committed spine.
+
+Three families of systems already sit on that execution, and each charges the branch at a fixed stage (\S\ref{sec:problem}).
+Automatic prefix caching (APC)~\cite{vllm} and RadixAttention~\cite{sglang} reuse a trunk after a full block has been published, so a same-batch fan-out still materializes $k$ copies of $L$.
+Prefill--decode disaggregation~\cite{distserve,splitwise} isolates \ttft{} from inter-token latency and then transfers every page the prefiller computed, aborted residuals included.
+Decode-time pruning scores a child from tokens that are already resident: ESC~\cite{esc} waits for an agreeing window, Speculative Rejection~\cite{specrej} waits for a partial-reward horizon, and DPTS~\cite{dpts} waits for a mini-step.
+In each case the residual has already been prefilled.
+Program-, session-, and workflow-level schedulers~\cite{autellix,thunderagent,continuum,mori,ayo,parrot,pythia} raise the atom above the request and still issue the next call as a unique continuation.
+Once KV retention has removed trunk recompute~\cite{continuum,mori}, the remaining \ttft{} term is residual-suffix prefill of children the harness can name before the observation returns.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_arch}}
+\caption{\textbf{\sys{} architecture.}
+(1)~$\sigma_u$ holds one read-only trunk; \texttt{fork} aliases it in $O(1)$; LCP binds the winner.
+(2)~A residual exits at the first decisive action.
+$m_i=\ell_i$ is $\mathrm{HS}$ ($\Work{=}0$); $0{<}m_i{<}\ell_i$ is $\mathrm{HP}$; a repeated loop is $\mathrm{DS}$; the first $\alpha\ell_i$ failing is $\mathrm{EA}$; otherwise $\mathrm{PF}$ prefills $\ell_i$ on the alias, and a low score that is not a loop is probed for $t_0$ tokens before it may continue.
+Index $0$ stays in $\Keep$, and $\Xfer$ sums $\Work_i$ only over that kept set.
+(3)~Slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$; $B^c_t$ runs beside $B^s_t$, and a known suffix is pinned when $p{=}1$ and $\Pref\le\Idle$.
+After abort the live occupancy is the spine; the same pool admits $76{\to}103$ sessions.}
+\label{fig:system}
+\end{figure*}
+
+\paragraph{This work.}
+We present \sys (\Cref{fig:system}).
+Prefill pruning decides which residual is computed; disaggregation then moves only that residual.
+Three mechanisms implement the rule.
+
+\smallskip\noindent\textbf{(1) A copy-on-write context tree (\S\ref{sec:state}).}
+Each session is a tree of committed and speculative nodes.
+\texttt{fork} creates a child that inherits the parent's pages by reference; writes allocate residual blocks.
+\texttt{abort} drops a subtree and decrements residual refcounts only, so live occupancy collapses to the spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+APC discovers the same sharing only after the tokens exist; the alias exists at \texttt{fork}, which is why a pruned residual never allocates a second trunk for the connector to ship.
+
+\smallskip\noindent\textbf{(2) Prefill pruning and a gated connector (\S\ref{sec:app}).}
+\app assigns each residual $\rho_i$ one action $a_i\in\Act$ and a pair $(\Work_i,\Xfer_i)$.
+A published prefix of length $m_i$ is retrieved: $m_i=\ell_i$ is a hash skip and $0{<}m_i{<}\ell_i$ prefills the miss tail.
+A miss has no row in the index.
+A repeated loop is draft-skipped before a kernel starts.
+Any other low-score residual is prefilled and decoded for a probe of $t_0$ tokens, and continues to the budget only if the generated prefix clears the threshold.
+Index $0$ is forced into $\Keep$.
+Baseline disaggregation inserts the span it computed, including the $k$-way trunk~\cite{distserve,splitwise}.
+\app inserts only the miss tail of $\Keep$.
+The same threshold sits in front of ESC, Speculative Rejection, or DPTS: those hosts still decide when to stop decoding, and the connector never receives a child the stage has already rejected.
+LCP commit binds the observed prompt; speculative tokens never enter the sampler.
+
+\smallskip\noindent\textbf{(3) The spine on the critical path (\S\ref{sec:schedule}).}
+Decode slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$.
+On tick $t$ the budget splits as $B_t=B^c_t+B^s_t$: $B^c_t$ decodes the committed spine and $B^s_t$ prefills the next winner's miss tail in the same step.
+A known suffix with $p(w){=}1$ and $\Pref(|w|)\le\Idle(u)$ is pinned during the tool pause; the observation arrives as the unmatched tail.
+
+\S\ref{sec:eval} leads with the GPU pruning rule and then the earlier cost model it replaces.
+On Qwen3-8B GSM8K, $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC, Speculative Rejection, or DPTS admits $12$ of $16$ residuals, cuts computed prefill by $23\%$ ($5008$ to $3848$), keeps $16/16$ any-finished at $k{=}8$ and $k{=}16$, and reduces ESC time from $17.05$\,s to $14.14$\,s; $\tau_{\mathrm{pre}}{=}0.45$ is faster at $k{=}16$ ($10.93$\,s, still $16/16$) but drops two questions at smaller fan-out (\Cref{tab:prefill-bar,tab:plugin}).
+On Qwen3-8B MATH-500, a blanket skip of every low score drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; a $128$-token probe restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s (\Cref{tab:grow}).
+On a three-turn Tree-of-Thoughts, ForkServe+ prefills $48$ of $192$ residuals and expands $7.9$--$10.6\times$ faster than APC (\Cref{tab:mt,tab:mt-split}).
+The Qwen3-14B forest still matches APC accuracy at $0.72\times$ median peak KV.
+An earlier control-plane model that blanket-skips every low-score residual cuts fan-out prefill by $74.72\%$ against APC and raises SLO-feasible concurrency by $35.5\%$; \S\ref{sec:eval-grow} replaces that skip.
+A six-model forest ($n{=}40$) keeps GSM8K peak KV at $0.72$--$0.75\times$ APC.

@@ -1,0 +1,224 @@
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >=Stealth,
+  live/.style={draw=fsgreen!70!black, fill=fscommit, rounded corners=1.3pt,
+               inner sep=1.3pt, align=center, font=\tiny\sffamily, minimum height=0.38cm},
+  dead/.style={draw=fsgray, fill=black!7, rounded corners=1.3pt, densely dashed,
+               inner sep=1.3pt, align=center, font=\tiny\sffamily, minimum height=0.38cm, text=fsgray},
+  casc/.style={draw=fspurple, fill=fspurple!12, rounded corners=1.3pt, densely dashed,
+               inner sep=1.3pt, align=center, font=\tiny\sffamily, minimum height=0.38cm, text=fspurple},
+  root/.style={draw=fsblue, fill=fslight, rounded corners=1.5pt,
+               inner sep=1.6pt, align=center, font=\tiny\sffamily\bfseries, minimum height=0.44cm},
+  arr/.style={-{Stealth[length=2.4pt,width=1.8pt]}, thick, fsblue!80},
+  darr/.style={-{Stealth[length=2.4pt,width=1.8pt]}, thick, densely dashed, fsorange!80},
+  carr/.style={-{Stealth[length=2.4pt,width=1.8pt]}, thick, densely dashed, fspurple},
+  rlab/.style={font=\tiny\ttfamily, text=fsorange!80!black},
+  sc/.style={font=\tiny, text=fsgreen!40!black},
+  sd/.style={font=\tiny, text=fsorange!75!black},
+  stg/.style={font=\tiny\sffamily, text=fsblue!70, align=right, anchor=east},
+]
+% ============================================================
+% (a)
+% ============================================================
+\node[font=\small\bfseries, anchor=west] at (-0.35,6.28) {(a) Staged CoW: one residual per fork, shared prefix across paths};
+\node[font=\tiny, text=fsgray, anchor=west] at (-0.35,5.92)
+  {abort iff $s{<}\tau$ ($\tau{=}0.40$). Fork C (depth 2): leaves die in one round $\Rightarrow$ parents with no live child cascade up.};
+
+% stage labels
+\node[stg] at (-1.72,5.38) {trunk};
+\node[stg] at (-1.72,4.32) {CoW-1};
+\node[stg] at (-1.72,3.28) {CoW-2};
+\node[stg] at (-1.72,2.24) {CoW-3};
+\node[stg] at (-1.72,1.20) {CoW-4};
+\node[stg] at (-1.72,0.08) {CoW-5};
+
+\node[root] (R) at (4.85,5.38) {Root / Planner \\[-1pt]{\tiny one shared trunk}};
+
+% CoW-1: A, B, and cascade root C
+\node[live] (A) at (1.55,4.32) {A};
+\node[live] (B) at (4.85,4.32) {B};
+\node[casc] (C) at (9.15,4.32) {C $\Uparrow$};
+\node[rlab] at (1.55,3.94) {$+$r$_A$};
+\node[rlab] at (4.85,3.94) {$+$r$_B$};
+\node[rlab] at (9.15,3.94) {$+$r$_C$};
+\node[sc] at (2.22,4.32) {$s{=}0.82$};
+\node[sc] at (5.52,4.32) {$s{=}0.71$};
+
+% CoW-2
+\node[live] (A1) at (0.40,3.28) {A1};
+\node[dead] (A2) at (1.55,3.28) {A2 $\times$};
+\node[live] (A3) at (2.70,3.28) {A3};
+\node[live] (B2) at (4.40,3.28) {B2};
+\node[dead] (B1) at (5.55,3.28) {B1 $\times$};
+\node[casc] (C1) at (8.25,3.28) {C1 $\Uparrow$};
+\node[casc] (C2) at (10.05,3.28) {C2 $\Uparrow$};
+\node[rlab] at (0.40,2.90) {$+$r$_{A1}$};
+\node[rlab] at (2.70,2.90) {$+$r$_{A3}$};
+\node[rlab] at (4.40,2.90) {$+$r$_{B2}$};
+\node[sd] at (1.55,2.90) {$0.31{<}\tau$};
+\node[sd] at (5.55,2.90) {$0.22{<}\tau$};
+\node[rlab] at (8.25,2.90) {$+$r$_{C1}$};
+\node[rlab] at (10.05,2.90) {$+$r$_{C2}$};
+
+% CoW-3: original plus C's depth-2 leaves (all die this round)
+\node[dead] (A1a) at (-0.70,2.24) {A1a $\times$};
+\node[live] (A1b) at (0.40,2.24) {A1b};
+\node[live] (A3a) at (2.70,2.24) {A3a};
+\node[live] (B2a) at (4.40,2.24) {B2a};
+\node[dead] (C1a) at (7.55,2.24) {C1a $\times$};
+\node[dead] (C1b) at (8.70,2.24) {C1b $\times$};
+\node[dead] (C2a) at (9.55,2.24) {C2a $\times$};
+\node[dead] (C2b) at (10.70,2.24) {C2b $\times$};
+\node[rlab] at (0.40,1.86) {$+$r$_{A1b}$};
+\node[rlab] at (2.70,1.86) {$+$r$_{A3a}$};
+\node[rlab] at (4.40,1.86) {$+$r$_{B2a}$};
+\node[sd] at (-0.70,1.86) {$0.35{<}\tau$};
+\node[sd] at (7.55,1.86) {$0.24$};
+\node[sd] at (8.70,1.86) {$0.28$};
+\node[sd] at (9.55,1.86) {$0.17$};
+\node[sd] at (10.70,1.86) {$0.22$};
+
+% CoW-4
+\node[live] (A1b1) at (0.40,1.20) {A1b1};
+\node[live] (A3a2) at (2.70,1.20) {A3a2};
+\node[live] (B2a1) at (4.40,1.20) {B2a1};
+\node[rlab] at (0.40,0.82) {$+$r$_{A1b1}$};
+\node[rlab] at (2.70,0.82) {$+$r$_{A3a2}$};
+\node[rlab] at (4.40,0.82) {$+$r$_{B2a1}$};
+
+% CoW-5
+\node[live] (A1b1x) at (-0.25,0.08) {A1b1x};
+\node[dead] (A1b1y) at (1.05,0.08) {A1b1y $\times$};
+\node[live] (A3a2x) at (2.70,0.08) {A3a2x};
+\node[dead] (B2a1x) at (3.90,0.08) {B2a1x $\times$};
+\node[live] (B2a1y) at (5.10,0.08) {B2a1y};
+\node[rlab] at (-0.25,-0.30) {$+$r};
+\node[sd] at (1.05,-0.30) {$0.27{<}\tau$};
+\node[rlab] at (2.70,-0.30) {$+$r};
+\node[sd] at (3.90,-0.30) {$0.33{<}\tau$};
+\node[rlab] at (5.10,-0.30) {$+$r};
+
+\draw[arr] (R) -- (A);
+\draw[arr] (R) -- (B);
+\draw[carr] (R) -- (C);
+\draw[arr] (A) -- (A1);
+\draw[darr] (A) -- (A2);
+\draw[arr] (A) -- (A3);
+\draw[arr] (B) -- (B2);
+\draw[darr] (B) -- (B1);
+\draw[carr] (C) -- (C1);
+\draw[carr] (C) -- (C2);
+\draw[darr] (A1) -- (A1a);
+\draw[arr] (A1) -- (A1b);
+\draw[arr] (A3) -- (A3a);
+\draw[arr] (B2) -- (B2a);
+\draw[darr] (C1) -- (C1a);
+\draw[darr] (C1) -- (C1b);
+\draw[darr] (C2) -- (C2a);
+\draw[darr] (C2) -- (C2b);
+\draw[arr] (A1b) -- (A1b1);
+\draw[arr] (A3a) -- (A3a2);
+\draw[arr] (B2a) -- (B2a1);
+\draw[arr] (A1b1) -- (A1b1x);
+\draw[darr] (A1b1) -- (A1b1y);
+\draw[arr] (A3a2) -- (A3a2x);
+\draw[darr] (B2a1) -- (B2a1x);
+\draw[arr] (B2a1) -- (B2a1y);
+
+\begin{scope}[on background layer]
+  \fill[fsblue!8, rounded corners=2pt] (0.85,4.08) rectangle (3.35,4.58);
+  \node[font=\tiny\itshape, text=fsblue!60, rotate=90, anchor=south] at (0.72,4.33) {share $+$r$_A$};
+\end{scope}
+
+\draw[fsblue!30, line width=2.4pt, opacity=0.5]
+  (R.south) -- (A.north)
+  (A.south) -- (A1.north)
+  (A1.south) -- (A1b.north)
+  (A1b.south) -- (A1b1.north)
+  (A1b1.south) -- (A1b1x.north);
+\draw[fsgreen!35, line width=2.0pt, opacity=0.45]
+  (A.south) -- (A3.north)
+  (A3.south) -- (A3a.north)
+  (A3a.south) -- (A3a2.north)
+  (A3a2.south) -- (A3a2x.north);
+\draw[fsorange!30, line width=2.0pt, opacity=0.45]
+  (R.south) -- (B.north)
+  (B.south) -- (B2.north)
+  (B2.south) -- (B2a.north)
+  (B2a.south) -- (B2a1.north)
+  (B2a1.south) -- (B2a1y.north);
+
+\node[font=\tiny, text=fsblue, align=left, anchor=west] at (6.15,1.45)
+  {\textbf{shared prefixes}\\[-1pt]
+   A1b1x $\cap$ A3a2x $=$ trunk${+}$r$_A$\\[-1pt]
+   either $\cap$ B2a1y $=$ trunk only};
+\node[font=\tiny, text=fsorange!80!black, align=left, anchor=west] at (6.15,0.55)
+  {\textbf{threshold abort}\\[-1pt]
+   $s{<}\tau$: A2, B1, A1a, A1b1y, B2a1x,\\[-1pt]
+   and C's four leaves};
+\node[font=\tiny, text=fspurple, align=left, anchor=west] at (6.15,-0.40)
+  {\textbf{cascade abort} (fork C, depth 2)\\[-1pt]
+   CoW-3: C1a/C1b/C2a/C2b all die\\[-1pt]
+   $\Rightarrow$ C1, C2, then C; Root lives (A,B)};
+
+\node[live, minimum width=0.68cm] at (0.50,-0.78) {live};
+\node[dead, minimum width=0.88cm] at (1.75,-0.78) {$s{<}\tau$};
+\node[casc, minimum width=1.28cm] at (3.40,-0.78) {cascade $\Uparrow$};
+
+% ============================================================
+% (b)
+% ============================================================
+\begin{scope}[shift={(11.55,-0.78)}]
+  \node[font=\small\bfseries, anchor=west] at (0,6.55) {(b) Many paths, staged CoW, one trunk};
+  \node[font=\tiny, text=fsgray, anchor=west] at (0,6.22)
+    {aligned layers $=$ shared pages (refcount $>$ 1)};
+
+  \node[font=\tiny\sffamily\bfseries, text=fsblue] at (0.85,5.88) {A1b1x};
+  \node[font=\tiny\sffamily\bfseries, text=fsgreen!50!black] at (2.55,5.88) {A3a2x};
+  \node[font=\tiny\sffamily\bfseries, text=fsorange!80!black] at (4.25,5.88) {B2a1y};
+
+  \fill[fslight, draw=fsblue, rounded corners=1.2pt] (0.10,5.28) rectangle (5.00,5.70);
+  \node[font=\tiny\ttfamily] at (2.55,5.49) {shared trunk $L$ \quad ref${=}3$};
+
+  \fill[fsblue!18, draw=fsblue!60, rounded corners=1.1pt] (0.10,4.72) rectangle (3.30,5.14);
+  \node[font=\tiny\ttfamily] at (1.70,4.93) {$+$r$_A$ \ ref${=}2$};
+  \fill[fsspec, draw=fsorange!70, rounded corners=1.1pt] (3.45,4.72) rectangle (5.00,5.14);
+  \node[font=\tiny\ttfamily] at (4.22,4.93) {$+$r$_B$};
+
+  \foreach \y/\la/\lb/\lc in {
+    4.16/{$+$r$_{A1}$}/{$+$r$_{A3}$}/{$+$r$_{B2}$},
+    3.60/{$+$r$_{A1b}$}/{$+$r$_{A3a}$}/{$+$r$_{B2a}$},
+    3.04/{$+$r$_{A1b1}$}/{$+$r$_{A3a2}$}/{$+$r$_{B2a1}$},
+    2.48/{$+$r$_{A1b1x}$}/{$+$r$_{A3a2x}$}/{$+$r$_{B2a1y}$}} {
+    \fill[fscommit, draw=fsgreen!65!black, rounded corners=1.0pt]
+      (0.10,\y) rectangle (1.60,\y+0.40);
+    \node[font=\tiny\ttfamily] at (0.85,\y+0.20) {\la};
+    \fill[fscommit, draw=fsgreen!65!black, rounded corners=1.0pt]
+      (1.80,\y) rectangle (3.30,\y+0.40);
+    \node[font=\tiny\ttfamily] at (2.55,\y+0.20) {\lb};
+    \fill[fsspec, draw=fsorange!70, rounded corners=1.0pt]
+      (3.45,\y) rectangle (5.00,\y+0.40);
+    \node[font=\tiny\ttfamily] at (4.22,\y+0.20) {\lc};
+  }
+
+  \fill[black!8, draw=fsgray, densely dashed, rounded corners=1.0pt]
+    (0.10,1.78) rectangle (1.60,2.18);
+  \node[font=\tiny\ttfamily, text=fsgray] at (0.85,1.98) {$+$r y};
+  \fill[black!8, draw=fsgray, densely dashed, rounded corners=1.0pt]
+    (3.45,1.78) rectangle (5.00,2.18);
+  \node[font=\tiny\ttfamily, text=fsgray] at (4.22,1.98) {$+$r x};
+  \node[font=\tiny, text=fsorange!80!black, anchor=west] at (5.12,1.98)
+    {$s{<}\tau$: free only this $+$r};
+
+  \node[font=\tiny, text=fsgray, anchor=west, align=left] at (0.10,1.42)
+    {A1b1x and A3a2x CoW five times each, but \textbf{share} trunk and $+$r$_A$.};
+
+  \fill[fsorange!12, draw=fsorange!70, rounded corners=1.4pt]
+    (0.10,0.42) rectangle (6.55,1.20);
+  \node[font=\tiny, anchor=west, align=left] at (0.20,0.81)
+    {\textbf{Not} 3$\times$ full clones, and not one CoW for the whole tree.\\[-1pt]
+     Each fork is a CoW stage. $N$ live paths sharing a prefix of length $d$\\[-1pt]
+     pay $1$ trunk $+\,d$ shared residuals $+\,$private tails---not $N$ trunks.};
+\end{scope}
+\end{tikzpicture}
+\vspace{-0.35em}

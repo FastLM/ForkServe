@@ -1,0 +1,66 @@
+%   Dong Liu --- first author
+%   Prof. Chuan Wu --- corresponding author
+\documentclass{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{hyperref}
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+\usepackage[accepted]{mlsys2026}
+\makeatletter
+\renewcommand{\mlsys@appearing}{%
+  \textit{Working draft in the MLSys 2026 format.}}
+\makeatother
+\setcitestyle{numbers,square,comma}
+
+\input{tex_new/preamble}
+
+\mlsystitlerunning{ForkServe: Prefill Pruning and Disaggregated KV}
+
+\begin{document}
+
+\twocolumn[
+\mlsystitle{ForkServe: Prefill Pruning and\\
+Disaggregated KV for Agentic LLM Serving}
+
+\begin{mlsysauthorlist}
+% Authorship record (this draft stays anonymous):
+% \mlsysauthor{Dong Liu}{hku}
+% \mlsysauthor{Hao Wu}{hku}
+% \mlsysauthor{Chuan Wu}{hku}
+\mlsysauthor{Anonymous Authors}{anon}
+\end{mlsysauthorlist}
+
+% \mlsysaffiliation{hku}{The University of Hong Kong}
+\mlsysaffiliation{anon}{Anonymous Institution}
+
+% \mlsyscorrespondingauthor{Chuan Wu}{cwu@cs.hku.hk}
+\mlsyscorrespondingauthor{Anonymous Authors}{anon@example.com}
+
+\mlsyskeywords{LLM serving, prefill pruning, prefill-decode disaggregation, KV cache, decode-time pruning, agentic inference}
+
+\vskip 0.3in
+
+\begin{abstract}
+\input{tex_new/abstract}
+\end{abstract}
+]
+
+\printAffiliationsAndNotice{}
+
+\input{tex_new/intro}
+\input{tex_new/problem}
+\input{tex_new/design}
+\input{tex_new/eval}
+\input{tex_new/related}
+\input{tex_new/conclusion}
+
+{\small
+\input{bibliography}
+}
+
+\end{document}

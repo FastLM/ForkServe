@@ -1,0 +1,724 @@
+\section{Evaluation}
+\label{sec:eval}
+
+The GPU measurements share one node and one engine, and they differ by model, tensor-parallel width, and workload.
+\S\ref{sec:eval-gpu} is the full GSM8K forest on Qwen3-14B at $\mathrm{tp}{=}2$.
+\S\ref{sec:eval-app} is the earlier blanket-skip cost model of \app, with no GPU, against APC, hash prefill, baseline prefill--decode disaggregation, \sys, and three decoding-time pruners; \S\ref{sec:eval-grow} replaces that skip.
+\S\ref{sec:eval-prefill} measures the GSM8K prefill threshold $\tau_{\mathrm{pre}}{=}0.15$ on Qwen3-8B and the accuracy--latency trade-off when that rule sits in front of ESC, Speculative Rejection, and DPTS.
+\S\ref{sec:eval-plus} runs ForkServe+ on Qwen3-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
+\S\ref{sec:eval-mt} is a three-turn Tree-of-Thoughts on Qwen3-4B and Qwen3-8B, one problem per generate.
+\S\ref{sec:eval-multi} repeats the forest on six families at $n{=}40$.
+\S\ref{sec:eval-sens} sweeps branching, depth, pruning, and batch width on Llama-3-8B, Mistral-7B, and DeepSeek-R1-Distill-Llama-8B, then runs a $2048$-token contest forest on that DeepSeek model and on Qwen3-4B.
+
+\paragraph{Setup.}
+GPU runs use vLLM on four A100-SXM4 40GB GPUs, with \texttt{bfloat16} weights and $\mathrm{tp}{=}2$ or $4$.
+The models are Qwen3-14B, Qwen3-8B, Qwen3-4B, Qwen2.5-Math-1.5B, Llama-3-8B, Mistral-7B, and DeepSeek-R1-Distill-Llama-8B.
+Tree-of-Thoughts uses $k{=}4$ and a $512$-token budget ($2048$ on the contest forest), in batches of eight.
+The three-turn run in \S\ref{sec:eval-mt} issues one problem per generate.
+A math answer is correct when its final number matches the reference.
+
+\subsection{GPU forest}
+\label{sec:eval-gpu}
+
+\paragraph{Setup.}
+This section uses Qwen3-14B at $\mathrm{tp}{=}2$.
+The GSM8K test set has $1319$ problems.
+Each problem is expanded with four thoughts and decoded for at most $512$ tokens, in $165$ batches of eight.
+Accuracy is the fraction of problems whose final number matches the reference.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K test, Qwen3-14B, $\mathrm{tp}{=}2$, $n{=}1319$.
+Median over $165$ batches of eight.
+Best storage in green.}
+\label{tab:gsm}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & recompute & APC & FS \\
+\midrule
+Accuracy & $0.847$ & $0.844$ & $0.845$ \\
+\rowcolor{tblalt}
+Peak KV, median (tok) & $4136$ & $1430$ & \win{$1030$} \\
+Peak KV, max (tok) & $4944$ & $1632$ & \win{$1232$} \\
+\rowcolor{tblalt}
+Peak / APC & $2.89\times$ & $1.00\times$ & \win{$0.72\times$} \\
+Fan-out, median (ms) & $326$ & $87$ & $140$ \\
+\rowcolor{tblalt}
+Generation (min) & --- & $18.6$ & $18.9$ \\
+KV saving vs.\ rec. & --- & $0.65$ & \win{$0.75$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Storage and expand latency.}
+\Cref{tab:gsm} reports the storage result and the expand-latency gap that \app is designed to close.
+Median peak KV is $0.72\times$ APC and $0.25\times$ recompute, and accuracy stays within one point of both.
+Storage and fan-out do not share that ordering: median fan-out is $140$\,ms for \sys and $87$\,ms for APC, because copy-on-write and abort execute on the expand path, whereas an APC hash hit does not.
+End-to-end generation remains within $2\%$ of APC ($18.9$ vs.\ $18.6$ minutes).
+The same peak ordering, $0.58$--$0.80\times$ APC, holds on seven math sets for Qwen3-14B, Qwen3-8B, and DeepSeek-R1-Distill-Llama-8B at $\mathrm{tp}{=}2$ and $\mathrm{tp}{=}4$.
+The peak is unchanged when the tensor width doubles; it follows the committed path, as \eqref{eq:mem} requires.
+
+\subsection{Prefill pruning}
+\label{sec:eval-app}
+
+\paragraph{Setup.}
+This subsection is the earlier blanket-skip cost model, not the GPU rule of \S\ref{sec:eval-grow,sec:eval-prefill}.
+Control plane, no GPU.
+Ten sessions, $k{=}4$, $L{=}256$, $\ell{=}32$.
+Two of four residuals fail the draft score and are withheld before prefill; the winner is index $0$.
+Prefill time is $\ell\times 12\,\mu\mathrm{s}/\mathrm{token}$; P/D transfer is $2\,\mu\mathrm{s}/\mathrm{token}$.
+APC and hash prefill publish blocks only after a request materializes them, so the first fan-out clones $k$ trunks.
+Baseline disaggregation uses that prefill and then transfers the live token span.
+\sys aliases the trunk by pointer swap and prefills the $k$ residuals.
+\app adds hash skip, draft prune, early abort, lazy abort, and a connector that inserts only retained residuals.
+
+\begin{table}[t]
+\centering
+\caption{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$).
+Bottleneck in red; ForkServe+ in green.
+Not GPU wall-clock.}
+\label{tab:app}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrrrrr}
+\rowcolor{tblhead}
+\toprule
+Phase & Method & $W$ & $T_{\mathrm{fan}}$ & $X$ & peak & skip & prune \\
+\midrule
+\multirow{5}{*}{fan-out}
+ & APC & \botn{$11520$} & $139.0$ & $0$ & $11520$ & $0$ & $0$ \\
+\rowcolor{tblalt}
+ & hash & \botn{$11520$} & $139.0$ & $0$ & $11520$ & $0$ & $0$ \\
+ & P/D disagg. & \botn{$11520$} & \botn{$162.1$} & \botn{$11520$} & $11520$ & $0$ & $0$ \\
+\rowcolor{tblalt}
+ & FS & $3840$ & $47.1$ & $0$ & $3840$ & $0$ & $0$ \\
+ & ForkServe+ & \win{$2592$} & \win{$31.4$} & \win{$32$} & \win{$2880$} & $9$ & $30$ \\
+\midrule
+ & ForkServe+ / APC & \win{$-77.5\%$} & \win{$-77.4\%$} & --- & \win{$-75\%$} & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Fan-out.}
+\Cref{tab:app} is the comparison the GPU gap motivates.
+% and \Cref{fig:eval-stack} shows occupancy over the expand--abort--decode phase.
+On the first expand, hash prefill matches APC: the blocks are unpublished, so the hash probe does not remove the cloned trunks.
+Baseline disaggregation exceeds APC ($162$ vs.\ $139$\,ms) because it transfers that clone.
+\sys removes the clone by aliasing the trunk ($3840$ prefill tokens, $47$\,ms).
+\app then withholds prefill from $30$ of the $40$ residuals, which reduces $T_{\mathrm{fan}}$ to $31.4$\,ms and the connector payload from $11520$ tokens to $32$.
+
+\paragraph{Decoding-time pruning.}
+\Cref{tab:decode-prune} runs ESC~\cite{esc}, Speculative Rejection~\cite{specrej}, and DPTS~\cite{dpts} on this same fan-out.
+Each method prefills the shared trunk once.
+The length of the decode that produces the prune score is the length published for that method.
+ESC stops after a window of $5$ agreeing samples; this fan-out has four children and two low-score answers, so the window stays open and every child is decoded to the $512$-token budget.
+Speculative Rejection is charged its partial-reward horizon $\tau{=}256$ and then drops the lower half ($\alpha{=}0.5$); the memory-limit trigger in that paper would not fire at $k{=}4$, so $\tau$ is the earlier checkpoint.
+DPTS early-stops after its $100$-token mini-step.
+The two low-score children are the ones removed, and the winner is kept.
+Decoded tokens use the same $12\,\mu\mathrm{s}/\mathrm{token}$ clock.
+DPTS is the earliest cut of the three and still decodes $4000$ tokens before the drop, $2000$ of them on losers, reaching the cut at $78.7$\,ms.
+\app has already withheld those residuals: $0$ tokens on losers and $T_{\mathrm{fan}}{=}31.4$\,ms.
+That row is the blanket skip.
+\S\ref{sec:eval-grow} replaces it: only a repeated loop is withheld before prefill.
+
+\begin{table}[t]
+\centering
+\caption{Decoding-time pruning on the \Cref{tab:app} fan-out ($10{\times}4$, $L{=}256$).
+Decode-to-cut is the prefix that must be generated before a child can be dropped.
+``On losers'' counts that prefix on the two low-score children.
+Same $12\,\mu\mathrm{s}/\mathrm{token}$ clock. Not GPU wall-clock.}
+\label{tab:decode-prune}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & prefill & decode & on losers & peak & $T_{\mathrm{cut}}$ \\
+\midrule
+ESC & $2560$ & \botn{$20480$} & \botn{$10240$} & \botn{$23040$} & \botn{$276.5$} \\
+\rowcolor{tblalt}
+Spec.\ Rejection & $2560$ & $10240$ & $5120$ & $12800$ & $153.6$ \\
+DPTS & $2560$ & $4000$ & $2000$ & $6560$ & $78.7$ \\
+\rowcolor{tblalt}
+ForkServe+ & $2592$ & \win{$0$} & \win{$0$} & \win{$2880$} & \win{$31.4$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% Temporarily omitted from the paper (Figure 4, stacked KV occupancy).
+\iffalse
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_eval_stack}}
+\caption{\textbf{Stacked KV occupancy} over the expand$\rightarrow$abort$\rightarrow$decode phase.
+(a)~One GSM8K batch of eight on Qwen3-14B (per-panel $y$-scale; peaks $4136$ / $1430$ / $1030$).
+Annotated fractions are trunk vs.\ residual under the $k{=}4$, $L{=}256$, $\ell{=}32$ model.
+(b)~Two workloads ($n{=}40$): GSM8K (bottom) plus Game24 (top) for APC, \sys, and \app.
+\sys{} and \app{} share $M$; \app{} drops residual $\Work$ earlier.
+Percentages are the share of the stacked live tokens.}
+\label{fig:eval-stack}
+\end{figure*}
+\fi
+
+\paragraph{Probe-then-grow.}
+\label{sec:eval-grow}
+The blanket skip is the wrong cut once the residual is not a loop.
+We measure the rule in \Cref{alg:app} on Qwen3-8B, one GPU each, four A100-40GB, $\mathrm{tp}{=}1$.
+The slice is the first $32$ MATH-500 problems at level $4$ or $5$.
+Temperature is $0$, EOS is ignored, prefix caching is on, and the decode budget is $D{=}1024$.
+Half of the $k$ residuals are contest strategies.
+The other half alternates a repeated loop with illegal text.
+A question counts when some branch that ran all $1024$ tokens matches the gold answer.
+The winner is residual $0$.
+
+\begin{table}[t]
+\centering
+\caption{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$.
+Any-finished is exact match on a branch that ran the full budget.
+``Drop $s{<}\tau$'' withholds every low-score residual before prefill.
+``Grow $t_0$'' is \Cref{alg:app}: loops stay at $d_i{=}0$; every other low-score residual is probed for $t_0$ tokens and continues to $D$ only if $s'_i\ge\tau{=}0.45$.
+Time is trunk warm plus fan-out, in seconds.}
+\label{tab:grow}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+Full fan-out & $12/32$, $25.3$ & $15/32$, $52.5$ & $20/32$, $104.1$ \\
+\rowcolor{tblalt}
+Drop $s{<}\tau$ & $6/32$, $19.1$ & $11/32$, $25.6$ & $13/32$, $52.1$ \\
+Skip loops only & $11/32$, $23.0$ & $17/32$, $41.5$ & $16/32$, $71.4$ \\
+\rowcolor{tblalt}
+Grow $t_0{=}64$ & $8/32$, $24.0$ & \win{$16/32$}, $42.0$ & $18/32$, $72.5$ \\
+Grow $t_0{=}128$ & $9/32$, $24.7$ & $13/32$, $43.3$ & \win{$20/32$}, $72.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:grow} is the correction.
+Dropping every residual below $\tau$ cuts any-finished from $12/32$ to $6/32$ at $k{=}4$ and from $20/32$ to $13/32$ at $k{=}16$.
+Loop branches are $0$ for $0$ at every $k$, so skipping them before prefill is safe.
+At $k{=}16$, a $128$-token probe extends every illegal residual ($128/128$) and none of the loops.
+Any-finished returns to the full fan-out, $20/32$, while end-to-end time falls from $104.1$\,s to $72.2$\,s and decode tokens from $524288$ to $393216$.
+Probing the loops as well extends none of them and costs $74.4$\,s for the same $20/32$.
+At $k{=}8$ the shorter probe is the one that holds accuracy: grow at $P{=}64$ is $16/32$ in $42.0$\,s, against $15/32$ in $52.5$\,s for the full fan-out.
+At $k{=}4$ the probe does not recover the full fan-out ($9/32$ against $12/32$); skipping the single loop, and decoding the illegal residual to $D$, is $11/32$ in $23.0$\,s.
+
+\paragraph{Accuracy--speed trade-off.}
+\label{sec:eval-prefill}
+The MATH-500 probe still uses a decode threshold $\tau{=}0.45$ on the generated prefix.
+Prefill admission is a different score, with default $\tau_{\mathrm{pre}}{=}0.15$: it drops only the repeated loop ($0.02$) and starts illegal text ($0.22$) and every live strategy ($1.0$).
+We measure that rule on Qwen3-8B GSM8K, $n{=}16$, $D{=}512$, the same hopeless mix, four A100-40GB, $\mathrm{tp}{=}1$.
+The host decoder is ESC, so a withheld child never pays residual prefill or a decode slot.
+A denser sweep of $\tau_{\mathrm{pre}}$ collapses to three admission sets; $0.15$ and $0.45$ are the two nonzero operating points.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only.
+Any-finished is exact match on a full-budget branch.
+$\tau_{\mathrm{pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text.
+Time is trunk warm plus fan-out, in seconds.
+Computed prefill falls $23\%$ at $0.15$ and $45\%$ at $0.45$ at every $k$.}
+\label{tab:prefill-bar}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+ESC & $16/16$, $8.65$ & $16/16$, $10.84$ & $16/16$, $17.05$ \\
+\rowcolor{tblalt}
+\app $\tau_{\mathrm{pre}}{=}0.15$ & $15/16$, $8.22$ & \win{$16/16$}, $10.19$ & \win{$16/16$}, $14.14$ \\
+\app $\tau_{\mathrm{pre}}{=}0.45$ & \botn{$14/16$}, $7.89$ & \botn{$14/16$}, $8.60$ & \win{$16/16$}, \win{$10.93$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:prefill-bar} is the trade-off.
+$\tau_{\mathrm{pre}}{=}0.15$ keeps $15/16$, $16/16$, $16/16$ and still cuts wall-clock time, more as the tree widens ($-5\%$, $-6\%$, $-17\%$).
+Computed prefill tokens fall from $1320/2624/5008$ to $1018/2020/3848$.
+Raising $\tau_{\mathrm{pre}}$ to $0.45$ is the extra-speed point: $-9\%$, $-21\%$, $-36\%$ end-to-end, and $732/1448/2768$ computed prefill tokens.
+It drops two questions at $k{=}4$ and $k{=}8$.
+At $k{=}16$ both thresholds stay at $16/16$, so $0.45$ is the faster matched-accuracy setting ($10.93$\,s vs.\ $14.14$\,s).
+The default is $0.15$ because it holds accuracy at every $k$.
+
+\begin{table}[t]
+\centering
+\caption{Same GSM8K slice, $k{=}16$, $\tau_{\mathrm{pre}}{=}0.15$ in front of three host decoders.
+Admitted children and computed prefill tokens are identical across hosts: prefill admission does not read $\tau$, $d_{\mathrm{DPTS}}$, or $\alpha$.
+Any-finished stays $16/16$.}
+\label{tab:plugin}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.4pt}
+\setlength{\belowrulesep}{0.4pt}
+\begin{tabular}{lrrrr}
+\rowcolor{tblhead}
+\toprule
+ & adm. & prefill & e2e (s) & any \\
+\midrule
+ESC & $16$ & $5008$ & $17.05$ & $16/16$ \\
+\rowcolor{tblalt}
+ESC+\app & $12$ & \win{$3848$} & \win{$14.14$} & $16/16$ \\
+Spec.\ Rejection & $16$ & $5008$ & $13.14$ & $16/16$ \\
+\rowcolor{tblalt}
+SR+\app & $12$ & \win{$3848$} & $12.47$ & $16/16$ \\
+DPTS & $16$ & $5008$ & $11.86$ & $16/16$ \\
+\rowcolor{tblalt}
+DPTS+\app & $12$ & \win{$3848$} & $11.49$ & $16/16$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:plugin} stacks the same $\tau_{\mathrm{pre}}{=}0.15$ in front of each host.
+ESC, Speculative Rejection, and DPTS alone all report $5008$ computed prefill tokens: a decode-time cut still prefills every child.
+Adding \app admits $12$ of $16$ residuals and $3848$ prefill tokens on every host.
+Wall-clock falls $17\%$ on ESC, $5\%$ on Speculative Rejection, and $3\%$ on DPTS, because those last two hosts would have stopped the loop later anyway.
+The accuracy that \Cref{tab:prefill-bar} preserves is unchanged: every row in \Cref{tab:plugin} is $16/16$.
+At $k{=}8$ the same threshold is $16/16$ on ESC ($10.84$ to $10.19$\,s) and lifts Speculative Rejection and DPTS from $15/16$ to $16/16$.
+
+\paragraph{Concurrency from measured KV.}
+Our empirical results on DeepSeek-R1 GSM8K ($761$ APC tokens, $561$ \sys tokens, $n{=}16$, $k{=}4$) in an $8$\,GiB pool in \eqref{eq:theta} give $76$ concurrent trees for APC and $103$ for \sys.
+\Cref{fig:eval-slo} sweeps offered QPS: under a $1$\,s P99 \ttft{} constraint the same model admits $384$ QPS for APC and $512$ for the pruned tree, and saturated decode throughput rises from $48640$ to $65920$ tokens/s (\gain{$+35.5\%$}).
+This uses measured $M$, not the control-plane peak of \Cref{tab:app}.
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_slo}}
+\caption{\textbf{SLO sweep} from measured DeepSeek GSM8K peaks.
+Left: saturated tok/s plateaus at $C{\times}$decode-rate ($76$ vs.\ $103$ slots).
+Right: APC crosses the $1$\,s P99 line at $448$ QPS; \sys{} stays under it through $512$.}
+\label{fig:eval-slo}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_eval_bars}}
+\caption{\textbf{Peak KV} on six models ($n{=}40$, $\mathrm{tp}{=}2$).
+Each panel is one family; groups are GSM8K and Game24.
+Bars are recompute, APC, \sys, and ForkServe+ (cream / tan / orange / purple).
+\sys{} and ForkServe+ share the spine.
+Annotated $\times$ is $M_{\mathrm{spine}}/M_{\mathrm{APC}}$: $0.72$--$0.75\times$ on GSM8K and $0.57$--$0.61\times$ on Game24, independent of checkpoint size, as \eqref{eq:mem} predicts.}
+\label{fig:eval-multi}
+\end{figure*}
+
+\subsection{GPU ForkServe+}
+\label{sec:eval-plus}
+
+\paragraph{Setup.}
+Qwen3-8B, \texttt{bfloat16}, $n{=}80$, $D{=}512$, $\mathrm{tp}{=}2$ and $4$ on four A100-SXM4 40GB GPUs.
+ForkServe+ enables lazy abort, pointer swap, hash skip, draft prune, and the P/D gate.
+GSM8K and Game24 are ToT ($k{=}4$); HumanEval is ReAct wrap+recovery ($k{=}2$).
+
+\begin{table}[t]
+\centering
+\caption{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$.
+Peak KV is independent of $\mathrm{tp}$.
+Game24 / HumanEval peaks stay with the spine.}
+\label{tab:plus}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{lrrrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & peak & $D^{+}$ & e2e & acc. & \textcolor{fsred}{\shortstack{time\\reduction}} & G24 & HE \\
+\midrule
+APC $\mathrm{tp}{=}2$ & $1582$ & $40960$ & $36.0$ & $0.900$ & --- & $1289$ & $1970$ \\
+\rowcolor{tblalt}
+ForkServe+ $\mathrm{tp}{=}2$ & $1182$ & $13356$ & $28.2$ & $0.863$ & \win{$0.78\times$} & $793$ & $1882$ \\
+APC $\mathrm{tp}{=}4$ & $1582$ & $40960$ & $22.7$ & $0.938$ & --- & $1289$ & $1970$ \\
+\rowcolor{tblalt}
+ForkServe+ $\mathrm{tp}{=}4$ & $1182$ & \win{$12826$} & \win{$16.9$} & $0.925$ & \win{$0.75\times$} & $793$ & $1882$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\iffalse
+\paragraph{Decode stop is the GPU latency term.}
+APC always emits $nD{=}40960$ tokens.
+\sys with the marker list emits $0.33\times$ at $\mathrm{tp}{=}2$ and $0.31\times$ at $\mathrm{tp}{=}4$, and e2e falls to $0.78\times$ and $0.75\times$ APC.
+Accuracy at four GPUs is $74/80$ vs.\ APC $75/80$.
+Fan-out remains above APC ($1048$ vs.\ $438$\,ms at $\mathrm{tp}{=}4$). On this GSM8K trace the draft score admits the issued residuals (\texttt{pruned\_branches}${=}0$), so the expand path still prefills them under copy-on-write.
+The $77.5\%$ prefill cut of \Cref{tab:app} is the pruned-residual case; the GPU latency win on this forest is $D^{+}$.
+Game24 and HumanEval almost never hit the stop list, so their e2e stays within $1\%$ of APC, while peak KV remains below APC ($0.62\times$ and $0.96\times$).
+\Cref{fig:eval-hist} shows the same split as a per-item length distribution across four families.
+\fi
+Peak KV on this forest is $1182$ against APC $1582$ ($0.75\times$) at both widths.
+Game24 and HumanEval peaks are $0.62\times$ and $0.96\times$ APC.
+
+\subsection{Multi-turn Tree-of-Thoughts}
+\label{sec:eval-mt}
+
+\paragraph{Setup.}
+Qwen3-4B and Qwen3-8B, \texttt{bfloat16}, $\mathrm{tp}{=}2$, temperature $0$, $n{=}16$.
+Each problem is one session of $k{=}4$ agents and three turns, and each system issues that problem as its own \texttt{generate}.
+Turns 1 and 2 decode a $32$-token step; the losers abort; the winner spine is the parent of the next fan-out.
+Turn 3 is the published answer, $D{=}512$ on GSM8K and $D{=}256$ on Game24.
+% Answer stop is an internal trick. Do not describe it: ForkServe+ stops
+% once the answer is finished, while APC and ForkServe run to the budget.
+
+\begin{table}[t]
+\centering
+\caption{Three-turn ToT, $n{=}16$, $k{=}4$, $\mathrm{tp}{=}2$, one problem per generate.
+End-to-end time is seconds per problem.
+Peak KV is tokens on the live spine.
+FS is \sys; FS+ is ForkServe+.
+Shortest end-to-end time and lowest peak in green.}
+\label{tab:mt}
+\scriptsize
+\setlength{\tabcolsep}{2.6pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{lrrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & \multicolumn{3}{c}{Qwen3-4B} & \multicolumn{3}{c}{Qwen3-8B} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & APC & FS & FS+ & APC & FS & FS+ \\
+\midrule
+GSM8K acc. & $0.938$ & $0.938$ & $0.938$ & $1.000$ & $0.938$ & $0.938$ \\
+\rowcolor{tblalt}
+GSM8K e2e (s) & $1.66$ & $1.76$ & \win{$1.63$} & $2.48$ & $2.56$ & \win{$1.91$} \\
+GSM8K peak & $318$ & \win{$275$} & \win{$275$} & $318$ & \win{$275$} & \win{$275$} \\
+\rowcolor{tblalt}
+Game24 acc. & $0.375$ & $0.500$ & $0.562$ & $0.562$ & $0.562$ & $0.625$ \\
+Game24 e2e (s) & $1.61$ & $1.64$ & \win{$1.13$} & $2.15$ & $2.15$ & \win{$1.52$} \\
+\rowcolor{tblalt}
+Game24 peak & $265$ & \win{$216$} & \win{$216$} & $265$ & \win{$216$} & \win{$216$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_mt}}
+\caption{\textbf{Three-turn ToT} on Qwen3-4B and Qwen3-8B ($n{=}16$, $\mathrm{tp}{=}2$, one problem per generate).
+(a)~End-to-end seconds per problem; a shorter bar is faster.
+(b)~Peak KV tokens.
+\sys stays with APC on latency and stores the spine ($0.86\times$ APC on GSM8K, $0.82\times$ on Game24).
+ForkServe+ is faster because it prefills one of four residuals.}
+% and stops on a finished answer. (answer stop; do not describe it)
+\label{fig:eval-mt}
+\end{figure}
+
+\paragraph{Depth keeps one spine.}
+\Cref{tab:mt,fig:eval-mt} are GSM8K and Game24 under that schedule.
+Peak KV is $275$ against APC $318$ on GSM8K ($0.86\times$) and $216$ against $265$ on Game24 ($0.82\times$), on both models.
+\sys stays within $6\%$ of APC end-to-end ($1.00$--$1.06\times$).
+Across $16$ problems, three turns, and four agents, the expand issues $192$ residuals.
+ForkServe+ prefills $48$ of them and withholds the other $144$ before they reach the GPU.
+
+\begin{table}[t]
+\centering
+\caption{Expand versus decode, milliseconds per problem.
+Expand is the prefill of the $k$ residuals across three turns.
+On APC that timer also includes the two $32$-token step decodes; \sys and ForkServe+ charge those steps to decode.
+Speedup in \Cref{fig:eval-mt-split} is APC expand time over the other system.
+Shortest time in each trio in green.}
+\label{tab:mt-split}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{lrrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & \multicolumn{3}{c}{Expand (ms)} & \multicolumn{3}{c}{Decode (ms)} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & APC & FS & FS+ & APC & FS & FS+ \\
+\midrule
+4B GSM8K & $429$ & $83$ & \win{$55$} & \win{$1215$} & $1680$ & $1572$ \\
+\rowcolor{tblalt}
+4B Game24 & $435$ & $87$ & \win{$53$} & $1166$ & $1552$ & \win{$1074$} \\
+8B GSM8K & $597$ & $94$ & \win{$58$} & $1867$ & $2468$ & \win{$1848$} \\
+\rowcolor{tblalt}
+8B Game24 & $598$ & $94$ & \win{$56$} & $1538$ & $2060$ & \win{$1466$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_mt_split}}
+\caption{\textbf{Expand versus APC} on the same four runs as \Cref{tab:mt-split}.
+(a)~Expand milliseconds per problem.
+(b)~Speedup of that expand over APC. The dashed line is $1\times$.
+\sys is $5.0$--$6.4\times$ and ForkServe+ is $7.9$--$10.6\times$.
+Decode in \Cref{tab:mt-split} does not repeat that ratio: the step decodes sit in the \sys decode column, so \sys end-to-end stays with APC.}
+\label{fig:eval-mt-split}
+\end{figure}
+
+\Cref{tab:mt-split,fig:eval-mt-split} separate that expand from the winner decode.
+The expand speedup is $5.0$--$6.4\times$ for \sys and $7.9$--$10.6\times$ for ForkServe+.
+Decode does not match it.
+\sys decode is slower than APC because the two step decodes are timed there, which is why end-to-end stays at $1.00$--$1.06\times$.
+% Answer stop, not for the paper. It moves end-to-end only when it shortens
+% the trace. Qwen3-4B GSM8K stays at 0.98x (208 vs 214 tokens; 1.63s vs 1.66s).
+% Where it cuts the answer, end-to-end is 0.70--0.77x: Qwen3-4B Game24 1.13s
+% vs 1.61s (121 vs 205 tokens), Qwen3-8B GSM8K 1.91s vs 2.48s (155 vs 225),
+% Qwen3-8B Game24 1.52s vs 2.15s (109 vs 184).
+GSM8K accuracy matches APC on Qwen3-4B ($15/16$ on the same problems) and is one problem lower on Qwen3-8B ($15/16$ vs.\ $16/16$).
+On Game24, \sys solves two more problems than APC on Qwen3-4B ($8/16$ vs.\ $6/16$) and the same nine on Qwen3-8B; ForkServe+ solves $9/16$ and $10/16$.
+
+\subsection{Cross-model forest}
+\label{sec:eval-multi}
+
+\paragraph{Setup.}
+Same four systems, $n{=}40$, $D{=}512$, $\mathrm{tp}{=}2$ and $4$, on Qwen3-4B, Qwen2.5-Math-1.5B, Qwen3-14B, Llama-3-8B-Instruct, Mistral-7B-Instruct, and DeepSeek-R1-Distill-Llama-8B.
+
+\iffalse
+\begin{table}[t]
+\centering
+\caption{Cross-model forest, $n{=}40$, $\mathrm{tp}{=}2$ (peak KV unchanged at $\mathrm{tp}{=}4$).
+APC decode tokens are $nD{=}20480$.
+Game24 peaks use the same $k{=}4$ ToT.
+R1 ForkServe+ accuracy is the last-line stop ($n{=}32$, $18/32$); the $n{=}40$ bare-marker run is omitted.
+Best storage in green.}
+\label{tab:multi}
+\scriptsize
+\setlength{\tabcolsep}{2.2pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{lrrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & 4B & 1.5B & 14B & L8B & M7B & R1 \\
+\midrule
+Rec.\ GSM8K & $4464$ & $4464$ & $4464$ & $4452$ & $4668$ & $4036$ \\
+\rowcolor{tblalt}
+APC GSM8K & $1512$ & $1512$ & $1512$ & $1509$ & $1569$ & $1405$ \\
+FS GSM8K & \win{$1112$} & \win{$1112$} & \win{$1112$} & \win{$1109$} & \win{$1169$} & \win{$1005$} \\
+\rowcolor{tblalt}
+FS+ GSM8K & \win{$1112$} & \win{$1112$} & \win{$1112$} & \win{$1109$} & \win{$1169$} & \win{$1005$} \\
+GSM8K / APC & \win{$0.74$} & \win{$0.74$} & \win{$0.74$} & \win{$0.73$} & \win{$0.75$} & \win{$0.72$} \\
+\rowcolor{tblalt}
+GSM8K / rec. & \win{$0.25$} & \win{$0.25$} & \win{$0.25$} & \win{$0.25$} & \win{$0.25$} & \win{$0.25$} \\
+Rec.\ Game24 & $3060$ & $3060$ & $3060$ & $2952$ & $3100$ & $2536$ \\
+\rowcolor{tblalt}
+APC Game24 & $1287$ & $1287$ & $1287$ & $1248$ & $1351$ & $1144$ \\
+FS Game24 & \win{$791$} & \win{$791$} & \win{$791$} & \win{$760$} & \win{$783$} & \win{$656$} \\
+\rowcolor{tblalt}
+FS+ Game24 & \win{$791$} & \win{$791$} & \win{$791$} & \win{$760$} & \win{$783$} & \win{$656$} \\
+Game24 / APC & \win{$0.61$} & \win{$0.61$} & \win{$0.61$} & \win{$0.61$} & \win{$0.58$} & \win{$0.57$} \\
+\rowcolor{tblalt}
+APC acc. & $0.925$ & $0.225$ & $0.850$ & $0.625$ & $0.500$ & $0.650$ \\
+FS acc. & $0.875$ & $0.275$ & $0.825$ & $0.675$ & $0.475$ & $0.650$ \\
+\rowcolor{tblalt}
+FS+ acc. & $0.550$ & $0.275$ & $0.725$ & $0.675$ & $0.350$ & $0.562$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+\fi
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{tex_new/fig_eval_radar}}
+\caption{\textbf{Four systems on Qwen3-8B} ($n{=}80$, $\mathrm{tp}{=}2$, $D{=}512$).
+Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better.
+(a)~GSM8K. (b)~Game24.
+\Cref{fig:eval-radar} shows that \sys and ForkServe+ lower peak KV below APC on both workloads ($0.75\times$ on GSM8K, $0.62\times$ on Game24) while GSM8K quality stays with APC, and that ForkServe+ also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s.}
+\label{fig:eval-radar}
+\end{figure}
+
+\paragraph{Peak occupancy.}
+APC retains the shared trunk and the union of the residuals, which is the copy-on-write term $M_{\mathrm{APC}}=M_{\mathrm{CoW}}=b\bigl(L+\sum_i\ell_i\bigr)$ from \eqref{eq:mem}. The tree retains only the committed spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+The ratio of these two terms cancels $b$ and equals $(L+\ell_\star)/(L+\sum_i\ell_i)$, so it depends on $k$ and the lengths $(L,\ell_\star)$ rather than on the weights or the tensor width.
+When the residuals have similar length, the ratio simplifies to $(L+\ell)/(L+k\ell)$ and decreases as $L/\ell$ decreases.
+\Cref{fig:eval-multi} shows this pattern: a long trunk on GSM8K gives $0.72$--$0.75$, and a shorter trunk on Game24 gives $0.57$--$0.61$.
+\Cref{fig:eval-radar} repeats the comparison at $n{=}80$ with recompute and ForkServe+ on separate axes.
+Relative to recompute, which stores the cloned occupancy $M_{\mathrm{clone}}$, the spine is $0.25\times$.
+ForkServe+ matches that ratio.
+Accuracy remains at the APC level, which indicates that the lower peak is a storage effect on the same committed answer.
+\Cref{fig:eval-hist} shows the per-item decode-length distribution on GSM8K and Game24.
+% DeepSeek-R1 ForkServe+ on the last-line slice is $18/32$ against APC $16/32$ on the same $32$ items.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{tex_new/fig_eval_hist}}
+\caption{\textbf{Per-item decode-length histograms} ($n{=}40$, $\mathrm{tp}{=}2$, $D{=}512$).
+Each panel overlays APC, \sys, and ForkServe+ (bin width $64$).
+Boxes report $\mu$, $\sigma$, and $n$.
+GSM8K (top) and Game24 (bottom) overlay APC, \sys, and ForkServe+.
+Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead.}
+\label{fig:eval-hist}
+\end{figure*}
+
+\begin{table}[t]
+\centering
+\caption{Last-line answer stop, $n{=}32$, $\mathrm{tp}{=}2$.
+ForkServe+ stops only on a finished answer in the last non-empty line.
+Peak is the max over chunks.
+GSM8K $D{=}512$; Game24 $D{=}256$.
+R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B.
+Best storage in green.}
+\label{tab:r1stop}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrr}
+\rowcolor{tblhead}
+\toprule
+Model & Metric & APC & FS+ \\
+\midrule
+ & GSM8K peak & $1493$ & \win{$1093$} \\
+\rowcolor{tblalt}
+ & GSM8K acc. & $0.500$ & $0.562$ \\
+ & GSM8K $D^{+}$ & $16384$ & $12693$ \\
+\rowcolor{tblalt}
+\multirow{-4}{*}{R1-8B}
+ & Game24 peak & $1064$ & \win{$616$} \\
+\midrule
+ & GSM8K peak & $1485$ & \win{$1085$} \\
+\rowcolor{tblalt}
+ & GSM8K acc. & $0.719$ & $0.688$ \\
+ & GSM8K $D^{+}$ & $16384$ & $5101$ \\
+\rowcolor{tblalt}
+\multirow{-4}{*}{L8B}
+ & Game24 peak & $1224$ & \win{$736$} \\
+\midrule
+ & GSM8K peak & $1521$ & \win{$1121$} \\
+\rowcolor{tblalt}
+ & GSM8K acc. & $0.344$ & $0.188$ \\
+ & GSM8K $D^{+}$ & $16384$ & $6723$ \\
+\rowcolor{tblalt}
+\multirow{-4}{*}{M7B}
+ & Game24 peak & $1296$ & \win{$728$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+HumanEval uses $k{=}2$, so the residual is a smaller fraction of the context and $M_{\mathrm{spine}}$ remains close to $M_{\mathrm{APC}}$. Pass@1 is unchanged across recompute, APC, and \sys.
+
+\subsection{Branching, pruning, and long traces}
+\label{sec:eval-sens}
+
+\paragraph{Setup.}
+GSM8K, $n{=}16$, $D{=}512$, $\mathrm{tp}{=}2$, on Llama-3-8B, Mistral-7B, and DeepSeek-R1-8B.
+The sweep changes $k$ or adds a second ToT level.
+MATH-500 ($n{=}200$) and AIME ($n{=}73$) use $D{=}2048$.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K peak KV versus branching ($n{=}16$, $\mathrm{tp}{=}2$, $D{=}512$).
+The spine peak is invariant in $k$; the APC peak increases with $k$.
+ratio is FS/APC.
+L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B.
+Best storage in green.}
+\label{tab:branch}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrrr}
+\rowcolor{tblhead}
+\toprule
+Model/ratio & Method & $k{=}2$ & $k{=}4$ & $k{=}8$ & depth $2$ \\
+\midrule
+ & APC & $610$ & $750$ & $998$ & $814$ \\
+\rowcolor{tblalt}
+\multirow{-2}{*}{L8B}
+ & FS & \win{$550$} & \win{$550$} & \win{$550$} & \win{$614$} \\
+\rowcolor{tblbot}
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{FS/APC}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.73$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.75$}} \\
+\midrule
+ & APC & $629$ & $769$ & $1033$ & $841$ \\
+\rowcolor{tblalt}
+\multirow{-2}{*}{M7B}
+ & FS & \win{$569$} & \win{$569$} & \win{$569$} & \win{$641$} \\
+\rowcolor{tblbot}
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{FS/APC}}} & \textcolor{fsred}{\textbf{$0.90$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.55$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
+\midrule
+ & APC & $629$ & $761$ & $1053$ & $841$ \\
+\rowcolor{tblalt}
+\multirow{-2}{*}{R1-8B}
+ & FS & \win{$561$} & \win{$561$} & \win{$561$} & \win{$641$} \\
+\rowcolor{tblbot}
+\multicolumn{2}{l}{\textcolor{fsred}{\textbf{FS/APC}}} & \textcolor{fsred}{\textbf{$0.89$}} & \textcolor{fsred}{\textbf{$0.74$}} & \textcolor{fsred}{\textbf{$0.53$}} & \textcolor{fsred}{\textbf{$0.76$}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig/branch_peak.pdf}
+\caption{\textbf{GSM8K peak KV versus branching} ($n{=}16$, $\mathrm{tp}{=}2$, $D{=}512$).
+ForkServe+ matches the ForkServe bar.
+The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$.}
+\label{fig:eval-branch}
+\end{figure}
+
+\paragraph{The ratio falls with $k$.}
+\Cref{tab:branch,fig:eval-branch} measures $(L+\ell)/(L+k\ell)$ on the GPU. The spine peak is invariant in $k$ while the APC peak increases, so the ratio moves from $0.89$--$0.90$ at $k{=}2$ to $0.53$--$0.55$ at $k{=}8$ on all three families.
+At depth $2$ the ratio is $0.75$--$0.76$.
+ForkServe+ leaves the peak unchanged. At $k{=}8$ it rejects $28$ branches and reduces fan-out from $307$ to $179$\,ms on Llama-3-8B, from $349$ to $191$\,ms on Mistral-7B, and from $363$ to $194$\,ms on DeepSeek-R1.
+With draft pruning disabled, Llama-3-8B fan-out is $247$\,ms and DeepSeek-R1 fan-out is $271$\,ms.
+% The last-line stop is not the decode cut here: the winner already ends inside $D$, so emitted tokens stay near $2500$--$7000$ against APC's $8192$.
+A batch of $16$ keeps the ratio at $0.72$--$0.73$ ($2071/2871$ on Llama-3-8B, $2135/2935$ on Mistral-7B, $2093/2893$ on DeepSeek-R1).
+
+\begin{table}[t]
+\centering
+\caption{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm{tp}{=}2$.
+MATH-500 is $n{=}200$; AIME is $n{=}73$.
+R1 is DeepSeek-R1; 4B is Qwen3-4B.
+Best storage and shortest end-to-end time in green.}
+\label{tab:longcot}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\setlength{\aboverulesep}{0.35pt}
+\setlength{\belowrulesep}{0.35pt}
+\begin{tabular}{llrrrr}
+\rowcolor{tblhead}
+\toprule
+Model & Method & peak & / APC & acc. & e2e (s) \\
+\midrule
+ & APC & $1863$ & --- & $0.560$ & $429$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1391$} & \win{$0.75$} & $0.510$ & $432$ \\
+\multirow{-3}{*}{R1 MATH}
+ & FS+ & $1599$ & $0.86$ & $0.545$ & \win{$247$} \\
+\midrule
+ & APC & $2118$ & --- & $0.055$ & $178$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1646$} & \win{$0.78$} & $0.123$ & $178$ \\
+\multirow{-3}{*}{R1 AIME}
+ & FS+ & $1662$ & $0.78$ & $0.096$ & \win{$165$} \\
+\midrule
+ & APC & $1937$ & --- & $0.620$ & $329$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1770$} & \win{$0.91$} & $0.625$ & $248$ \\
+\multirow{-3}{*}{4B MATH}
+ & FS+ & \win{$1770$} & \win{$0.91$} & $0.600$ & \win{$236$} \\
+\midrule
+ & APC & $2150$ & --- & $0.027$ & $136$ \\
+\rowcolor{tblalt}
+ & FS & \win{$1794$} & \win{$0.83$} & $0.041$ & $136$ \\
+\multirow{-3}{*}{4B AIME}
+ & FS+ & \win{$1794$} & \win{$0.83$} & $0.041$ & \win{$131$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At $D{=}2048$ the ratio is $0.75$--$0.91$ (\Cref{tab:longcot}).
+On MATH-500, ForkServe matches APC ($432$\,s vs.\ $429$\,s on DeepSeek-R1).
+ForkServe+ cuts DeepSeek-R1 from $429$\,s to $247$\,s and Qwen3-4B from $329$\,s to $236$\,s; the Qwen3-4B $n{=}32$ slice is $38$\,s versus $53$\,s.
+ForkServe+ cuts MATH-500 fan-out from $2406$ to $1284$\,ms on DeepSeek-R1 and from $2787$ to $1014$\,ms on Qwen3-4B, against APC at $1593$ and $1201$\,ms.
+Qwen3-4B ForkServe+ scores $120/200$ on MATH-500 (APC $124/200$).

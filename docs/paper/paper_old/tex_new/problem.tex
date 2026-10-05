@@ -1,0 +1,104 @@
+\section{Background and Model}
+\label{sec:problem}
+
+\subsection{Prefill, Decode, and Idle}
+Autoregressive inference has two mechanically different phases~\cite{orca,distserve,splitwise}.
+\emph{Prefill} consumes the prompt in parallel and is compute-bound; \emph{decode} emits one token (or a small chunk) per step and is memory-bandwidth bound.
+PagedAttention~\cite{vllm} stores KV in non-contiguous pages; RadixAttention~\cite{sglang} indexes pages by token prefix so concurrent requests that share a system prompt hit a common trunk.
+Two consequences matter for agents.
+First, next-turn \ttft{} is the prefill of tokens that miss the cache, plus queuing.
+Second, a memory-bound decode batch rarely saturates the tensor cores that a concurrent chunked prefill could use~\cite{sarathi}.
+Agent serving adds a third fact: the prompt of turn $i{+}1$ is a \emph{delta} on turn $i$, applied after a tool pause of highly variable length~\cite{continuum,mori}.
+
+\subsection{Traditional Methods on a Fan-out}
+\label{sec:traditional}
+We use \emph{traditional methods} for the mechanisms a production stack already applies to one fan-out: prefix caching, hash-indexed prefill, prefill--decode disaggregation, and decode-time pruning.
+They share the trunk or they drop a child, and they do so at a stage that is fixed in advance.
+\Cref{tab:trad} is that stage.
+
+\begin{table*}[t]
+\centering
+\caption{Where each traditional method pays for one fan-out of $k$ residuals on a trunk of length $L$.
+``First expand'' is the GPU prefill issued before any child has published a block.
+``Rejection'' is the earliest point at which a non-winner can leave.
+\sys is the stage order of \S\ref{sec:app}.}
+\label{tab:trad}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}p{0.20\textwidth}p{0.20\textwidth}p{0.28\textwidth}p{0.24\textwidth}@{}}
+\toprule
+Method & First expand & Rejection & Connector \\
+\midrule
+Recompute & $k$ clones of $L$ & end of the request & none \\
+APC, radix, hash prefill & $k$ clones of $L$ & LRU after a block is published & none; a later replay of the winner is a hit \\
+P/D disaggregation & $k$ clones of $L$ & after \texttt{insert} & $kL+\sum_i\ell_i$ \\
+ESC, Speculative Rejection, DPTS & every residual & after a generated prefix & KV of every prefilled child \\
+\sys & one alias of $L$ & loop before the kernel; other low scores after a $t_0$ probe & miss tail of $\Keep$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{First-expand cost.}
+APC indexes a full block by $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ after those tokens exist~\cite{vllm}; RadixAttention walks the same prefix~\cite{sglang}.
+A same-batch expansion therefore misses and clones $k$ trunks,
+$\Work_{\mathrm{APC}}=kL+\sum_i\ell_i$,
+while a later replay of $x_\star$ is a hit ($\Work{=}0$).
+Baseline disaggregation~\cite{distserve,splitwise} transfers that span,
+\begin{equation}
+\label{eq:xfer-stock}
+\Xfer_{\mathrm{PD}}=kL+\textstyle\sum_i\ell_i,
+\end{equation}
+so $\Xfer_{\mathrm{PD}}=\Work_{\mathrm{APC}}$ on the first expand.
+ESC~\cite{esc}, Speculative Rejection~\cite{specrej}, and DPTS~\cite{dpts} evaluate a child only after its prefill and a generated prefix, hence after $\Work$ and, under disaggregation, after $\Xfer$.
+
+\subsection{Fan-out Model}
+\label{sec:model}
+
+\begin{definition}[Branching step]
+\label{def:step}
+A parent $u$ holds a committed trunk $x_u$ with $|x_u|{=}L$.
+A fan-out is a set of residuals $\{\rho_i\}_{i=1}^{k}$, $|\rho_i|{=}\ell_i$.
+The bound winner $\star$ leaves the spine $x_\star=x_u\Vert\rho_\star$, $|x_\star|{=}L{+}\ell_\star$.
+\end{definition}
+
+Let $b$ be KV bytes per token and $P$ the page size.
+The three occupancies of one step are
+\begin{align}
+M_{\mathrm{clone}} &= b\bigl(kL+\textstyle\sum_i\ell_i\bigr), \label{eq:mem}\\
+M_{\mathrm{CoW}} &= b\bigl(L+\textstyle\sum_i\ell_i\bigr), \nonumber\\
+M_{\mathrm{spine}} &= b\bigl(L+\ell_\star\bigr). \nonumber
+\end{align}
+$M_{\mathrm{clone}}$ is the first-expand footprint of recompute, APC, and baseline disaggregation;
+$M_{\mathrm{CoW}}$ is one shared trunk with every residual live;
+$M_{\mathrm{spine}}$ is the footprint after abort.
+$\Work$ is the token count issued to a prefill kernel before $\star$ is known;
+$\Xfer$ is the token count inserted on the P/D connector.
+\Cref{tab:notation} fixes the remaining symbols.
+
+\begin{table}[t]
+\centering
+\caption{Notation for Definition~\ref{def:step} and for \eqref{eq:action}--\eqref{eq:xfer}.}
+\label{tab:notation}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}llp{0.58\columnwidth}@{}}
+\toprule
+Symbol & Domain & Meaning \\
+\midrule
+$L$, $\ell_i$, $\ell_\star$ & $\mathbb{N}$ & trunk; residual $i$; committed residual \\
+$\rho_i$, $x_u$ & tokens & residual of child $i$; committed trunk \\
+$h_i$ & digest & $\mathrm{hash}(\mathrm{parent},\rho_i[0{:}P),\mathrm{extra})$ \\
+$m_i$ & tokens & full-page prefix of $\rho_i$ in $H$, steps of $P$ \\
+$s_i$, $s'_i$, $\tau$ & $[0,1]$ & score of $\rho_i$; score of the probe $y_i$; threshold \\
+$t_0$, $D$, $d_i$ & tokens & probe length; decode budget; length assigned to $i$ \\
+$\alpha$ & $(0,1]$ & early-abort prefix fraction ($0.20$) \\
+$p_i$, $q_i$ & $[0,1]$ & admit probability; residual-prefix hit rate \\
+$a_i\in\Act$ & $\Act$ & $\mathrm{HS},\mathrm{HP},\mathrm{DS},\mathrm{EA},\mathrm{PF}$ (\eqref{eq:action}) \\
+$\Lambda$, $F_i$ & set, $\{0,1\}$ & repeated-loop index set; early-abort predicate \\
+$\Keep$ & $\subseteq[k]$ & residuals that remain after admission \\
+$\Work_i$, $\Xfer_i$ & tokens & GPU miss tail; connector payload \\
+$b$, $P$ & bytes, tok & KV bytes per token; page size \\
+$B_t=B^c_t+B^s_t$ & tokens & committed and speculative budget on tick $t$ \\
+\bottomrule
+\end{tabular}
+\end{table}

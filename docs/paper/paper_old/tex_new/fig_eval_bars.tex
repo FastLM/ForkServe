@@ -1,0 +1,256 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={draw=black!65, line width=0.22pt},
+  >=Latex,
+]
+\definecolor{Rec}{HTML}{F8E6A0}
+\definecolor{APC}{HTML}{E8B86D}
+\definecolor{FS}{HTML}{D97B2F}
+\definecolor{FSp}{HTML}{4A2878}
+
+\fill[Rec] (4.10,7.48) rectangle (4.32,7.64);
+\node[font=\tiny, anchor=west] at (4.36,7.56) {Recompute};
+\fill[APC] (5.95,7.48) rectangle (6.17,7.64);
+\node[font=\tiny, anchor=west] at (6.21,7.56) {APC};
+\fill[FS] (7.15,7.48) rectangle (7.37,7.64);
+\node[font=\tiny, anchor=west] at (7.41,7.56) {\sys};
+\fill[FSp] (8.95,7.48) rectangle (9.17,7.64);
+\node[font=\tiny, anchor=west] at (9.21,7.56) {ForkServe+};
+
+% --- Qwen3-4B ---
+\begin{scope}[shift={(0.00,3.75)}]
+  \node[font=\tiny\bfseries] at (2.20,3.41) {Qwen3-4B};
+  \draw[black!12] (0.44,0.300) -- (4.18,0.300);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,0.300) {0};
+  \draw[black!12] (0.44,1.119) -- (4.18,1.119);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.119) {1.5k};
+  \draw[black!12] (0.44,1.939) -- (4.18,1.939);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.939) {3.0k};
+  \draw[black!12] (0.44,2.758) -- (4.18,2.758);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,2.758) {4.5k};
+  \draw[black!55] (0.44,0.30) -- (4.18,0.30);
+  \draw[black!55] (0.44,0.30) -- (0.44,3.25);
+  \fill[bar, Rec] (0.360,0.30) rectangle (0.660,2.739);
+  \fill[bar, APC] (0.730,0.30) rectangle (1.030,1.126);
+  \fill[bar, FS] (1.100,0.30) rectangle (1.400,0.907);
+  \fill[bar, FSp] (1.470,0.30) rectangle (1.770,0.907);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.510,2.879) {4464};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.880,1.266) {1512};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (1.435,1.047) {1112};
+  \draw[black!75, line width=0.35pt] (0.880,1.126) -- (0.880,1.546);
+  \draw[black!75, line width=0.35pt] (0.880,1.546) -- (1.250,1.546);
+  \draw[black!75, line width=0.35pt] (1.250,1.546) -- (1.250,0.907);
+  \node[font=\tiny\bfseries] at (1.065,1.696) {$0.74\times$};
+  \node[font=\tiny, text=black!55] at (0.915,0.12) {GSM8K};
+  \fill[bar, Rec] (2.280,0.30) rectangle (2.580,1.972);
+  \fill[bar, APC] (2.650,0.30) rectangle (2.950,1.003);
+  \fill[bar, FS] (3.020,0.30) rectangle (3.320,0.732);
+  \fill[bar, FSp] (3.390,0.30) rectangle (3.690,0.732);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.430,2.112) {3060};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.800,1.143) {1287};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (3.355,0.872) {791};
+  \draw[black!75, line width=0.35pt] (2.800,1.003) -- (2.800,1.423);
+  \draw[black!75, line width=0.35pt] (2.800,1.423) -- (3.170,1.423);
+  \draw[black!75, line width=0.35pt] (3.170,1.423) -- (3.170,0.732);
+  \node[font=\tiny\bfseries] at (2.985,1.573) {$0.61\times$};
+  \node[font=\tiny, text=black!55] at (2.835,0.12) {Game24};
+\end{scope}
+
+% --- Math-1.5B ---
+\begin{scope}[shift={(5.25,3.75)}]
+  \node[font=\tiny\bfseries] at (2.20,3.41) {Math-1.5B};
+  \draw[black!12] (0.44,0.300) -- (4.18,0.300);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,0.300) {0};
+  \draw[black!12] (0.44,1.119) -- (4.18,1.119);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.119) {1.5k};
+  \draw[black!12] (0.44,1.939) -- (4.18,1.939);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.939) {3.0k};
+  \draw[black!12] (0.44,2.758) -- (4.18,2.758);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,2.758) {4.5k};
+  \draw[black!55] (0.44,0.30) -- (4.18,0.30);
+  \draw[black!55] (0.44,0.30) -- (0.44,3.25);
+  \fill[bar, Rec] (0.360,0.30) rectangle (0.660,2.739);
+  \fill[bar, APC] (0.730,0.30) rectangle (1.030,1.126);
+  \fill[bar, FS] (1.100,0.30) rectangle (1.400,0.907);
+  \fill[bar, FSp] (1.470,0.30) rectangle (1.770,0.907);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.510,2.879) {4464};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.880,1.266) {1512};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (1.435,1.047) {1112};
+  \draw[black!75, line width=0.35pt] (0.880,1.126) -- (0.880,1.546);
+  \draw[black!75, line width=0.35pt] (0.880,1.546) -- (1.250,1.546);
+  \draw[black!75, line width=0.35pt] (1.250,1.546) -- (1.250,0.907);
+  \node[font=\tiny\bfseries] at (1.065,1.696) {$0.74\times$};
+  \node[font=\tiny, text=black!55] at (0.915,0.12) {GSM8K};
+  \fill[bar, Rec] (2.280,0.30) rectangle (2.580,1.972);
+  \fill[bar, APC] (2.650,0.30) rectangle (2.950,1.003);
+  \fill[bar, FS] (3.020,0.30) rectangle (3.320,0.732);
+  \fill[bar, FSp] (3.390,0.30) rectangle (3.690,0.732);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.430,2.112) {3060};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.800,1.143) {1287};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (3.355,0.872) {791};
+  \draw[black!75, line width=0.35pt] (2.800,1.003) -- (2.800,1.423);
+  \draw[black!75, line width=0.35pt] (2.800,1.423) -- (3.170,1.423);
+  \draw[black!75, line width=0.35pt] (3.170,1.423) -- (3.170,0.732);
+  \node[font=\tiny\bfseries] at (2.985,1.573) {$0.61\times$};
+  \node[font=\tiny, text=black!55] at (2.835,0.12) {Game24};
+\end{scope}
+
+% --- Qwen3-14B ---
+\begin{scope}[shift={(10.50,3.75)}]
+  \node[font=\tiny\bfseries] at (2.20,3.41) {Qwen3-14B};
+  \draw[black!12] (0.44,0.300) -- (4.18,0.300);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,0.300) {0};
+  \draw[black!12] (0.44,1.119) -- (4.18,1.119);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.119) {1.5k};
+  \draw[black!12] (0.44,1.939) -- (4.18,1.939);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.939) {3.0k};
+  \draw[black!12] (0.44,2.758) -- (4.18,2.758);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,2.758) {4.5k};
+  \draw[black!55] (0.44,0.30) -- (4.18,0.30);
+  \draw[black!55] (0.44,0.30) -- (0.44,3.25);
+  \fill[bar, Rec] (0.360,0.30) rectangle (0.660,2.739);
+  \fill[bar, APC] (0.730,0.30) rectangle (1.030,1.126);
+  \fill[bar, FS] (1.100,0.30) rectangle (1.400,0.907);
+  \fill[bar, FSp] (1.470,0.30) rectangle (1.770,0.907);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.510,2.879) {4464};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.880,1.266) {1512};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (1.435,1.047) {1112};
+  \draw[black!75, line width=0.35pt] (0.880,1.126) -- (0.880,1.546);
+  \draw[black!75, line width=0.35pt] (0.880,1.546) -- (1.250,1.546);
+  \draw[black!75, line width=0.35pt] (1.250,1.546) -- (1.250,0.907);
+  \node[font=\tiny\bfseries] at (1.065,1.696) {$0.74\times$};
+  \node[font=\tiny, text=black!55] at (0.915,0.12) {GSM8K};
+  \fill[bar, Rec] (2.280,0.30) rectangle (2.580,1.972);
+  \fill[bar, APC] (2.650,0.30) rectangle (2.950,1.003);
+  \fill[bar, FS] (3.020,0.30) rectangle (3.320,0.732);
+  \fill[bar, FSp] (3.390,0.30) rectangle (3.690,0.732);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.430,2.112) {3060};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.800,1.143) {1287};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (3.355,0.872) {791};
+  \draw[black!75, line width=0.35pt] (2.800,1.003) -- (2.800,1.423);
+  \draw[black!75, line width=0.35pt] (2.800,1.423) -- (3.170,1.423);
+  \draw[black!75, line width=0.35pt] (3.170,1.423) -- (3.170,0.732);
+  \node[font=\tiny\bfseries] at (2.985,1.573) {$0.61\times$};
+  \node[font=\tiny, text=black!55] at (2.835,0.12) {Game24};
+\end{scope}
+
+% --- Llama-3-8B ---
+\begin{scope}[shift={(0.00,0.10)}]
+  \node[font=\tiny\bfseries] at (2.20,3.41) {Llama-3-8B};
+  \draw[black!12] (0.44,0.300) -- (4.18,0.300);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,0.300) {0};
+  \draw[black!12] (0.44,1.119) -- (4.18,1.119);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.119) {1.5k};
+  \draw[black!12] (0.44,1.939) -- (4.18,1.939);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.939) {3.0k};
+  \draw[black!12] (0.44,2.758) -- (4.18,2.758);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,2.758) {4.5k};
+  \draw[black!55] (0.44,0.30) -- (4.18,0.30);
+  \draw[black!55] (0.44,0.30) -- (0.44,3.25);
+  \fill[bar, Rec] (0.360,0.30) rectangle (0.660,2.732);
+  \fill[bar, APC] (0.730,0.30) rectangle (1.030,1.124);
+  \fill[bar, FS] (1.100,0.30) rectangle (1.400,0.906);
+  \fill[bar, FSp] (1.470,0.30) rectangle (1.770,0.906);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.510,2.872) {4452};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.880,1.264) {1509};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (1.435,1.046) {1109};
+  \draw[black!75, line width=0.35pt] (0.880,1.124) -- (0.880,1.544);
+  \draw[black!75, line width=0.35pt] (0.880,1.544) -- (1.250,1.544);
+  \draw[black!75, line width=0.35pt] (1.250,1.544) -- (1.250,0.906);
+  \node[font=\tiny\bfseries] at (1.065,1.694) {$0.73\times$};
+  \node[font=\tiny, text=black!55] at (0.915,0.12) {GSM8K};
+  \fill[bar, Rec] (2.280,0.30) rectangle (2.580,1.913);
+  \fill[bar, APC] (2.650,0.30) rectangle (2.950,0.982);
+  \fill[bar, FS] (3.020,0.30) rectangle (3.320,0.715);
+  \fill[bar, FSp] (3.390,0.30) rectangle (3.690,0.715);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.430,2.053) {2952};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.800,1.122) {1248};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (3.355,0.855) {760};
+  \draw[black!75, line width=0.35pt] (2.800,0.982) -- (2.800,1.402);
+  \draw[black!75, line width=0.35pt] (2.800,1.402) -- (3.170,1.402);
+  \draw[black!75, line width=0.35pt] (3.170,1.402) -- (3.170,0.715);
+  \node[font=\tiny\bfseries] at (2.985,1.552) {$0.61\times$};
+  \node[font=\tiny, text=black!55] at (2.835,0.12) {Game24};
+\end{scope}
+
+% --- Mistral-7B ---
+\begin{scope}[shift={(5.25,0.10)}]
+  \node[font=\tiny\bfseries] at (2.20,3.41) {Mistral-7B};
+  \draw[black!12] (0.44,0.300) -- (4.18,0.300);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,0.300) {0};
+  \draw[black!12] (0.44,1.119) -- (4.18,1.119);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.119) {1.5k};
+  \draw[black!12] (0.44,1.939) -- (4.18,1.939);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.939) {3.0k};
+  \draw[black!12] (0.44,2.758) -- (4.18,2.758);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,2.758) {4.5k};
+  \draw[black!55] (0.44,0.30) -- (4.18,0.30);
+  \draw[black!55] (0.44,0.30) -- (0.44,3.25);
+  \fill[bar, Rec] (0.360,0.30) rectangle (0.660,2.850);
+  \fill[bar, APC] (0.730,0.30) rectangle (1.030,1.157);
+  \fill[bar, FS] (1.100,0.30) rectangle (1.400,0.939);
+  \fill[bar, FSp] (1.470,0.30) rectangle (1.770,0.939);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.510,2.990) {4668};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.880,1.297) {1569};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (1.435,1.079) {1169};
+  \draw[black!75, line width=0.35pt] (0.880,1.157) -- (0.880,1.577);
+  \draw[black!75, line width=0.35pt] (0.880,1.577) -- (1.250,1.577);
+  \draw[black!75, line width=0.35pt] (1.250,1.577) -- (1.250,0.939);
+  \node[font=\tiny\bfseries] at (1.065,1.727) {$0.75\times$};
+  \node[font=\tiny, text=black!55] at (0.915,0.12) {GSM8K};
+  \fill[bar, Rec] (2.280,0.30) rectangle (2.580,1.994);
+  \fill[bar, APC] (2.650,0.30) rectangle (2.950,1.038);
+  \fill[bar, FS] (3.020,0.30) rectangle (3.320,0.728);
+  \fill[bar, FSp] (3.390,0.30) rectangle (3.690,0.728);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.430,2.134) {3100};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.800,1.178) {1351};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (3.355,0.868) {783};
+  \draw[black!75, line width=0.35pt] (2.800,1.038) -- (2.800,1.458);
+  \draw[black!75, line width=0.35pt] (2.800,1.458) -- (3.170,1.458);
+  \draw[black!75, line width=0.35pt] (3.170,1.458) -- (3.170,0.728);
+  \node[font=\tiny\bfseries] at (2.985,1.608) {$0.58\times$};
+  \node[font=\tiny, text=black!55] at (2.835,0.12) {Game24};
+\end{scope}
+
+% --- DeepSeek-R1 ---
+\begin{scope}[shift={(10.50,0.10)}]
+  \node[font=\tiny\bfseries] at (2.20,3.41) {DeepSeek-R1};
+  \draw[black!12] (0.44,0.300) -- (4.18,0.300);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,0.300) {0};
+  \draw[black!12] (0.44,1.119) -- (4.18,1.119);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.119) {1.5k};
+  \draw[black!12] (0.44,1.939) -- (4.18,1.939);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,1.939) {3.0k};
+  \draw[black!12] (0.44,2.758) -- (4.18,2.758);
+  \node[font=\tiny, text=black!45, anchor=east] at (0.38,2.758) {4.5k};
+  \draw[black!55] (0.44,0.30) -- (4.18,0.30);
+  \draw[black!55] (0.44,0.30) -- (0.44,3.25);
+  \fill[bar, Rec] (0.360,0.30) rectangle (0.660,2.505);
+  \fill[bar, APC] (0.730,0.30) rectangle (1.030,1.068);
+  \fill[bar, FS] (1.100,0.30) rectangle (1.400,0.849);
+  \fill[bar, FSp] (1.470,0.30) rectangle (1.770,0.849);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.510,2.645) {4036};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (0.880,1.208) {1405};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (1.435,0.989) {1005};
+  \draw[black!75, line width=0.35pt] (0.880,1.068) -- (0.880,1.488);
+  \draw[black!75, line width=0.35pt] (0.880,1.488) -- (1.250,1.488);
+  \draw[black!75, line width=0.35pt] (1.250,1.488) -- (1.250,0.849);
+  \node[font=\tiny\bfseries] at (1.065,1.638) {$0.72\times$};
+  \node[font=\tiny, text=black!55] at (0.915,0.12) {GSM8K};
+  \fill[bar, Rec] (2.280,0.30) rectangle (2.580,1.685);
+  \fill[bar, APC] (2.650,0.30) rectangle (2.950,0.925);
+  \fill[bar, FS] (3.020,0.30) rectangle (3.320,0.658);
+  \fill[bar, FSp] (3.390,0.30) rectangle (3.690,0.658);
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.430,1.825) {2536};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (2.800,1.065) {1144};
+  \node[font=\tiny, inner sep=0.2pt, fill=white, fill opacity=0.85, text opacity=1] at (3.355,0.798) {656};
+  \draw[black!75, line width=0.35pt] (2.800,0.925) -- (2.800,1.345);
+  \draw[black!75, line width=0.35pt] (2.800,1.345) -- (3.170,1.345);
+  \draw[black!75, line width=0.35pt] (3.170,1.345) -- (3.170,0.658);
+  \node[font=\tiny\bfseries] at (2.985,1.495) {$0.57\times$};
+  \node[font=\tiny, text=black!55] at (2.835,0.12) {Game24};
+\end{scope}
+
+\node[font=\tiny, text=black!55, rotate=90] at (-0.20,3.65) {Peak KV (tokens)};
+\end{tikzpicture}
+
