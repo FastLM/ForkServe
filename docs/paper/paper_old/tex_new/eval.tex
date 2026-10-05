@@ -320,9 +320,10 @@ Prefill admission is identical across the three hosts: $16$ children and $5008$ 
 
 \paragraph{Concurrency from measured KV.}
 Our empirical results on DeepSeek-R1 GSM8K ($761$ APC tokens, $561$ \sys tokens, $n{=}16$, $k{=}4$) in an $8$\,GiB pool in \eqref{eq:theta} give $76$ concurrent trees for APC and $103$ for \sys.
-\Cref{fig:eval-slo} sweeps offered QPS: under a $1$\,s P99 \ttft{} constraint the same model admits $384$ QPS for APC and $512$ for the pruned tree, and saturated decode throughput rises from $48640$ to $65920$ tokens/s (\gain{$+35.5\%$}).
+Under a $1$\,s P99 \ttft{} constraint the same model admits $384$ QPS for APC and $512$ for the pruned tree, and saturated decode throughput rises from $48640$ to $65920$ tokens/s (\gain{$+35.5\%$}).
 This uses measured $M$, not the control-plane peak of \Cref{tab:app}.
 
+\iffalse
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{tex_new/fig_eval_slo}}
@@ -332,6 +333,7 @@ Each slot serves $640$ tokens/s, so offered load saturates at $48640$ and $65920
 Under the same model the $1$\,s P99 \ttft{} line is crossed by APC at $448$ QPS and is still met by \sys at $512$ QPS ($0.81$\,s).}
 \label{fig:eval-slo}
 \end{figure*}
+\fi
 
 \begin{figure*}[t]
 \centering

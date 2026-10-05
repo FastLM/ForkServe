@@ -106,50 +106,44 @@
 \citation{esc}
 \citation{specrej}
 \citation{dpts}
-\newlabel{fig:radix}{{5}{7}{\textbf {One radix tree, five actions} (\eqref {eq:action}--\eqref {eq:xfer}). The root is the aliased trunk $x_u$. Each edge is one page of $P$ tokens. Green pages are in $H$; orange pages are prefilled; gray pages are withheld. (a)~$\mathrm {HS}$: $m_i{=}\ell _i$, $\Work _i{=}\Xfer _i{=}0$. (b)~$\mathrm {HP}$: $0{<}m_i{<}\ell _i$, $\Work _i{=}\ell _i{-}m_i$. (c)~$\mathrm {EA}$: $m_i{=}0$, $F_i{=}1$, $\Work _i{=}\lceil \alpha \ell _i\rceil $, $\Xfer _i{=}0$. (d)~$\mathrm {PF}$: $m_i{=}0$, $i{\notin }\Lambda $, $\neg F_i$, $\Work _i{=}\ell _i$. (e)~$\mathrm {DS}$: $i{\in }\Lambda $, $\Work _i{=}\Xfer _i{=}0$. A score below $\tau $ with $i{\notin }\Lambda $ is prefilled and probed (\Cref {alg:app})}{figure.5}{}}
-\newlabel{fig:radix@cref}{{[figure][5][]5}{[1][4][]7}{}{}{}}
 \newlabel{tab:gsm}{{4}{7}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.4}{}}
 \newlabel{tab:gsm@cref}{{[table][4][]4}{[1][6][]7}{}{}{}}
-\newlabel{sec:eval-app}{{4.2}{7}{}{subsection.4.2}{}}
-\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][7][]7}{}{}{}}
 \newlabel{tab:app}{{5}{7}{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; ForkServe+ in green. Not GPU wall-clock}{table.5}{}}
 \newlabel{tab:app@cref}{{[table][5][]5}{[1][7][]7}{}{}{}}
-\newlabel{tab:decode-prune}{{6}{8}{Decoding-time pruning on the \Cref {tab:app} fan-out ($10{\times }4$, $L{=}256$). Decode-to-cut is the prefix that must be generated before a child can be dropped. ``On losers'' counts that prefix on the two low-score children. Same $12\,\mu \mathrm {s}/\mathrm {token}$ clock. Not GPU wall-clock}{table.6}{}}
-\newlabel{tab:decode-prune@cref}{{[table][6][]6}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-app}{{4.2}{7}{}{subsection.4.2}{}}
+\newlabel{sec:eval-app@cref}{{[subsection][2][4]4.2}{[1][7][]7}{}{}{}}
+\newlabel{tab:decode-prune}{{6}{7}{Decoding-time pruning on the \Cref {tab:app} fan-out ($10{\times }4$, $L{=}256$). Decode-to-cut is the prefix that must be generated before a child can be dropped. ``On losers'' counts that prefix on the two low-score children. Same $12\,\mu \mathrm {s}/\mathrm {token}$ clock. Not GPU wall-clock}{table.6}{}}
+\newlabel{tab:decode-prune@cref}{{[table][6][]6}{[1][7][]7}{}{}{}}
+\newlabel{sec:eval-grow}{{4.2}{7}{}{table.6}{}}
+\newlabel{sec:eval-grow@cref}{{[subsection][2][4]4.2}{[1][7][]7}{}{}{}}
 \newlabel{tab:grow}{{7}{8}{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$. Any-finished is exact match on a branch that ran the full budget. ``Drop $s{<}\tau $'' withholds every low-score residual before prefill. ``Grow $t_0$'' is \Cref {alg:app}: loops stay at $d_i{=}0$; every other low-score residual is probed for $t_0$ tokens and continues to $D$ only if $s'_i\ge \tau {=}0.45$. Time is trunk warm plus fan-out, in seconds}{table.7}{}}
-\newlabel{tab:grow@cref}{{[table][7][]7}{[1][8][]8}{}{}{}}
-\newlabel{sec:eval-grow}{{4.2}{8}{}{table.6}{}}
-\newlabel{sec:eval-grow@cref}{{[subsection][2][4]4.2}{[1][8][]8}{}{}{}}
+\newlabel{tab:grow@cref}{{[table][7][]7}{[1][7][]8}{}{}{}}
 \newlabel{tab:prefill-bar}{{8}{8}{GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only. Any-finished is exact match on a full-budget branch. $\tau _{\mathrm {pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text. Time is trunk warm plus fan-out, in seconds. Computed prefill falls $23\%$ at $0.15$ and $45\%$ at $0.45$ at every $k$}{table.8}{}}
 \newlabel{tab:prefill-bar@cref}{{[table][8][]8}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-prefill}{{4.2}{8}{}{figure.5}{}}
+\newlabel{sec:eval-prefill@cref}{{[subsection][2][4]4.2}{[1][8][]8}{}{}{}}
 \newlabel{tab:plugin}{{9}{8}{Same GSM8K slice, $k{=}16$, $\tau _{\mathrm {pre}}{=}0.15$ in front of three host decoders. Admitted children and computed prefill tokens are identical across hosts: prefill admission does not read $\tau $, $d_{\mathrm {DPTS}}$, or $\alpha $. Any-finished stays $16/16$}{table.9}{}}
 \newlabel{tab:plugin@cref}{{[table][9][]9}{[1][8][]8}{}{}{}}
-\newlabel{sec:eval-prefill}{{4.2}{8}{}{figure.6}{}}
-\newlabel{sec:eval-prefill@cref}{{[subsection][2][4]4.2}{[1][8][]8}{}{}{}}
-\newlabel{fig:eval-grow}{{6}{9}{\textbf {Probe admission on MATH-500} (\Cref {tab:grow}). Any-finished counts a problem only when a full-budget branch matches. Dropping every $s{<}\tau $ is the fast curve and the low count. Grow $t_0{=}128$ returns to $20/32$ at $k{=}16$ and cuts $104.1$\,s to $72.2$\,s. At $k{=}8$, grow $t_0{=}64$ is $16/32$ in $42.0$\,s, above the full fan-out}{figure.6}{}}
-\newlabel{fig:eval-grow@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
-\newlabel{sec:eval-plus}{{4.3}{9}{}{subsection.4.3}{}}
-\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][9][]9}{}{}{}}
-\newlabel{tab:plus}{{10}{9}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. Game24 / HumanEval peaks stay with the spine}{table.10}{}}
-\newlabel{tab:plus@cref}{{[table][10][]10}{[1][9][]9}{}{}{}}
+\newlabel{tab:plus}{{10}{8}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. Game24 / HumanEval peaks stay with the spine}{table.10}{}}
+\newlabel{tab:plus@cref}{{[table][10][]10}{[1][8][]8}{}{}{}}
+\newlabel{sec:eval-plus}{{4.3}{8}{}{subsection.4.3}{}}
+\newlabel{sec:eval-plus@cref}{{[subsection][3][4]4.3}{[1][8][]8}{}{}{}}
+\newlabel{fig:eval-grow}{{5}{9}{\textbf {Probe admission on MATH-500} (\Cref {tab:grow}). Any-finished counts a problem only when a full-budget branch matches. Dropping every $s{<}\tau $ is the fast curve and the low count. Grow $t_0{=}128$ returns to $20/32$ at $k{=}16$ and cuts $104.1$\,s to $72.2$\,s. At $k{=}8$, grow $t_0{=}64$ is $16/32$ in $42.0$\,s, above the full fan-out}{figure.5}{}}
+\newlabel{fig:eval-grow@cref}{{[figure][5][]5}{[1][8][]9}{}{}{}}
+\newlabel{fig:eval-admit}{{6}{9}{\textbf {Prefill threshold on GSM8K} (\Cref {tab:prefill-bar,tab:plugin}). (a)~Wall-clock under ESC. Labels are any-finished. $\tau _{\mathrm {pre}}{=}0.45$ is $14/16$ at $k{=}4$ and $k{=}8$, and $16/16$ at $k{=}16$. (b)~Computed prefill tokens, $-23\%$ at $0.15$ and $-45\%$ at $0.45$. (c)~The same $0.15$ threshold in front of each host at $k{=}16$. Every row stays $16/16$}{figure.6}{}}
+\newlabel{fig:eval-admit@cref}{{[figure][6][]6}{[1][8][]9}{}{}{}}
+\newlabel{sec:eval-mt}{{4.4}{9}{}{subsection.4.4}{}}
+\newlabel{sec:eval-mt@cref}{{[subsection][4][4]4.4}{[1][8][]9}{}{}{}}
 \newlabel{tab:mt}{{11}{9}{Three-turn ToT, $n{=}16$, $k{=}4$, $\mathrm {tp}{=}2$, one problem per generate. End-to-end time is seconds per problem. Peak KV is tokens on the live spine. FS is \sys ; FS+ is ForkServe+. Shortest end-to-end time and lowest peak in green}{table.11}{}}
 \newlabel{tab:mt@cref}{{[table][11][]11}{[1][9][]9}{}{}{}}
-\newlabel{sec:eval-mt}{{4.4}{9}{}{subsection.4.4}{}}
-\newlabel{sec:eval-mt@cref}{{[subsection][4][4]4.4}{[1][9][]9}{}{}{}}
-\newlabel{fig:eval-admit}{{7}{10}{\textbf {Prefill threshold on GSM8K} (\Cref {tab:prefill-bar,tab:plugin}). (a)~Wall-clock under ESC. Labels are any-finished. $\tau _{\mathrm {pre}}{=}0.45$ is $14/16$ at $k{=}4$ and $k{=}8$, and $16/16$ at $k{=}16$. (b)~Computed prefill tokens, $-23\%$ at $0.15$ and $-45\%$ at $0.45$. (c)~The same $0.15$ threshold in front of each host at $k{=}16$. Every row stays $16/16$}{figure.7}{}}
-\newlabel{fig:eval-admit@cref}{{[figure][7][]7}{[1][9][]10}{}{}{}}
-\newlabel{fig:eval-slo}{{8}{10}{\textbf {SLO sweep} from the measured DeepSeek-R1 GSM8K peaks ($761$ APC tokens, $561$ spine tokens, $n{=}16$, $k{=}4$). An $8$\,GiB pool at $147456$ bytes/token holds $76$ and $103$ trees. Each slot serves $640$ tokens/s, so offered load saturates at $48640$ and $65920$ tokens/s. Under the same model the $1$\,s P99 \ttft {} line is crossed by APC at $448$ QPS and is still met by \sys at $512$ QPS ($0.81$\,s)}{figure.8}{}}
-\newlabel{fig:eval-slo@cref}{{[figure][8][]8}{[1][9][]10}{}{}{}}
+\newlabel{fig:eval-multi}{{7}{10}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.7}{}}
+\newlabel{fig:eval-multi@cref}{{[figure][7][]7}{[1][8][]10}{}{}{}}
 \newlabel{tab:mt-split}{{12}{10}{Expand versus decode, milliseconds per problem. Expand is the prefill of the $k$ residuals across three turns. On APC that timer also includes the two $32$-token step decodes; \sys and ForkServe+ charge those steps to decode. Speedup in \Cref {fig:eval-mt-split} is APC expand time over the other system. Shortest time in each trio in green}{table.12}{}}
-\newlabel{tab:mt-split@cref}{{[table][12][]12}{[1][10][]10}{}{}{}}
+\newlabel{tab:mt-split@cref}{{[table][12][]12}{[1][9][]10}{}{}{}}
 \newlabel{sec:eval-multi}{{4.5}{10}{}{subsection.4.5}{}}
 \newlabel{sec:eval-multi@cref}{{[subsection][5][4]4.5}{[1][10][]10}{}{}{}}
-\newlabel{fig:eval-multi}{{9}{11}{\textbf {Peak KV} on six models ($n{=}40$, $\mathrm {tp}{=}2$). Each panel is one family; groups are GSM8K and Game24. Bars are recompute, APC, \sys , and ForkServe+ (cream / tan / orange / purple). \sys {} and ForkServe+ share the spine. Annotated $\times $ is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24, independent of checkpoint size, as \eqref {eq:mem} predicts}{figure.9}{}}
-\newlabel{fig:eval-multi@cref}{{[figure][9][]9}{[1][9][]11}{}{}{}}
-\newlabel{sec:eval-sens}{{4.6}{11}{}{subsection.4.6}{}}
-\newlabel{sec:eval-sens@cref}{{[subsection][6][4]4.6}{[1][11][]11}{}{}{}}
-\newlabel{tab:r1stop}{{13}{11}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green}{table.13}{}}
-\newlabel{tab:r1stop@cref}{{[table][13][]13}{[1][11][]11}{}{}{}}
+\newlabel{sec:eval-sens}{{4.6}{10}{}{subsection.4.6}{}}
+\newlabel{sec:eval-sens@cref}{{[subsection][6][4]4.6}{[1][10][]10}{}{}{}}
 \citation{orca}
 \citation{vllm}
 \citation{sglang}
@@ -169,33 +163,39 @@
 \citation{idlespec}
 \citation{speculative,medusa,eagledraft}
 \citation{forkkv}
+\newlabel{fig:eval-mt}{{8}{11}{\textbf {Three-turn ToT} on Qwen3-4B and Qwen3-8B ($n{=}16$, $\mathrm {tp}{=}2$, one problem per generate). (a)~End-to-end seconds per problem; a shorter bar is faster. (b)~Peak KV tokens. \sys stays with APC on latency and stores the spine ($0.86\times $ APC on GSM8K, $0.82\times $ on Game24). ForkServe+ is faster because it prefills one of four residuals}{figure.8}{}}
+\newlabel{fig:eval-mt@cref}{{[figure][8][]8}{[1][9][]11}{}{}{}}
+\newlabel{fig:eval-mt-split}{{9}{11}{\textbf {Expand versus APC} on the same four runs as \Cref {tab:mt-split}. (a)~Expand milliseconds per problem. (b)~Speedup of that expand over APC. The dashed line is $1\times $. \sys is $5.0$--$6.4\times $ and ForkServe+ is $7.9$--$10.6\times $. Decode in \Cref {tab:mt-split} does not repeat that ratio: the step decodes sit in the \sys decode column, so \sys end-to-end stays with APC}{figure.9}{}}
+\newlabel{fig:eval-mt-split@cref}{{[figure][9][]9}{[1][9][]11}{}{}{}}
+\newlabel{sec:related}{{5}{11}{}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][11][]11}{}{}{}}
 \citation{tot}
 \citation{esc}
 \citation{specrej}
 \citation{dpts}
-\newlabel{fig:eval-mt}{{10}{12}{\textbf {Three-turn ToT} on Qwen3-4B and Qwen3-8B ($n{=}16$, $\mathrm {tp}{=}2$, one problem per generate). (a)~End-to-end seconds per problem; a shorter bar is faster. (b)~Peak KV tokens. \sys stays with APC on latency and stores the spine ($0.86\times $ APC on GSM8K, $0.82\times $ on Game24). ForkServe+ is faster because it prefills one of four residuals}{figure.10}{}}
-\newlabel{fig:eval-mt@cref}{{[figure][10][]10}{[1][9][]12}{}{}{}}
-\newlabel{sec:related}{{5}{12}{}{section.5}{}}
-\newlabel{sec:related@cref}{{[section][5][]5}{[1][12][]12}{}{}{}}
-\newlabel{fig:eval-mt-split}{{11}{12}{\textbf {Expand versus APC} on the same four runs as \Cref {tab:mt-split}. (a)~Expand milliseconds per problem. (b)~Speedup of that expand over APC. The dashed line is $1\times $. \sys is $5.0$--$6.4\times $ and ForkServe+ is $7.9$--$10.6\times $. Decode in \Cref {tab:mt-split} does not repeat that ratio: the step decodes sit in the \sys decode column, so \sys end-to-end stays with APC}{figure.11}{}}
-\newlabel{fig:eval-mt-split@cref}{{[figure][11][]11}{[1][10][]12}{}{}{}}
 \bibcite{infercept}{{1}{}{{}}{{}}}
+\newlabel{fig:eval-radar}{{10}{12}{\textbf {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better. (a)~GSM8K. (b)~Game24. \Cref {fig:eval-radar} shows that \sys and ForkServe+ lower peak KV below APC on both workloads ($0.75\times $ on GSM8K, $0.62\times $ on Game24) while GSM8K quality stays with APC, and that ForkServe+ also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s}{figure.10}{}}
+\newlabel{fig:eval-radar@cref}{{[figure][10][]10}{[1][10][]12}{}{}{}}
+\newlabel{sec:conclusion}{{6}{12}{}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][12][]12}{}{}{}}
+\newlabel{tab:r1stop}{{13}{12}{Last-line answer stop, $n{=}32$, $\mathrm {tp}{=}2$. ForkServe+ stops only on a finished answer in the last non-empty line. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green}{table.13}{}}
+\newlabel{tab:r1stop@cref}{{[table][13][]13}{[1][10][]12}{}{}{}}
+\newlabel{tab:branch}{{14}{12}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green}{table.14}{}}
+\newlabel{tab:branch@cref}{{[table][14][]14}{[1][10][]12}{}{}{}}
 \bibcite{sarathi}{{2}{}{{}}{{}}}
 \bibcite{sarathisplit}{{3}{}{{}}{{}}}
 \bibcite{claude_code}{{4}{}{{}}{{}}}
-\newlabel{fig:eval-radar}{{12}{13}{\textbf {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better. (a)~GSM8K. (b)~Game24. \Cref {fig:eval-radar} shows that \sys and ForkServe+ lower peak KV below APC on both workloads ($0.75\times $ on GSM8K, $0.62\times $ on Game24) while GSM8K quality stays with APC, and that ForkServe+ also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s}{figure.12}{}}
-\newlabel{fig:eval-radar@cref}{{[figure][12][]12}{[1][10][]13}{}{}{}}
-\newlabel{tab:branch}{{14}{13}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green}{table.14}{}}
-\newlabel{tab:branch@cref}{{[table][14][]14}{[1][11][]13}{}{}{}}
-\newlabel{sec:conclusion}{{6}{13}{}{section.6}{}}
-\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][13][]13}{}{}{}}
-\newlabel{tab:longcot}{{15}{13}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage and shortest end-to-end time in green}{table.15}{}}
-\newlabel{tab:longcot@cref}{{[table][15][]15}{[1][11][]13}{}{}{}}
 \bibcite{spork}{{5}{}{{}}{{}}}
 \bibcite{sutradhara}{{6}{}{{}}{{}}}
 \bibcite{medusa}{{7}{}{{}}{{}}}
 \bibcite{murakkab}{{8}{}{{}}{{}}}
 \bibcite{idlespec}{{9}{}{{}}{{}}}
+\newlabel{fig:eval-hist}{{11}{13}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and ForkServe+. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.11}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][11][]11}{[1][10][]13}{}{}{}}
+\newlabel{fig:eval-branch}{{12}{13}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.12}{}}
+\newlabel{fig:eval-branch@cref}{{[figure][12][]12}{[1][10][]13}{}{}{}}
+\newlabel{tab:longcot}{{15}{13}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage and shortest end-to-end time in green}{table.15}{}}
+\newlabel{tab:longcot@cref}{{[table][15][]15}{[1][11][]13}{}{}{}}
 \bibcite{contextrot}{{10}{}{{}}{{}}}
 \bibcite{conserve}{{11}{}{{}}{{}}}
 \bibcite{pie}{{12}{}{{}}{{}}}
@@ -203,10 +203,6 @@
 \bibcite{metagpt}{{14}{}{{}}{{}}}
 \bibcite{swebench}{{15}{}{{}}{{}}}
 \bibcite{thunderagent}{{16}{}{{}}{{}}}
-\newlabel{fig:eval-hist}{{13}{14}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and ForkServe+ (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and ForkServe+. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.13}{}}
-\newlabel{fig:eval-hist@cref}{{[figure][13][]13}{[1][11][]14}{}{}{}}
-\newlabel{fig:eval-branch}{{14}{14}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). ForkServe+ matches the ForkServe bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.14}{}}
-\newlabel{fig:eval-branch@cref}{{[figure][14][]14}{[1][11][]14}{}{}{}}
 \bibcite{vllm}{{17}{}{{}}{{}}}
 \bibcite{speculative}{{18}{}{{}}{{}}}
 \bibcite{dpts}{{19}{}{{}}{{}}}
@@ -247,4 +243,4 @@
 \bibcite{distserve}{{54}{}{{}}{{}}}
 \bibcite{webarena}{{55}{}{{}}{{}}}
 \providecommand\NAT@force@numbers{}\NAT@force@numbers
-\gdef \@abspage@last{16}
+\gdef \@abspage@last{15}
