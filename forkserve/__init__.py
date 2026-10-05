@@ -1,6 +1,9 @@
-"""ForkServe: branch-aware speculative prefilling and CoW KV state.
+"""ForkServe: the branch is the serving object.
 
-Public surface is the five harness verbs plus ``Engine`` / ``Orchestrator``.
+``fork`` aliases the parent's KV. Each residual is rejected at the cheapest
+admissible stage. Decode attends the committed spine only.
+
+Public surface is the harness verbs plus ``Engine`` / ``Orchestrator``.
 Speculation never feeds unverified tokens into decode.
 """
 

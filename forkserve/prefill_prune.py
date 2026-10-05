@@ -1,23 +1,20 @@
-"""Advanced Prefill Pruning (APP): hash skip ⊕ draft prune ⊕ early abort.
+"""One action per residual, taken at the cheapest stage that can reject it.
 
-Prefill is the expensive half of a ToT / ReAct fan-out. APC (hash_prefill)
-skips *already published* full blocks. vLLM disagg_prefill ships whatever
-the prefill instance computed. APP sits between them and decides, per
-branch, whether GPU prefill (and later KV transfer) should happen at all.
+Copy-on-write places the trunk. This module decides whether a residual
+enters a prefill kernel and whether any of its KV would cross the
+connector. The next stage runs only when this one has not rejected it.
 
-Skip layers, cheapest first:
+1. **Hash probe** — a published full prefix is a retrieval (no kernel, no
+   transfer). A proper prefix prefills the miss tail.
+2. **Draft skip** — a repeated loop (score 0.02, below ``prefill_threshold``
+   0.15) never starts. Illegal text scores 0.22 and is prefilled.
+3. **Early abort** — the first ``early_prune_frac`` of a residual already
+   fails; the remaining chunks are not issued.
+4. **Prefill** — otherwise, on the trunk aliased at ``fork``.
 
-1. **Hash skip** — ``hash(parent, block_tokens, extra)`` already published
-   (HashForkServe / APC). Zero FLOPs for the matched prefix.
-2. **Draft prune** — residual looks hopeless (illegal / loop / high entropy,
-   or an optional draft-model score). Never start prefill.
-3. **Early abort** — first ``early_prune_frac`` of a residual already fails;
-   cancel the remaining chunks (chunked / disagg prefill).
-4. **Disagg gate** — only survivors are inserted into the KV pipe
-   (see ``forkserve.disagg``). Losers never leave the prefill instance.
-
-Winner index is always kept (output identity). Spec pages stay unpublished
-until LCP commit (Theorem 2).
+The connector inserts only the miss tail of a residual that is kept.
+Winner index is always kept. Spec pages stay unpublished until LCP commit.
+``admit_mode`` selects one rule (``score``, ``winner``, ``top_m``, ``alpha``).
 """
 
 from __future__ import annotations

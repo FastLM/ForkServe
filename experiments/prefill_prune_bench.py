@@ -1,9 +1,10 @@
-"""Compare prefill methods: APC, ForkServe, hash_prefill, disagg_prefill, APP.
+"""Compare prefill decisions: APC, ForkServe, hash_prefill, disagg_prefill, cascade.
 
 Also places three decoding-time pruners on the same fan-out: ESC, Speculative
 Rejection, and DPTS. They drop a child only after a decoded prefix, so the
-trunk prefill and that prefix are already issued. APP withholds the residual
-before prefill. ``run_prefill_on_decoding`` stacks that admission on each
+trunk prefill and that prefix are already issued. The cascade rejects a
+repeated loop before prefill and keeps illegal text.
+``run_prefill_on_decoding`` applies that same admission in front of each
 decoder: a rejected child never pays the decision prefix, and a child both
 sides keep still decodes to the budget.
 
@@ -20,8 +21,9 @@ Methods
   skips published full blocks. First fan-out still pays the clone.
 * ``disagg_prefill`` — vLLM P/D split: prefill like APC, then ship *all*
   live KV to the decode instance (stock disagg does not prune).
-* ``app`` — Advanced Prefill Pruning: CoW + hash skip + draft/early prune
-  + disagg gate (only survivors ship) + lazy abort.
+* ``app`` — one action per residual: alias the trunk, skip a published
+  prefix, draft-skip a repeated loop, prefill illegal text, ship only a
+  kept miss tail, abort off the TTFT path.
 
 Two phases per method: first-session ToT fan-out, then cross-session replay.
 """
@@ -59,7 +61,8 @@ SR_TAU = 256
 # Ding et al., ACL 2025, Appendix C.2: one mini-step, then early-stop.
 DPTS_MINI_STEP = 100
 
-# ToT-like residuals: two live thoughts, two hopeless (illegal / loop).
+# ToT-like residuals: two live thoughts, one repeated loop, one illegal
+# text. The default bar 0.15 drops the loop (0.02) and keeps illegal (0.22).
 THOUGHTS = (
     "Thought 1: compute carefully and box the answer with ####.",
     "Thought 2: ****loop****loop****loop****loop****loop",
