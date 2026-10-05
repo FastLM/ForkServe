@@ -266,7 +266,7 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{一条规则如何同时决定 $W$ 和 $X$？}
+\begin{frame}{一次 first-match 同时写出 $W$ 和 $X$}
   \why{每条 residual 只做一次 first-match。命中的动作同时确定 GPU prefill 的 token 与 connector 传输的 token。Index 0 只能是 HS、HP 或 PF，下一轮才有 spine。}
   \paperfig[0.50]{fig_dragon.tex}
   \src{一格是 $P{=}16$ 个 token。绿页已经在 radix $H$ 里，橙页是这次 prefill，灰页 withheld。橙竖线是 HP 和 EA 的切口。}
@@ -304,7 +304,7 @@
 \end{frame}
 \fi
 
-\begin{frame}{五个动作如何映射到 $W$ 和 $X$？}
+\begin{frame}{只有保留的 HP 与 PF 把 $W$ 写入 $X$}
   \why{图上的 first-match 即 \texttt{\_decide} 的返回。整页命中为 HS / HP；未保留且前缀已失败为 EA，否则为 DS；其余为 PF。$X$ 只累加已保留且不是 HS 的 $W$，因此 EA 与 DS 不进入 connector。}
   {\scriptsize
   \begin{algorithmic}[1]
@@ -502,15 +502,15 @@
     \toprule
     \textbf{Setting} & \textbf{$k{=}4$} & \textbf{$k{=}8$} & \textbf{$k{=}16$} \\
     \midrule
-    full fan-out：不剪，跑满 $1024$ & $12/32$, 25.3\,s & $15/32$, 52.5\,s & $20/32$, 104.1\,s \\
-    整段丢弃：$s{<}\tau$ 低分全丢，留下的跑满 & \bad{$6/32$, 19.1\,s} & \bad{$11/32$, 25.6\,s} & \bad{$13/32$, 52.1\,s} \\
-    只丢 loop，其余跑满 & $11/32$, 23.0\,s & $17/32$, 41.5\,s & $16/32$, 71.4\,s \\
-    只短 decode：不剪 loop，停在 $128$ & $10/32$, 23.1\,s & $15/32$, 42.3\,s & $17/32$, 74.0\,s \\
-    probe $t_0{=}64$：只丢 loop，其余先 $64$ & $8/32$, 24.0\,s & \good{$16/32$, 42.0\,s} & $18/32$, 72.5\,s \\
-    probe $t_0{=}128$：只丢 loop，其余先 $128$ & $9/32$, 24.7\,s & $13/32$, 43.3\,s & \good{$20/32$, 72.2\,s} \\
-    loop 也 probe：不在 kernel 前丢，全部先 $128$ & $10/32$, 24.9\,s & $15/32$, 43.3\,s & $20/32$, 74.4\,s \\
+    full fan-out & $12/32$, 25.3\,s & $15/32$, 52.5\,s & $20/32$, 104.1\,s \\
+    整段丢弃 & \bad{$6/32$, 19.1\,s} & \bad{$11/32$, 25.6\,s} & \bad{$13/32$, 52.1\,s} \\
+    只丢 loop & $11/32$, 23.0\,s & $17/32$, 41.5\,s & $16/32$, 71.4\,s \\
+    只短 decode & $10/32$, 23.1\,s & $15/32$, 42.3\,s & $17/32$, 74.0\,s \\
+    probe $t_0{=}64$ & $8/32$, 24.0\,s & \good{$16/32$, 42.0\,s} & $18/32$, 72.5\,s \\
+    probe $t_0{=}128$ & $9/32$, 24.7\,s & $13/32$, 43.3\,s & \good{$20/32$, 72.2\,s} \\
+    loop 也 probe & $10/32$, 24.9\,s & $15/32$, 43.3\,s & $20/32$, 74.4\,s \\
     \bottomrule
-  \end{tabular}}
+  \end{tabular}\par}
   \src{\texttt{logs/prune\_ablation\_scale} 与 \texttt{prune\_ablation\_grow}，2026-10-01。$k{=}16$、$t_0{=}128$ 的 decode token 从 524288 降到 393216。温度 0，prefix cache 开，$\mathrm{tp}{=}1$，四张 A100-40GB。}
 \end{frame}
 
