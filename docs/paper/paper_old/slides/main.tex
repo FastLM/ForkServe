@@ -91,27 +91,29 @@
 }
 
 \title{\sys}
-\subtitle{分支进 kernel 之前，决定这条 residual 要不要 prefill、要不要过 connector}
+\subtitle{每页一个问题，一句原因，一组数据对比}
 \author{一次 fan-out：trunk 长度 $L$，\,$k$ 条 residual $\ell_i$，最后一条 committed spine}
 \date{}
+
+\newcommand{\why}[1]{{\small\textbf{\color{fsgreen}原因.}\ #1}\par\vspace{0.45em}}
 
 \begin{document}
 
 \begin{frame}
   \titlepage
-  \vspace{1.2em}
+  \vspace{1.1em}
   \begin{columns}[T]
     \begin{column}{0.32\textwidth}
-      \textbf{\color{fsblue}背景}\\[0.3em]
-      {\small Tree of Thoughts、ESC / Speculative Rejection / DPTS、APC 与 DistServe / Splitwise 各自在哪一步付钱。}
+      \textbf{\color{fsblue}问题 1}\\[0.25em]
+      {\small Decode-time pruning 为什么省不了 prefill？}
     \end{column}
     \begin{column}{0.32\textwidth}
-      \textbf{\color{fsblue}设计}\\[0.3em]
-      {\small Prefill 之前的 admission，以及 connector 只搬 $\mathrm{Keep}$。}
+      \textbf{\color{fsblue}问题 2}\\[0.25em]
+      {\small 为什么默认阈值是 $0.15$，不是 $0.45$？}
     \end{column}
     \begin{column}{0.32\textwidth}
-      \textbf{\color{fsblue}结果}\\[0.3em]
-      {\small 2026-10-01 prune ablation，2026-09-29 三轮 ToT。Qwen3-8B / 4B，A100-40GB。}
+      \textbf{\color{fsblue}问题 3}\\[0.25em]
+      {\small Expand 快了约 $10\times$，端到端为什么只降一点？}
     \end{column}
   \end{columns}
 \end{frame}
@@ -120,32 +122,27 @@
 
 \section{背景}
 
-\begin{frame}{一次 fan-out 的三笔账}
-  Agent 和 Tree-of-Thoughts 的服务单位是一次分支：共享一条 trunk，分叉出 $k$ 条短 residual，最后只提交一条 spine。传统栈对这次分支收三笔钱。
-  \vspace{0.2em}
+\begin{frame}{一次 fan-out 的钱花在哪三步？}
+  \why{只提交一条 spine，但 APC 把 trunk 克隆 $k$ 份，DistServe / Splitwise 把算出的页全部搬走，ESC / Speculative Rejection / DPTS 要等 token 已经在显存里才打分。}
   \begin{columns}[T]
     \begin{column}{0.32\textwidth}
       \begin{block}{Work，GPU prefill}
-        \footnotesize 第一次 expand 时 block 还没进 radix index。APC 和 hash prefill 把 trunk 克隆 $k$ 份。
+        \footnotesize 第一次 expand，block 还没进 radix index。
         \[W = kL + \textstyle\sum_i \ell_i\]
       \end{block}
     \end{column}
     \begin{column}{0.32\textwidth}
       \begin{block}{Xfer，connector}
-        \footnotesize DistServe / Splitwise 把 prefiller 算出的每一页传给 decoder。被丢掉的 residual 如果已经 insert，也在这条链路上。
+        \footnotesize 被丢掉的 residual 如果已经 \texttt{insert}，也走这条链路。$X$ 与 $W$ 同一批页。
       \end{block}
     \end{column}
     \begin{column}{0.32\textwidth}
       \begin{block}{Decode-to-cut}
-        \footnotesize ESC、Speculative Rejection、DPTS 的分数来自已经 resident 的 token。Prefill 和一段 decode 发生在丢弃之前。
+        \footnotesize 窗口、$\tau$ 或 mini-step 都在 prefill 之后。这段 decode 剪不掉。
       \end{block}
     \end{column}
   \end{columns}
-  \vspace{0.15em}
-  \begin{exampleblock}{后面的设计对着后两笔账}
-    \footnotesize Admission 在 kernel 之前丢掉不该留的 residual。Connector 只搬 $\mathrm{Keep}$ 的 miss。Decode-time pruning 剪不到这两笔。
-  \end{exampleblock}
-  \vspace{0.2em}
+  \vspace{0.35em}
   {\fontsize{6.2}{7.0}\selectfont
   Yao, Yu, Zhao, Shafran, Griffiths, Cao, Narasimhan. \textit{Tree of Thoughts: Deliberate Problem Solving with Large Language Models.} NeurIPS 2023.\\
   Kwon, Li, Zhuang, Sheng, Zheng, Yu, Gonzalez, Zhang, Stoica. \textit{Efficient Memory Management for Large Language Model Serving with PagedAttention.} SOSP 2023.\\
@@ -154,75 +151,50 @@
   }
 \end{frame}
 
-\begin{frame}{ESC：窗口里的样本一致才停}
-  {\scriptsize Li, Yuan, Feng, Pan, Wang, Sun, Wang, Li. \textit{Escape Sky-High Cost: Early-Stopping Self-Consistency for Multi-Step Reasoning.} ICLR 2024.}
-  \vspace{0.25em}
+\begin{frame}{ESC 要等到什么时候才停？}
+  \why{熵为 0 读的是已经生成完的答案。图中窗口 $w{=}5$、计划样本 $L{=}20$。窗口关不上时，每个样本都已经 prefill，并 decode 到预算。}
   \begin{center}
-    \includegraphics[width=0.92\textwidth]{figs/esc_fig1.png}
+    \includegraphics[width=0.90\textwidth]{figs/esc_fig1.png}
   \end{center}
-  \vspace{0.15em}
-  {\small
-  计划抽 $L$ 个完整样本（图中 $L{=}20$）。切成顺序窗口，窗口大小 $w{=}5$。一个窗口里答案的熵为 0，也就是五个答案相同，才停止后面的采样，再对已经抽到的样本投票。
-  分数读的是\textbf{已经生成完}的答案。窗口关不上时，每个样本都要 prefill，并 decode 到预算。}
-  \src{图：原文 Figure 1。Li, Yuan, Feng, Pan, Wang, Sun, Wang, Li. \textit{Escape Sky-High Cost: Early-Stopping Self-Consistency for Multi-Step Reasoning.} ICLR 2024.}
+  \src{Li, Yuan, Feng, Pan, Wang, Sun, Wang, Li. \textit{Escape Sky-High Cost: Early-Stopping Self-Consistency for Multi-Step Reasoning.} ICLR 2024. 图：原文 Figure 1.}
 \end{frame}
 
-\begin{frame}{Speculative Rejection：部分奖励到了 $\tau$ 再砍分位}
-  {\scriptsize Sun, Haider, Zhang, Yang, Qiu, Yin, Wang, Bartlett, Zanette. \textit{Fast Best-of-N Decoding via Speculative Rejection.} NeurIPS 2024.}
-  \vspace{0.2em}
+\begin{frame}{Speculative Rejection 在砍分位之前已经付了什么？}
+  \why{论文在 partial-reward horizon $\tau{=}256$ 才用 reward model 停掉较低分位 $\alpha$。停掉之前，每条候选的 prefill 和前 $\tau$ 个 token 已经付过。小 $k$ 上 memory-limit 触发器不响。}
   \begin{center}
-    \includegraphics[width=0.96\textwidth,height=0.58\textheight,keepaspectratio]{figs/sr_fig1.png}
+    \includegraphics[width=0.92\textwidth,height=0.52\textheight,keepaspectratio]{figs/sr_fig1.png}
   \end{center}
-  \vspace{0.1em}
-  {\small
-  Best-of-$N$ 把 $N$ 条生成全部跑完，再用 reward model 挑最高分。Speculative Rejection 先用很大的 batch 开跑，在 partial-reward horizon $\tau$（论文里 $\tau{=}256$）用 reward model 给半成品打分，停掉较低分位 $\alpha$，把省下的显存让给还活着的候选。
-  停掉之前，每条候选的 prefill 和前 $\tau$ 个 token 已经付过。Memory-limit 触发器在小 $k$ 上不会响。}
-  \src{图：原文 Figure 1。Sun, Haider, Zhang, Yang, Qiu, Yin, Wang, Bartlett, Zanette. \textit{Fast Best-of-N Decoding via Speculative Rejection.} NeurIPS 2024.}
+  \src{Sun, Haider, Zhang, Yang, Qiu, Yin, Wang, Bartlett, Zanette. \textit{Fast Best-of-N Decoding via Speculative Rejection.} NeurIPS 2024. 图：原文 Figure 1.}
 \end{frame}
 
-\begin{frame}{DPTS：每个节点先跑 mini-step，再 early-stop}
-  {\scriptsize Ding, Jiang, Liu, Jing, Guo, Wang, Zhang, Wang, Liu, Du, Liu, Tao. \textit{Dynamic Parallel Tree Search for Efficient LLM Reasoning.} ACL 2025.}
-  \vspace{0.15em}
+\begin{frame}{DPTS 的 early-stop 读的是哪一段 token？}
+  \why{每个孩子先生成固定 mini-step，置信度低于 $\theta_{\mathrm{es}}$ 才停。剪枝读的是已经生成的 mini-step。我们复现时这一步是 100 token。}
   \begin{center}
-    \includegraphics[width=0.88\textwidth]{figs/dpts_fig4.png}
+    \includegraphics[width=0.86\textwidth]{figs/dpts_fig4.png}
   \end{center}
-  \vspace{0.05em}
-  {\small
-  左：Parallelism Streamline 把树上不同长度的路径 pad 齐，一起过 LLM，并管理 past \kv{}。
-  右：Search and Transition。Exploit 继承高置信父节点；Explore 按 $1{-}p$ 展开。孩子先生成固定 mini-step，置信度低于 $\theta_{\mathrm{es}}$ 就 early-stop，高于 $\theta_{\mathrm{ds}}$ 才继续 deep seek。
-  剪枝读的是已经生成的 mini-step。我们复现时这一步是 100 token。}
-  \src{图：原文 Figure 4。Ding, Jiang, Liu, Jing, Guo, Wang, Zhang, Wang, Liu, Du, Liu, Tao. \textit{Dynamic Parallel Tree Search for Efficient LLM Reasoning.} ACL 2025.}
+  \src{Ding, Jiang, Liu, Jing, Guo, Wang, Zhang, Wang, Liu, Du, Liu, Tao. \textit{Dynamic Parallel Tree Search for Efficient LLM Reasoning.} ACL 2025. 图：原文 Figure 4.}
 \end{frame}
 
-\begin{frame}{三篇都是 prefill 之后才剪}
-  Qwen3-8B，GSM8K，$n{=}16$，$D{=}512$，$\mathrm{tp}{=}1$，四张 A100-40GB。$k{=}16$ 时三个 host 单独跑，computed prefill 都是 5008。
-  \vspace{0.35em}
+\begin{frame}{为什么这三篇的 prefill token 一样？}
+  \why{分数都来自已经 resident 的 token。剪得越早，decode 越少，prefill 不变。}
   {\footnotesize
-  \setlength{\tabcolsep}{4pt}
-  \begin{tabular}{@{}p{0.22\textwidth}p{0.24\textwidth}rrrr@{}}
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{@{}lrrrr@{}}
     \toprule
-    \textbf{方法} & \textbf{丢掉之前} & \textbf{prefill} & \textbf{decode} & \textbf{e2e} & \textbf{any} \\
+    \textbf{$k{=}16$，host 单独跑} & \textbf{prefill} & \textbf{decode} & \textbf{e2e} & \textbf{any} \\
     \midrule
-    ESC & 窗口内完整样本一致 & 5008 & 131072 & 17.05\,s & $16/16$ \\
-    Spec.\ Rejection & 生成到 $\tau$，再砍较低一半 & 5008 & 98304 & 13.14\,s & $16/16$ \\
-    DPTS & 每个节点 100-token mini-step & 5008 & 78336 & 11.86\,s & $16/16$ \\
-    \good{$+\tau_{\mathrm{pre}}{=}0.15$} & \good{loop 在 kernel 前} & \good{3848} & \good{见下页} & \good{见下页} & \good{$16/16$} \\
+    ESC & 5008 & 131072 & 17.05\,s & $16/16$ \\
+    Speculative Rejection & 5008 & 98304 & 13.14\,s & $16/16$ \\
+    DPTS & 5008 & 78336 & 11.86\,s & $16/16$ \\
     \bottomrule
   \end{tabular}}
-  \vspace{0.4em}
-  {\small DPTS 最早，仍然把 16 条 residual 全部 prefill。代价模型里它在被丢掉的孩子上还要 decode 2000 token，切点在 78.7\,ms。ESC 的窗口在这个 fan-out 上关不上，切点在 276\,ms。}
-  \vspace{0.2em}
-  {\scriptsize
-  Li, Yuan, Feng, Pan, Wang, Sun, Wang, Li. \textit{Escape Sky-High Cost: Early-Stopping Self-Consistency for Multi-Step Reasoning.} ICLR 2024.\\
-  Sun, Haider, Zhang, Yang, Qiu, Yin, Wang, Bartlett, Zanette. \textit{Fast Best-of-N Decoding via Speculative Rejection.} NeurIPS 2024.\\
-  Ding, Jiang, Liu, Jing, Guo, Wang, Zhang, Wang, Liu, Du, Liu, Tao. \textit{Dynamic Parallel Tree Search for Efficient LLM Reasoning.} ACL 2025.
-  }
-  \src{GPU：\texttt{logs/prune\_ablation\_thresh/all.json}，2026-10-01，policy $=$ base。}
+  \src{Qwen3-8B，GSM8K，$n{=}16$，$D{=}512$，$\mathrm{tp}{=}1$，四张 A100-40GB。\texttt{logs/prune\_ablation\_thresh/all.json}，2026-10-01，policy $=$ base。}
 \end{frame}
 
 \section{设计}
 
-\begin{frame}{Pruning 在 insert 之前，connector 只搬 Keep}
+\begin{frame}{Admission 和 decode-time pruning 差在哪一步？}
+  \why{Decode-time 的分数在 prefill 和 \texttt{insert} 之后。这里先读 draft：loop 不进 kernel，connector 只搬 $\mathrm{Keep}$。}
   \begin{center}
   \begin{tikzpicture}[
       font=\scriptsize\sffamily,
@@ -264,71 +236,72 @@
   \end{center}
 \end{frame}
 
-\begin{frame}{五个动作：同一条规则决定 $W$ 和 $X$}
-  {\small 先读 radix 命中 $m_i$。整段命中不进 kernel；部分命中只算 miss；重复 loop 直接丢掉；其余低分只探前缀；过线的才整段 prefill。Index 0 只能是 HS、HP 或 PF。}
-  \vspace{0.2em}
-  \paperfig[0.62]{fig_dragon.tex}
-  \src{论文图：一条 radix 上的五个动作。绿页在 $H$，橙页是 prefill，灰页是 withheld。}
-\end{frame}
-
-\begin{frame}{最好的参数}
-  两个旋钮。$\tau_{\mathrm{pre}}$ 决定 prefill 前丢掉谁。$t_0$ 决定低分但不是 loop 的 residual 先探多长。
-  \vspace{0.35em}
-  {\footnotesize
-  \setlength{\tabcolsep}{3.5pt}
-  \begin{tabular}{@{}p{0.28\textwidth}p{0.22\textwidth}p{0.42\textwidth}@{}}
-    \toprule
-    \textbf{最好的点} & \textbf{设置} & \textbf{效果} \\
-    \midrule
-    默认，每个 $k$ 都守住精度 &
-    $\tau_{\mathrm{pre}}{=}0.15$ &
-    $k{=}4/8/16$：$15/16,\ 16/16,\ 16/16$。Prefill $-23\%$（$k{=}16$：$5008\to 3848$）。ESC $17.05\to 14.13$\,s。 \\
-    \addlinespace
-    \good{宽树下最快、精度不掉} &
-    \good{$\tau_{\mathrm{pre}}{=}0.45$，$k{=}16$} &
-    \good{仍是 $16/16$。ESC $10.92$\,s，prefill $2768$（$-45\%$）。SR $10.80$\,s，DPTS $10.90$\,s。} \\
-    \addlinespace
-    窄树上不用 $0.45$ &
-    同一阈值，$k{=}4,8$ &
-    ESC 掉到 $14/16$。$0.45$ 会连 illegal text 一起丢。所以默认留在 $0.15$。 \\
-    \addlinespace
-    \good{MATH-500，探到能恢复精度} &
-    \good{$t_0{=}128$，$k{=}16$} &
-    \good{any-finished $20/32$，和 full fan-out 一样。$104.1\to 72.2$\,s。Decode token $524288\to 393216$。} \\
-    \addlinespace
-    $k{=}8$ 上更短的 probe 更好 &
-    $t_0{=}64$，$k{=}8$ &
-    $16/32$，$42.0$\,s。Full fan-out 是 $15/32$，$52.5$\,s。 \\
-    \bottomrule
-  \end{tabular}}
-  \src{$\tau_{\mathrm{pre}}$：\texttt{prune\_ablation\_thresh}。$t_0$：\texttt{prune\_ablation\_grow} 与论文 tab:grow。一刀切丢掉全部 $s{<}\tau$ 在 $k{=}16$ 只有 $13/32$。}
+\begin{frame}{一条规则怎么同时决定 $W$ 和 $X$？}
+  \why{先看 radix 命中 $m_i$。整段命中不进 kernel；部分命中只算 miss；重复 loop 丢掉；其余低分只探前缀；过线才整段 prefill。Index 0 只能是 HS、HP 或 PF。}
+  \paperfig[0.55]{fig_dragon.tex}
+  \src{论文图。绿页在 $H$，橙页是 prefill，灰页是 withheld。}
 \end{frame}
 
 \section{结果}
 
-\begin{frame}{同一个 $\tau_{\mathrm{pre}}$ 插在三个 host 前面}
-  {\small $k{=}16$ 上 $0.15$ 和 $0.45$ 都是 $16/16$。端到端少多少，取决于这个 host 本来会把 loop decode 多久。$k{=}8$ 时 $0.15$ 把 SR 和 DPTS 从 $15/16$ 抬回 $16/16$。}
-  \vspace{0.15em}
-  \paperfig[0.62]{fig_eval_admit.tex}
-  \src{论文图。GSM8K，Qwen3-8B，$n{=}16$，$D{=}512$。来源 \texttt{logs/prune\_ablation\_thresh/all.json}。}
-\end{frame}
-
-\begin{frame}{为什么不能把低分全部挡在 prefill 前}
-  {\small MATH-500，$n{=}32$。Loop 是 0 分，可以在 kernel 前丢掉。Illegal text 要先探 $t_0$。$t_0{=}128$ 在 $k{=}16$ 回到 $20/32$。}
-  \vspace{0.15em}
-  \paperfig[0.62]{fig_eval_grow.tex}
-  \src{论文图。Grow 行与 2026-10-01 的 shard JSON 一致。Full / 一刀切来自同一次实验的 tab:grow。}
-\end{frame}
-
-\begin{frame}{P/D 分离之后，pruning 少搬了什么}
-  DistServe 和 Splitwise 的 connector 搬运 prefiller 已经算出的页。Admission 把 $\mathrm{Keep}$ 定在 \texttt{insert} 之前。
-  {\scriptsize
-  Zhong, Liu, Chen, Hu, Zhu, Liu, Jin, Zhang. \textit{DistServe: Disaggregating Prefill and Decoding for Goodput-optimized Large Language Model Serving.} OSDI 2024.\\
-  Patel, Choukse, Zhang, Shah, Goiri, Maleki, Bianchini. \textit{Splitwise: Efficient Generative LLM Inference Using Phase Splitting.} ISCA 2024.\\
-  Kwon, Li, Zhuang, Sheng, Zheng, Yu, Gonzalez, Zhang, Stoica. \textit{Efficient Memory Management for Large Language Model Serving with PagedAttention.} SOSP 2023.}
-  \vspace{0.3em}
+\begin{frame}{Prefill pruning 比这三个 host 省在哪里？}
+  \why{Loop 的分数约 $0.02$，低于 $0.15$，进 kernel 之前丢掉。策略分数约 $1.0$，留下。Admission 不读 host 的切点，所以三个 host 的 prefill 一起下降。ESC 省得最多，因为它本来要把 loop decode 到窗口结束。}
   {\footnotesize
   \setlength{\tabcolsep}{5pt}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{$k{=}16$} & \textbf{prefill} & \textbf{e2e，单独} & \textbf{e2e，$+\tau_{\mathrm{pre}}{=}0.15$} & \textbf{any} \\
+    \midrule
+    ESC & $5008\to 3848$ & 17.05\,s & \good{14.13\,s} & $16/16$ \\
+    Speculative Rejection & $5008\to 3848$ & 13.14\,s & \good{12.47\,s} & $16/16$ \\
+    DPTS & $5008\to 3848$ & 11.86\,s & \good{11.49\,s} & $16/16$ \\
+    \bottomrule
+  \end{tabular}}
+  \src{同一 JSON。$k{=}8$ 上 SR 和 DPTS 单独跑是 $15/16$，加上 $0.15$ 后是 $16/16$。ESC 的 decode token 从 131072 降到 98304。}
+\end{frame}
+
+\begin{frame}{为什么默认是 $0.15$，不是更快的 $0.45$？}
+  \why{$0.45$ 把分数约 $0.22$ 的 illegal text 和 loop 一起丢掉。$k{=}16$ 上还 admit 8 条，精度守住；$k{=}4$ 和 $k{=}8$ 上不够。}
+  {\footnotesize
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    & \textbf{prefill} & \textbf{admit} & \textbf{ESC e2e} & \textbf{any} \\
+    \midrule
+    $k{=}16$，base & 5008 & 16 & 17.05\,s & $16/16$ \\
+    $k{=}16$，$\tau_{\mathrm{pre}}{=}0.15$ & 3848 & 12 & 14.13\,s & $16/16$ \\
+    \good{$k{=}16$，$\tau_{\mathrm{pre}}{=}0.45$} & \good{2768} & \good{8} & \good{10.92\,s} & \good{$16/16$} \\
+    \midrule
+    $k{=}8$，$\tau_{\mathrm{pre}}{=}0.45$ & 1448 & 4 & \multicolumn{2}{r}{\bad{any $14/16$}} \\
+    $k{=}4$，$\tau_{\mathrm{pre}}{=}0.45$ & 732 & 2 & \multicolumn{2}{r}{\bad{any $14/16$}} \\
+    \bottomrule
+  \end{tabular}}
+  \src{$k{=}16$、$\tau_{\mathrm{pre}}{=}0.45$ 上 SR 是 $10.80$\,s，DPTS 是 $10.90$\,s，都是 $16/16$。$k{=}4$ 的 $0.15$ 是 $15/16$。\texttt{prune\_ablation\_thresh}。}
+\end{frame}
+
+\begin{frame}{为什么不能把低分全部挡在 prefill 前？}
+  \why{Loop 可以在 kernel 前丢。Illegal text 要先 decode $t_0$ 再打分，否则对的分支也被丢掉。}
+  {\footnotesize
+  \setlength{\tabcolsep}{6pt}
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    \textbf{MATH-500，$n{=}32$，$\tau{=}0.45$} & \textbf{any} & \textbf{时间} \\
+    \midrule
+    $k{=}16$，full fan-out & $20/32$ & 104.1\,s \\
+    $k{=}16$，一刀切丢掉全部 $s{<}\tau$ & \bad{$13/32$} & \bad{52.1\,s} \\
+    \good{$k{=}16$，probe $t_0{=}128$} & \good{$20/32$} & \good{72.2\,s} \\
+    $k{=}16$，连 loop 也 probe & $20/32$ & 74.4\,s \\
+    $k{=}8$，full fan-out & $15/32$ & 52.5\,s \\
+    \good{$k{=}8$，probe $t_0{=}64$} & \good{$16/32$} & \good{42.0\,s} \\
+    \bottomrule
+  \end{tabular}}
+  \src{$k{=}16$、$t_0{=}128$ 的 decode token 从 524288 降到 393216。Grow 行来自 2026-10-01 的 shard JSON；full 与一刀切来自论文 tab:grow。}
+\end{frame}
+
+\begin{frame}{P/D 分离之后，pruning 少搬了多少？}
+  \why{Connector 搬的是已经 prefill 的页。$\mathrm{Keep}$ 定在 \texttt{insert} 之前，丢掉的 residual 不进这条链路。}
+  {\footnotesize
+  \setlength{\tabcolsep}{8pt}
   \begin{tabular}{@{}lrrrr@{}}
     \toprule
     & \textbf{APC} & \textbf{P/D} & \textbf{\sys} & \textbf{\fsplus} \\
@@ -338,97 +311,97 @@
     Fan-out & 139\,ms & \bad{162\,ms} & 47\,ms & \good{31.4\,ms} \\
     \bottomrule
   \end{tabular}}
-  \vspace{0.35em}
-  {\small 相对 APC，prefill token $-77\%$。相对 P/D，connector 从 11520 token 降到 32。GPU 上的对应物是三轮 ToT：\fsplus{} 的 \texttt{transfer\_tokens} 是赢家的 miss（Qwen3-8B GSM8K 为 1402），192 条 residual 里 144 条没有 prefill。}
-  \src{前三行是控制面代价模型，不是 GPU wall clock。10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$。论文 tab:app。}
+  \src{控制面代价模型，不是 GPU wall clock。10 sessions，$k{=}4$，$L{=}256$，$\ell{=}32$。论文 tab:app。DistServe、Splitwise、PagedAttention 的完整引用在背景页。}
 \end{frame}
 
-\begin{frame}{KV 占用：剪掉的 residual 不再堆在 live set 里}
-  \paperfig[0.78]{fig_eval_stack.tex}
-  \src{论文图。Qwen3-14B GSM8K 的 peak 是 $4136$ / $1430$ / $1030$。\fsplus{} 与 \sys{} 共享 spine，更早丢掉 residual 的 $W$。}
-\end{frame}
-
-\begin{frame}{三轮 ToT}
-  {\small 一个 session、$k{=}4$、三轮。前两轮 decode 32-token step，输家丢掉，赢家是下一轮的父节点。\fsplus{} prefill $48/192$ 条 residual。}
-  \vspace{0.1em}
-  \paperfig[0.58]{fig_eval_mt.tex}
-  \src{论文图。\texttt{logs/tot\_mt}，2026-09-29，$n{=}16$，$\mathrm{tp}{=}2$，one problem per generate。8B GSM8K 端到端 $2.48\to 1.91$\,s；4B GSM8K token 几乎不变，端到端 $1.66\to 1.63$\,s。}
-\end{frame}
-
-\begin{frame}{Expand 是 APC 的 $7.9$--$10.6$ 倍}
-  \paperfig[0.62]{fig_eval_mt_split.tex}
-  \vspace{0.2em}
+\begin{frame}{三轮 ToT 的 expand 为什么比 APC 快？}
+  \why{三轮合计 192 条 residual，\fsplus{} 只 prefill 48 条。Connector 只搬赢家的 miss。}
   {\footnotesize
-  \setlength{\tabcolsep}{4pt}
+  \setlength{\tabcolsep}{8pt}
   \begin{tabular}{@{}lrrrr@{}}
     \toprule
-    Expand ms / 题 & 4B GSM8K & 4B Game24 & 8B GSM8K & 8B Game24 \\
+    \textbf{Expand ms / 题} & \textbf{4B GSM8K} & \textbf{4B Game24} & \textbf{8B GSM8K} & \textbf{8B Game24} \\
     \midrule
     APC & 429 & 435 & 597 & 598 \\
     \sys & 83 & 87 & 94 & 94 \\
     \fsplus & \good{55} & \good{53} & \good{58} & \good{56} \\
     \bottomrule
   \end{tabular}}
-  \src{论文图与 \texttt{fanout\_ms}/16。\sys{} 的端到端仍贴着 APC，因为两步 32-token decode 记在 decode 计时里。}
+  \src{\texttt{logs/tot\_mt}，2026-09-29，$n{=}16$，$k{=}4$，$\mathrm{tp}{=}2$，\texttt{fanout\_ms}/16。\fsplus{} / APC 是 $7.9$--$10.6\times$。}
 \end{frame}
 
-\begin{frame}{六个模型上的 peak \kv{}}
-  \paperfig[0.78]{fig_eval_bars.tex}
-  \src{论文图。$n{=}40$，$\mathrm{tp}{=}2$。GSM8K 上 spine / APC 是 $0.72$--$0.75\times$，Game24 上是 $0.57$--$0.61\times$。}
-\end{frame}
-
-\begin{frame}{Qwen3-8B 上质量和时延}
-  \paperfig[0.72]{fig_eval_radar.tex}
-  \src{论文图。$n{=}80$，$\mathrm{tp}{=}2$，$D{=}512$。GSM8K 端到端 $36.0\to 28.2$\,s。Peak \kv{}：$1582\to 1182$。}
-\end{frame}
-
-\begin{frame}{每题 decode 长度}
-  \paperfig[0.78]{fig_eval_hist.tex}
-  \src{论文图。$n{=}40$，$\mathrm{tp}{=}2$，bin 宽 64。端到端拉开的运行，是发出的 token 也变少的那些。}
-\end{frame}
-
-\begin{frame}{同一块显存上的并发}
-  {\small DeepSeek-R1 GSM8K，测到的 peak 是 APC 761 token、\sys{} 561 token。$8$\,GiB 池子里并发树从 76 到 103。饱和 decode 从 48640 到 65920 token/s。}
-  \vspace{0.15em}
-  \paperfig[0.58]{fig_eval_slo.tex}
-  \src{论文图。$1$\,s P99 TTFT：APC 在 448 QPS 越过，\sys{} 在 512 QPS 仍是 $0.81$\,s。}
-\end{frame}
-
-\begin{frame}{精度}
+\begin{frame}{Expand 快了约 $10\times$，端到端为什么只降一点？}
+  \why{端到端里还有两步 32-token decode。发出的 token 几乎不变时，端到端几乎不变。}
   {\footnotesize
-  \setlength{\tabcolsep}{5pt}
+  \setlength{\tabcolsep}{7pt}
   \begin{tabular}{@{}lrrrr@{}}
     \toprule
-    \textbf{三轮 ToT，$n{=}16$} & \textbf{APC} & \textbf{\sys} & \textbf{\fsplus} & \textbf{Peak \kv{}} \\
+    & \textbf{APC 端到端} & \textbf{\fsplus{} 端到端} & \textbf{APC token} & \textbf{\fsplus{} token} \\
     \midrule
-    Qwen3-4B GSM8K & $15/16$ & $15/16$ & $15/16$ & $318\to 275$ \\
-    Qwen3-8B GSM8K & $16/16$ & $15/16$ & $15/16$ & $318\to 275$ \\
-    Qwen3-4B Game24 & $6/16$ & \good{$8/16$} & \good{$9/16$} & $265\to 216$ \\
-    Qwen3-8B Game24 & $9/16$ & $9/16$ & \good{$10/16$} & $265\to 216$ \\
+    8B GSM8K & 2.48\,s & \good{1.91\,s} & 3594 & \good{2485} \\
+    8B Game24 & 2.15\,s & \good{1.52\,s} & 2943 & \good{1750} \\
+    4B GSM8K & 1.66\,s & 1.63\,s & 3421 & 3334 \\
     \bottomrule
   \end{tabular}}
-  \vspace{0.35em}
-  \begin{columns}[T]
-    \begin{column}{0.48\textwidth}
-      \begin{exampleblock}{最好的安全点}
-        \small $\tau_{\mathrm{pre}}{=}0.15$：$k{=}8,16$ 为 $16/16$，$k{=}4$ 为 $15/16$。宽树上 $\tau_{\mathrm{pre}}{=}0.45$ 同样 $16/16$，ESC $10.92$\,s。MATH-500 上 $t_0{=}128$ 回到 $20/32$。
-      \end{exampleblock}
-    \end{column}
-    \begin{column}{0.48\textwidth}
-      \begin{alertblock}{只留 1 条会伤精度}
-        \small \texttt{prune\_ablation\_wide} 里没有 score 模式的 app，在 $k{=}16$ 只 admit 1 条。ESC 掉到 $11/16$，SR 掉到 $9/16$。同一阈值的 score 模式 admit 8 条，保持 $16/16$。
-      \end{alertblock}
-    \end{column}
-  \end{columns}
+  \src{同一批 \texttt{tot\_mt}。4B GSM8K 的 token 几乎没变，端到端就几乎没变。Qwen3-8B GSM8K 的 \texttt{transfer\_tokens} 是 1402。}
 \end{frame}
 
-\begin{frame}{三句话}
+\begin{frame}{剪完之后，做对的题还在吗？}
+  \why{丢掉的是低分 loop。GSM8K 上 4B 持平，8B 少 1 题。Game24 上少做无效分支，做对的次数上升。}
+  {\footnotesize
+  \setlength{\tabcolsep}{8pt}
+  \begin{tabular}{@{}lrrr@{}}
+    \toprule
+    \textbf{三轮 ToT，$n{=}16$} & \textbf{APC} & \textbf{\sys} & \textbf{\fsplus} \\
+    \midrule
+    Qwen3-4B GSM8K & $15/16$ & $15/16$ & $15/16$ \\
+    Qwen3-8B GSM8K & $16/16$ & $15/16$ & $15/16$ \\
+    Qwen3-4B Game24 & $6/16$ & \good{$8/16$} & \good{$9/16$} \\
+    Qwen3-8B Game24 & $9/16$ & $9/16$ & \good{$10/16$} \\
+    \bottomrule
+  \end{tabular}}
+  \src{同一批 \texttt{tot\_mt}，one problem per generate。}
+\end{frame}
+
+\begin{frame}{只 admit 一条为什么伤精度？}
+  \why{没有 score 模式时，app 不按分数留一半，把对的分支也丢掉了。}
+  {\footnotesize
+  \setlength{\tabcolsep}{8pt}
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{$k{=}16$，$\tau{=}0.45$} & \textbf{admit} & \textbf{prefill} & \textbf{ESC} & \textbf{SR} \\
+    \midrule
+    app，无 score & \bad{1} & \bad{414} & \bad{$11/16$} & \bad{$9/16$} \\
+    app，score & \good{8} & \good{2768} & \good{$16/16$} & \good{$16/16$} \\
+    \bottomrule
+  \end{tabular}}
+  \src{\texttt{logs/prune\_ablation\_wide/all.json}。GSM8K，Qwen3-8B，$n{=}16$。}
+\end{frame}
+
+\begin{frame}{少占的 \kv{} 换成了多少吞吐？}
+  \why{Spine 比 APC 短，同一块显存里能多放树，decode 饱和之后吞吐上去，TTFT 更晚越过 $1$\,s。}
+  {\footnotesize
+  \setlength{\tabcolsep}{8pt}
+  \begin{tabular}{@{}lrr@{}}
+    \toprule
+    \textbf{DeepSeek-R1，GSM8K} & \textbf{APC} & \textbf{\sys} \\
+    \midrule
+    测到的 peak & 761 token & \good{561 token} \\
+    $8$\,GiB 里的并发树 & 76 & \good{103} \\
+    饱和 decode & 48640 token/s & \good{65920 token/s} \\
+    $1$\,s P99 TTFT & 448 QPS 越过 & \good{512 QPS 仍是 $0.81$\,s} \\
+    \bottomrule
+  \end{tabular}}
+  \src{论文测到的 peak 与并发扫描。}
+\end{frame}
+
+\begin{frame}{三个问题，各用一组数回答}
   \begin{enumerate}
-    \item ESC 等一个窗口的完整样本，Speculative Rejection 等到 $\tau$，DPTS 等到 mini-step。三篇的分数都来自已经 resident 的 token，所以 $k{=}16$ 时 computed prefill 都是 5008。P/D 接着把这些页全部传走。
-    \vspace{0.4em}
-    \item 这里的 admission 在 kernel 之前处理重复 loop，其他低分只给 $t_0$ 的 probe。Connector 只搬 $\mathrm{Keep}$ 的 miss。五个动作同时决定 $W$ 和 $X$。
-    \vspace{0.4em}
-    \item 最好的安全点是 $\tau_{\mathrm{pre}}{=}0.15$。宽树上 $\tau_{\mathrm{pre}}{=}0.45$ 仍是 $16/16$，ESC 从 17.05\,s 降到 10.92\,s。MATH-500 上 $t_0{=}128$ 把 $20/32$ 的精度留住，时间从 104.1\,s 降到 72.2\,s。
+    \item \textbf{为什么三篇的 prefill 一样？} 分数来自已经 resident 的 token。$k{=}16$ 时 ESC、Speculative Rejection、DPTS 的 prefill 都是 5008。加上 $\tau_{\mathrm{pre}}{=}0.15$ 后是 3848，ESC 从 17.05\,s 到 14.13\,s，仍是 $16/16$。
+    \vspace{0.55em}
+    \item \textbf{为什么默认是 $0.15$？} $k{=}16$ 上 $0.45$ 更快（ESC 10.92\,s，仍是 $16/16$），但 $k{=}4$ 和 $k{=}8$ 掉到 $14/16$。MATH-500 上一刀切是 $13/32$，$t_0{=}128$ 回到 $20/32$，104.1\,s 到 72.2\,s。
+    \vspace{0.55em}
+    \item \textbf{Expand 快了，端到端为什么只降一点？} 8B GSM8K 的 expand 从 597\,ms 到 58\,ms，端到端从 2.48\,s 到 1.91\,s，因为发出 token 从 3594 降到 2485。4B GSM8K 的 token 从 3421 到 3334，端到端从 1.66\,s 到 1.63\,s。
   \end{enumerate}
 \end{frame}
 
