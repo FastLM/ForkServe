@@ -1,0 +1,81 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  >=Latex,
+  tick/.style={font=\tiny, text=black!55, inner sep=0pt},
+  grid/.style={black!12, line width=0.25pt},
+]
+\definecolor{APC}{HTML}{C48A3A}
+\definecolor{FSln}{HTML}{D97B2F}
+
+% Measured DeepSeek-R1 GSM8K peaks: APC 761 tok, spine 561 tok.
+% 8 GiB pool, 147456 B/token -> C = 76 and 103.
+% Service model: e2e = 0.4 s, 256 decode tokens, so one slot is 640 tok/s.
+% tok/s = min(round(qps*0.4), C) * 640.
+% qps:     8, 32, 64, 128, 192, 256, 320, 384, 448, 512
+% APC:  1920, 8320, 16640, 32640, 48640, then 48640
+% FS:   1920, 8320, 16640, 32640, 49280, 65280, then 65920
+% P99 s, APC: 0.020 until 128, 0.031, 0.294, 0.567, 0.841, 1.104, 1.378
+% P99 s, FS:  0.020 until 256, 0.214, 0.416, 0.610, 0.812
+% Left y: thousands, 0--80.  x: 512 * 0.0066 = 3.38
+
+\begin{scope}[shift={(0,0)}]
+  \foreach \y in {0,20,40,60,80} {
+    \draw[grid] (0,\y*0.032) -- (3.55,\y*0.032);
+    \node[tick, anchor=east] at (-0.06,\y*0.032) {\y};
+  }
+  \draw[black!55, line width=0.35pt] (0,0) -- (3.55,0);
+  \draw[black!55, line width=0.35pt] (0,0) -- (0,2.56);
+  % APC plateau 48.64, spine plateau 65.92
+  \draw[APC, densely dashed, line width=0.3pt] (0,48.64*0.032) -- (3.55,48.64*0.032);
+  \draw[FSln, densely dashed, line width=0.3pt] (0,65.92*0.032) -- (3.55,65.92*0.032);
+  \draw[APC, line width=0.8pt]
+    (8*0.0066, 1.92*0.032) -- (32*0.0066, 8.32*0.032) -- (64*0.0066, 16.64*0.032)
+    -- (128*0.0066, 32.64*0.032) -- (192*0.0066, 48.64*0.032) -- (512*0.0066, 48.64*0.032);
+  \draw[FSln, line width=0.8pt]
+    (8*0.0066, 1.92*0.032) -- (32*0.0066, 8.32*0.032) -- (64*0.0066, 16.64*0.032)
+    -- (128*0.0066, 32.64*0.032) -- (192*0.0066, 49.28*0.032) -- (256*0.0066, 65.28*0.032)
+    -- (320*0.0066, 65.92*0.032) -- (512*0.0066, 65.92*0.032);
+  \foreach \q/\ya/\yf in {8/1.92/1.92, 128/32.64/32.64, 192/48.64/49.28, 256/48.64/65.28, 512/48.64/65.92} {
+    \fill[APC] (\q*0.0066, \ya*0.032) circle (1.15pt);
+    \fill[FSln] (\q*0.0066, \yf*0.032) circle (1.15pt);
+  }
+  \draw[fsgain, line width=0.4pt] (3.28,48.64*0.032) -- (3.28,65.92*0.032);
+  \node[font=\tiny, text=fsgain, anchor=east] at (3.20,1.83) {$+35.5\%$};
+  \foreach \q/\lab in {8/8, 128/128, 256/256, 384/384, 512/512} {
+    \node[tick] at (\q*0.0066, -0.18) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (1.78,2.62) {tok/s ($\times 10^{3}$)};
+  \node[tick] at (1.78, -0.42) {offered QPS};
+\end{scope}
+
+\begin{scope}[shift={(4.55,0)}]
+  \foreach \y in {0.0,0.5,1.0,1.5} {
+    \draw[grid] (0,\y*1.60) -- (3.55,\y*1.60);
+    \node[tick, anchor=east] at (-0.06,\y*1.60) {\y};
+  }
+  \draw[black!55, line width=0.35pt] (0,0) -- (3.55,0);
+  \draw[black!55, line width=0.35pt] (0,0) -- (0,2.56);
+  \draw[black!45, densely dashed] (0,1.60) -- (3.55,1.60);
+  \node[tick, anchor=west, text=black!50] at (0.08,1.72) {SLO $1$\,s};
+  \draw[APC, line width=0.8pt]
+    (8*0.0066, 0.020*1.60) -- (128*0.0066, 0.020*1.60) -- (192*0.0066, 0.031*1.60)
+    -- (256*0.0066, 0.294*1.60) -- (320*0.0066, 0.567*1.60) -- (384*0.0066, 0.841*1.60)
+    -- (448*0.0066, 1.104*1.60) -- (512*0.0066, 1.378*1.60);
+  \draw[FSln, line width=0.8pt]
+    (8*0.0066, 0.020*1.60) -- (256*0.0066, 0.020*1.60) -- (320*0.0066, 0.214*1.60)
+    -- (384*0.0066, 0.416*1.60) -- (448*0.0066, 0.610*1.60) -- (512*0.0066, 0.812*1.60);
+  \fill[APC] (384*0.0066, 0.841*1.60) circle (1.15pt);
+  \fill[APC] (448*0.0066, 1.104*1.60) circle (1.15pt);
+  \fill[FSln] (512*0.0066, 0.812*1.60) circle (1.15pt);
+  \foreach \q/\lab in {8/8, 128/128, 256/256, 384/384, 512/512} {
+    \node[tick] at (\q*0.0066, -0.18) {\lab};
+  }
+  \node[font=\tiny, anchor=south] at (1.78,2.62) {P99 TTFT (s)};
+  \node[tick] at (1.78, -0.42) {offered QPS};
+\end{scope}
+
+\fill[APC] (2.15,-0.78) rectangle (2.40,-0.64);
+\node[font=\tiny, anchor=west] at (2.46,-0.71) {APC};
+\fill[FSln] (3.55,-0.78) rectangle (3.80,-0.64);
+\node[font=\tiny, anchor=west] at (3.86,-0.71) {\sys};
+\end{tikzpicture}

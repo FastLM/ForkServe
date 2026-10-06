@@ -1,0 +1,111 @@
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily\scriptsize,
+  >=Latex,
+  line cap=round, line join=round,
+  panel/.style={draw=fsblue!35, line width=0.55pt, rounded corners=2pt, fill=white},
+  head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
+  chip/.style={draw, rounded corners=1pt, inner sep=1.4pt, font=\tiny\sffamily, line width=0.4pt},
+  arr/.style={-{Latex[length=1.6mm,width=1.2mm]}, line width=0.5pt, draw=fsblue!80},
+  thought/.style={draw, rounded corners=1pt, minimum width=0.72cm, minimum height=0.38cm, inner sep=0pt, font=\tiny\sffamily},
+]
+\path (0,0) rectangle (16.35,6.55);
+
+% ---------- panels ----------
+\draw[panel] (0.00,0.62) rectangle (5.28,6.50);
+\draw[panel] (5.48,0.62) rectangle (10.72,6.50);
+\draw[panel] (10.92,0.62) rectangle (16.35,6.50);
+\fill[fsblue] (0.00,6.08) rectangle (5.28,6.50);
+\fill[fsorange!88!black] (5.48,6.08) rectangle (10.72,6.50);
+\fill[fspurple!80!black] (10.92,6.08) rectangle (16.35,6.50);
+\node[head] at (0.12,6.29) {(a) Search scores a written thought};
+\node[head] at (5.60,6.29) {(b) Hosts share one prefill};
+\node[head] at (11.04,6.29) {(c) Cache and transfer, after the page};
+
+% ---------- (a) ToT-style tree, original redraw ----------
+\node[draw=fsblue!60, fill=fslight, ellipse, inner sep=1.5pt, font=\tiny\sffamily] (inp) at (2.64,5.62) {Input};
+\node[thought, fill=fscommit, draw=fsgreen!70!black] (t0) at (1.15,4.55) {};
+\node[thought, fill=fsgreen!55!black, draw=fsgreen!70!black] (t1) at (2.64,4.55) {};
+\node[thought, fill=fsmiss, draw=fsred!70] (t2) at (4.13,4.55) {};
+\node[thought, fill=fscommit, draw=fsgreen!70!black] (t00) at (0.72,3.55) {};
+\node[thought, fill=fsmiss, draw=fsred!70] (t01) at (1.58,3.55) {};
+\node[thought, fill=fscommit, draw=fsgreen!70!black] (t10) at (2.28,3.55) {};
+\node[thought, fill=fsmiss, draw=fsred!70] (t11) at (3.10,3.55) {};
+\node[draw=fsgreen!60!black, fill=fscommit, ellipse, inner sep=1.4pt, font=\tiny\sffamily] (out) at (1.50,2.55) {Output};
+\draw[arr, draw=fsgreen!70!black] (inp) -- (t0);
+\draw[arr, draw=fsgreen!70!black] (inp) -- (t1);
+\draw[arr, draw=fsred!70] (inp) -- (t2);
+\draw[arr, draw=fsgreen!70!black] (t0) -- (t00);
+\draw[arr, draw=fsred!70] (t0) -- (t01);
+\draw[arr, draw=fsgreen!70!black] (t1) -- (t10);
+\draw[arr, draw=fsred!70] (t1) -- (t11);
+\draw[arr, draw=fsgreen!70!black] (t00) -- (out);
+\node[font=\tiny\sffamily, text=fsgreen!60!black, anchor=west] at (3.35,2.62) {kept};
+\node[font=\tiny\sffamily, text=fsred, anchor=west] at (3.35,2.28) {dropped};
+\fill[fscommit] (3.15,2.52) rectangle (3.30,2.70);
+\draw[fsgreen!70!black] (3.15,2.52) rectangle (3.30,2.70);
+\fill[fsmiss] (3.15,2.18) rectangle (3.30,2.36);
+\draw[fsred!70] (3.15,2.18) rectangle (3.30,2.36);
+
+\node[chip, draw=fsorange!70, fill=fsspec, anchor=west] (prop) at (0.18,1.55) {propose};
+\node[chip, draw=fsblue!60, fill=fslight, anchor=west] (val) at (2.55,1.55) {value: sure / maybe / impossible};
+\draw[arr] (prop.east) -- (val.west);
+\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (0.18,0.95)
+  {The value prompt reads a thought\\that the propose step has already written.};
+
+% ---------- (b) three hosts, identical prefill ----------
+\foreach \y/\name/\dw/\cut in {
+  4.95/ESC/2.05/window,
+  3.85/SR/1.35/{$\tau{=}256$},
+  2.75/DPTS/0.85/{step 100}
+} {
+  \node[font=\tiny\sffamily\bfseries, anchor=west] at (5.62,\y) {\name};
+  \fill[fsgray!35] (6.55,\y-0.16) rectangle (7.85,\y+0.16);
+  \draw[fsgray] (6.55,\y-0.16) rectangle (7.85,\y+0.16);
+  \fill[fsblue!45] (7.85,\y-0.16) rectangle ({7.85+\dw},\y+0.16);
+  \draw[fsblue!80] (7.85,\y-0.16) rectangle ({7.85+\dw},\y+0.16);
+  \draw[fsred, line width=0.9pt] ({7.85+\dw},\y-0.28) -- ({7.85+\dw},\y+0.28);
+  \node[font=\tiny\sffamily, text=fsred, anchor=west] at ({7.95+\dw},\y) {\cut};
+}
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (6.55,2.22) {prefill};
+\node[font=\tiny\sffamily, text=fsblue, anchor=west] at (7.95,2.22) {decode until the score};
+\node[font=\tiny\sffamily, align=left, anchor=west] at (5.62,1.35)
+  {$k{=}16$, one GSM8K run:\\prefill tokens $= 5008$ for all three.\\They differ only after the kernel.};
+\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (5.62,0.78)
+  {ESC keeps the window open.\\SR and DPTS still decode to the cut.};
+
+% ---------- (c) vLLM + DistServe, original redraw ----------
+\node[chip, draw=fsgreen!60!black, fill=fscommit] (sch) at (11.70,5.55) {Scheduler};
+\node[chip, draw=fsblue!50, fill=fslight, align=center] (kvm) at (13.55,5.55) {KV manager\\[-1pt]\tiny block table};
+\node[chip, draw=fsblue!50, fill=white] (wk) at (15.45,5.55) {Worker};
+\draw[arr] (sch) -- (kvm);
+\draw[arr] (kvm) -- (wk);
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (11.10,4.85)
+  {Hash after a full block.};
+
+\node[chip, draw=fsred!60, fill=fsmiss] (ctl) at (11.35,4.15) {Controller};
+\node[draw=fsorange!70, fill=fsspec, rounded corners=1.5pt, align=center,
+      minimum width=1.55cm, minimum height=1.05cm, font=\tiny\sffamily] (pre) at (12.55,2.95) {};
+\node[font=\tiny\sffamily\bfseries, text=fsorange!80!black] at (12.55,3.22) {Prefill};
+\node[font=\tiny\sffamily] at (12.55,2.90) {instance};
+\node[font=\tiny\sffamily, text=fsgray] at (12.55,2.60) {computed KV};
+\node[draw=fsblue!60, fill=fslight, rounded corners=1.5pt, align=center,
+      minimum width=1.55cm, minimum height=1.05cm, font=\tiny\sffamily] (dec) at (15.35,2.95) {};
+\node[font=\tiny\sffamily\bfseries, text=fsblue] at (15.35,3.22) {Decode};
+\node[font=\tiny\sffamily] at (15.35,2.90) {instance};
+\node[font=\tiny\sffamily, text=fsgray] at (15.35,2.60) {sampler};
+\draw[arr] (ctl.south) -- (pre.north);
+\draw[arr, draw=fsred, line width=0.7pt] (pre.east) -- (dec.west);
+\node[font=\tiny\sffamily, text=fsred, align=center] at (13.95,3.70) {no admission};
+\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (11.08,1.55)
+  {The first fan-out has no page yet,\\so every residual is computed.\\An aborted residual still crosses.};
+
+% ---------- bottom cost bar ----------
+\fill[black!4] (0.00,0.00) rectangle (16.35,0.48);
+\draw[fsgray!50] (0.00,0.48) -- (16.35,0.48);
+\node[font=\tiny\sffamily, anchor=west] at (0.15,0.24)
+  {\textbf{Paid before abort:}\quad
+   $W$ GPU prefill \quad\textperiodcentered\quad
+   $X$ connector payload \quad\textperiodcentered\quad
+   decode-to-cut (window, $\tau$, or mini-step)};
+\end{tikzpicture}

@@ -5,8 +5,14 @@ The body is three coupled mechanisms: a copy-on-write context tree, one cost-ord
 
 ```bash
 cd docs/paper && make        # original draft → main.pdf
-cd docs/paper && make new    # revised draft → main_new.pdf
+cd docs/paper && make new    # revised MLSys draft → main_new.pdf
+cd docs/paper && make acl    # ACL draft, PD-Prune → acl/main.pdf
 ```
+
+`acl/` is the ACL-format rewrite under the name PD-Prune.
+Figure 1 redraws the reference architectures from the slides (Tree-of-Thoughts, the three decode-time hosts, vLLM prefix caching, DistServe).
+Figure 2 is the PD-Prune path: a prefill gate, a prefill instance, and a decode probe.
+The body uses the October 2026 prune measurements; the appendix records scores, token accounting, width and probe sweeps, and the connector cost model.
 
 Produces `main.pdf` or `main_new.pdf`. The bibliography is the checked-in `*.bbl` (numeric citations). Do not run `bibtex` unless `refs.bib` is restored.
 

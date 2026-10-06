@@ -1,12 +1,21 @@
 LATEX=pdflatex
 MAIN=main
 NEW=main_new
+ACL=acl/main
 
-.PHONY: all new clean distclean view
+.PHONY: all new acl clean distclean view
 
 all: $(MAIN).pdf
 
 new: $(NEW).pdf
+
+acl: $(ACL).pdf
+
+$(ACL).pdf: acl/main.tex acl/refs.bib acl/acl.sty acl/acl_natbib.bst acl/tex/*.tex acl/fig/*.tex
+	cd acl && $(LATEX) -interaction=nonstopmode main
+	cd acl && bibtex main
+	cd acl && $(LATEX) -interaction=nonstopmode main
+	cd acl && $(LATEX) -interaction=nonstopmode main
 
 $(MAIN).pdf: $(MAIN).tex $(MAIN).bbl mlsys2026.sty tex/*.tex
 	$(LATEX) -interaction=nonstopmode $(MAIN)

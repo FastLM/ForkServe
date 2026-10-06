@@ -1,0 +1,215 @@
+\section{Experiments}
+\label{sec:eval}
+
+\subsection{Experiment Setup}
+\label{sec:setup}
+
+We evaluate \sys on Qwen3-8B at temperature $0$ with prefix caching and tensor parallelism $1$, on four A100 40GB GPUs.
+By default we use the ordered pair in Equation~\ref{eq:pair} and probe length $t_0{=}128$.
+We evaluate with GSM8K under three decode-time hosts and with MATH-500 under the probe rule.
+We also report peak KV, quality, and offered load on a serving stack whose live occupancy is the committed spine, using six model families.
+Please refer to Appendix~\ref{app:details} for host parameters and metric definitions.
+Note that \sys is complementary to the hosts, since our approach does not modify their scoring rules or require additional test-time model calls.
+
+\paragraph{GSM8K hosts.}
+Sixteen GSM8K problems.
+Each problem is a fan-out of $k \in \{4,8,16\}$ residuals and a decode budget $D{=}512$.
+Each fan-out is a controlled mix: half the residuals are live strategy instructions, and half alternate a repeated loop with illegal text.
+Index $0$ is always a live strategy.
+\emph{Any-finished} counts a problem if any admitted branch produces the reference number.
+\emph{Winner} counts a problem if the branch selected as the winner does.
+Both are reported over $16$.
+ESC, speculative rejection, and DPTS are the decode hosts.
+The host alone submits every residual.
+\sys applies $\tau_{\mathrm{pre}}$ first and leaves the host's cut in place.
+
+\paragraph{MATH-500 probe.}
+The first $32$ MATH-500 problems at level $4$ or higher, $k \in \{4,8,16\}$, $D{=}1024$.
+Half the residuals are contest strategies and half are loops or illegal text.
+The decode bar is $\tau_{\mathrm{dec}}$.
+Full fan-out decodes every residual to $D$.
+Discard drops every residual below that bar before prefill.
+Probe admits those residuals for $t_0$ tokens and extends only when the generated prefix clears $\tau_{\mathrm{dec}}$.
+
+\subsection{Result Analysis}
+\label{sec:analysis}
+
+We summarize the results in Table~\ref{tab:hosts} and Figure~\ref{fig:results}.
+\sys significantly reduces the prefill shared by three decode-time hosts, while maintaining any-finished accuracy.
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+$k{=}16$ & Prefill & Host & $+\tau_{\mathrm{pre}}$ & Any \\
+\midrule
+ESC & $5008 \to 3848$ & 17.05\,s & \textbf{14.13\,s} & $16/16$ \\
+SR & $5008 \to 3848$ & 13.14\,s & \textbf{12.47\,s} & $16/16$ \\
+DPTS & $5008 \to 3848$ & 11.86\,s & \textbf{11.49\,s} & $16/16$ \\
+\bottomrule
+\end{tabular}
+\caption{Prefill pruning at $\tau_{\mathrm{pre}}$ in front of three hosts.
+Any-finished stays $16/16$.
+The prefill column is identical across hosts because the gate, not the host cut, changes $W$, as predicted by Proposition~\ref{prop:invariance}.}
+\label{tab:hosts}
+\end{table}
+
+Specifically, with the prefill gate off, the three hosts share one prefill of $5008$ tokens.
+Turning on $\tau_{\mathrm{pre}}$ drops the loops, leaves illegal text, and cuts that prefill to $3848$ on every host.
+ESC moves the most, because its baseline decodes the loops out to $D$.
+Speculative rejection and DPTS move less, because they were already stopping the loop and illegal half at their own cut.
+The gate removes the prefill of the loop, which none of those cuts avoids.
+This highlights a deficiency of pruning only after tokens exist: the host can stop an abortable residual, but it cannot unspend $W$.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_results}}
+\caption{Qwen3-8B.
+(a)~GSM8K controlled mix, $k{=}16$, $n{=}16$, $D{=}512$.
+Each group is one host.
+The gray bar is the host alone, blue adds $\tau_{\mathrm{pre}}$, and green sets the prefill bar to $\tau_{\mathrm{dec}}$.
+Any-finished accuracy holds on every bar.
+At the higher prefill bar the three hosts meet.
+(b)~MATH-500, $n{=}32$, $D{=}1024$.
+Each polyline connects $k{=}4$, $k{=}8$, and $k{=}16$.
+Discarding residuals below $\tau_{\mathrm{dec}}$ before prefill is fast and less accurate.
+The probe under $(\tau_{\mathrm{pre}}, \tau_{\mathrm{dec}})$ meets the full fan-out at $k{=}16$.}
+\label{fig:results}
+\end{figure*}
+
+Figure~\ref{fig:results}(a) raises the prefill bar from $\tau_{\mathrm{pre}}$ to $\tau_{\mathrm{dec}}$, which also drops illegal text.
+Any-finished holds at $k{=}16$.
+End-to-end time converges across the three hosts, and the host's later cut fires on nobody: the prefill gate has already removed every residual that cut would have rejected.
+
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Setting & Admit & Cut later & Prefill & Decode & Time & Any & Winner \\
+\midrule
+\multicolumn{8}{@{}l}{\emph{Decode pruning only.} No $\tau_{\mathrm{pre}}$. Every residual is prefilled.} \\
+ESC, budget $D{=}512$ & 16 & 0 & 5008 & 131072 & 17.05\,s & $16/16$ & $11/16$ \\
+SR, horizon $256$ & 16 & 8 & 5008 & 98304 & 13.14\,s & $16/16$ & $12/16$ \\
+DPTS, mini-step $100$ & 16 & 8 & 5008 & 78336 & 11.86\,s & $16/16$ & $12/16$ \\
+\midrule
+\multicolumn{8}{@{}l}{\emph{Prefill pruning only.} Decode runs each admitted residual to $D{=}512$.} \\
+$\tau_{\mathrm{pre}}$ & 12 & 0 & 3848 & 98304 & 14.13\,s & $16/16$ & $11/16$ \\
+$\tau_{\mathrm{dec}}$ as prefill & 8 & 0 & 2768 & 65536 & \textbf{10.92\,s} & $16/16$ & $10/16$ \\
+\midrule
+\multicolumn{8}{@{}l}{\emph{Both.} The same prefill bar, then the host cut on what remains.} \\
+SR $+\tau_{\mathrm{pre}}$ & 12 & 4 & 3848 & 81920 & 12.47\,s & $16/16$ & $10/16$ \\
+DPTS $+\tau_{\mathrm{pre}}$ & 12 & 4 & 3848 & 71936 & 11.49\,s & $16/16$ & $12/16$ \\
+SR $+\tau_{\mathrm{dec}}$ & 8 & 0 & 2768 & 65536 & \textbf{10.80\,s} & $16/16$ & $10/16$ \\
+DPTS $+\tau_{\mathrm{dec}}$ & 8 & 0 & 2768 & 65536 & \textbf{10.90\,s} & $16/16$ & $10/16$ \\
+\bottomrule
+\end{tabular}
+\caption{Ablation at $k{=}16$ on the GSM8K controlled mix.
+``Cut later'' is the number of admitted residuals the host stops at its own horizon.
+Any-finished is unchanged.
+Winner accuracy moves by at most two problems.
+When the prefill bar is $\tau_{\mathrm{dec}}$, the host cut fires on nobody and the decode columns meet.}
+\label{tab:ablation}
+\end{table*}
+
+Table~\ref{tab:ablation} separates the two gates.
+Decode pruning alone never changes prefill, and the time ranking is the ranking of the cut.
+Prefill pruning alone, with no host cut, is already faster than ESC at $\tau_{\mathrm{pre}}$ and faster than all three hosts when the prefill bar is $\tau_{\mathrm{dec}}$.
+Stacking a host on $\tau_{\mathrm{pre}}$ still stops some of the admitted residuals.
+Stacking a host on $\tau_{\mathrm{dec}}$ does not, because the admitted set is the live half.
+Any-finished holds throughout.
+Winner accuracy is not identical to any-finished: dropping illegal residuals can change which branch the host ranks first.
+The gate preserves a correct branch in the admitted set.
+Appendix~\ref{app:width} reports $k{=}4$ and $k{=}8$, where the higher prefill bar does drop any-finished accuracy.
+
+The two scores of a loop or an illegal residual are not interchangeable, which is the empirical content of the score gap in Section~\ref{sec:gap}.
+On the residual, illegal text lies above $\tau_{\mathrm{pre}}$.
+On a generated prefix that is still illegal, the decode score lies below $\tau_{\mathrm{dec}}$.
+Applying $\tau_{\mathrm{dec}}$ as a prefill bar therefore drops illegal text, which \eqref{eq:keep} at $\tau_{\mathrm{pre}}$ would have admitted.
+On MATH-500 at large $k$ that is the discard row of Table~\ref{tab:probe}.
+Applying $\tau_{\mathrm{pre}}$ as a decode bar would do the opposite: an illegal prefix still clears $\tau_{\mathrm{pre}}$, so the probe would extend a residual the decode rule is designed to stop.
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+Full & 12/32, 25.3\,s & 15/32, 52.5\,s & 20/32, 104.1\,s \\
+Discard & 6/32, 19.1\,s & 11/32, 25.6\,s & 13/32, 52.1\,s \\
+Probe & 9/32, 24.7\,s & 13/32, 43.3\,s & \textbf{20/32, 72.2\,s} \\
+\bottomrule
+\end{tabular}
+\caption{MATH-500, Qwen3-8B, $n{=}32$, $D{=}1024$.
+Each cell is any-finished accuracy and end-to-end time.
+At $k{=}16$ the probe matches the full fan-out and is $31\%$ faster.
+At $k{=}4$ and $k{=}8$ it does not fully recover accuracy.}
+\label{tab:probe}
+\end{table}
+
+Table~\ref{tab:probe} and Figure~\ref{fig:results}(b) compare the three prefill policies on MATH-500.
+Discarding every residual below $\tau_{\mathrm{dec}}$ is the fastest curve and the least accurate.
+The probe spends $t_0$ tokens on the uncertain residuals, then extends a residual only when its prefix clears $\tau_{\mathrm{dec}}$.
+At $k{=}16$ any-finished returns to the full fan-out.
+At $k{=}4$ and $k{=}8$ it does not.
+Recovery is a wide-fan-out result.
+Appendix~\ref{app:probe} sweeps $t_0 \in \{64,128\}$, loop-skipping, and a decode-only short budget.
+The $k{=}16$ match to full accuracy is specific to $t_0{=}128$ among the probe lengths we compare; $t_0{=}64$ reaches $18/32$.
+
+The prefill gate does not lengthen the committed spine.
+Appendix~\ref{app:spine} measures that spine against recomputation and automatic prefix caching.
+Peak KV stays below the cache on six model families, because live occupancy is the spine.
+On Qwen3-8B the pruned system keeps GSM8K quality with that cache and lowers end-to-end time.
+Under a $1$\,s P99 time-to-first-token line, the shorter spine admits a higher offered load.
+
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+$k{=}16$, bar $\tau_{\mathrm{dec}}$ & Admit & Prefill & ESC & SR \\
+\midrule
+Keep one, ignore score & 1 & 414 & $11/16$ & $9/16$ \\
+Keep all above $\tau_{\mathrm{dec}}$ & 8 & 2768 & $\mathbf{16/16}$ & $\mathbf{16/16}$ \\
+\bottomrule
+\end{tabular}
+\caption{Winner-only admission on the GSM8K mix.
+A single reserved slot drops any-finished accuracy on both hosts.
+Scoring, and keeping the whole live half, restores $16/16$.}
+\label{tab:best}
+\end{table}
+
+Table~\ref{tab:best} holds the batch width fixed and compares two admission rules at $\tau_{\mathrm{dec}}$.
+Ignoring the score and keeping one residual drops any-finished accuracy on both hosts.
+Keeping every residual at or above $\tau_{\mathrm{dec}}$ restores it.
+The savings in Table~\ref{tab:hosts} come from dropping loops, and at $\tau_{\mathrm{dec}}$ from dropping illegal text as well.
+They do not come from collapsing the fan-out onto its winner.
+
+\FloatBarrier
+\section{Discussion}
+\label{sec:discussion}
+
+We presented a lightweight approach to efficient agentic inference.
+By identifying and pruning abortable residuals during KV-cache encoding of the residual, and by continuing an uncertain residual only when a short prefix clears a second bar, our approach ensures that prefill and transfer are spent on live strategies rather than on text the search will abort.
+Experiments show that \sys exhibits a host-invariant reduction in shared prefill, significantly lowering end-to-end time while preserving large-fan-out any-finished accuracy on GSM8K and MATH-500.
+Collapsing either decision onto the other bar, or onto a single reserved slot, is what loses problems.
+Our work highlights a practical split for enhancing the efficiency of LLMs in agentic serving, complementary to decode-time hosts, prefix caches, and prefill--decode disaggregation.
+
+\section{Limitations}
+\label{sec:limit}
+
+The scores are surface tests: repetition, an illegal-math pattern, an answer mark, and character statistics.
+They are not a learned reward model, and a residual that is wrong without being repetitive passes the prefill gate.
+The evaluation mix is constructed so that half the fan-out is live strategy text and half is a loop or illegal string.
+It is a controlled test of the two thresholds, not a trace of a production agent.
+Any-finished accuracy can stay flat while winner accuracy moves, and at $k{=}4$ even $\tau_{\mathrm{pre}}$ drops one GSM8K problem.
+The MATH-500 probe recovers full any-finished accuracy at $k{=}16$ and does not do so at $k{=}4$ or $k{=}8$.
+The pruning study uses one model and temperature $0$, so the tables are single-run measurements.
+The connector numbers in Appendix~\ref{app:xfer} are an accounting model, not a measured transfer time.
+We do not explore training-based alternatives such as finetuning a pruner, since we target the setting without a heavy compute budget.

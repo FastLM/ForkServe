@@ -1,0 +1,26 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Agentic inference.}
+Tree-of-Thoughts proposes candidate thoughts and then values them~\citep{tot}.
+Self-consistency draws multiple chains and votes~\citep{selfconsistency}.
+ReAct interleaves reasoning with tools~\citep{react}.
+ESC closes the sample early once a window of answers agrees~\citep{esc}.
+Speculative rejection spends a partial-reward horizon and then drops the lower quantile~\citep{specrej}.
+DPTS grows a tree in mini-steps and stops a child whose confidence is low~\citep{dpts}.
+In each case the score is a function of generated tokens, so an earlier threshold inside that family shortens decode and leaves prefill unchanged.
+The success of those cuts relies on tokens already being resident, i.e., it happens when the stack fails to skip abortable text but still stops it after a prefix.
+\sys reads the residual before those tokens exist and leaves the host's cut in place for the residuals it admits.
+The decode score is also not a token-draft acceptance test~\citep{speculative}: speculative decoding checks a draft continuation of the same sequence, whereas the probe checks whether a sibling residual should continue to $D$.
+
+\paragraph{Serving.}
+Orca batches at iteration granularity~\citep{orca}.
+PagedAttention and automatic prefix caching address KV as blocks and reuse a block after its hash is stored~\citep{vllm}; SGLang's radix cache is the same contract for program-structured calls~\citep{sglang}.
+DistServe and Splitwise place prefill and decode on separate instances and ship KV across the cut~\citep{distserve,splitwise}.
+Those designs remove recomputation of a prefix that has already been stored, and they isolate time-to-first-token from inter-token latency.
+The first fan-out of a new trunk has nothing stored, and the connector has no opinion about a residual the search will abort.
+Training-time methods that change the model, and test-time workflows that add extra model calls per response, are orthogonal: they require a larger compute budget than a pair of string scores.
+\sys is the admission step in front of that kernel and that transfer.
+It is complementary to the existing serving stack, while not modifying the prompt or introducing extra test-time overhead in response processing.
+Section~\ref{sec:eval} measures the gates.
+It does not propose a new page allocator.
