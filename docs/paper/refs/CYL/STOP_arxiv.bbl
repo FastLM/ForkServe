@@ -1,0 +1,146 @@
+\begin{thebibliography}{28}
+\providecommand{\natexlab}[1]{#1}
+
+\bibitem[{Brown et~al.(2024)Brown, Mann, Ryder, Subbiah, Kaplan et~al.}]{brown2024large}
+Tom~B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, et~al. 2024.
+\newblock Large language models are few-shot learners.
+\newblock \emph{arXiv preprint arXiv:2005.14165}.
+
+\bibitem[{Cai et~al.(2024)Cai, Li, Liu, and Chen}]{cai2024medusa}
+Han Cai, Jing Li, Wei Liu, and Tianqi Chen. 2024.
+\newblock Medusa: Simple framework for accelerating llm generation with multiple decoding heads.
+\newblock \emph{arXiv preprint arXiv:2401.10774}.
+
+\bibitem[{Chan et~al.(2023)Chan, Liang, Yang, and Wang}]{chan2023chamele}
+Brendan Chan, Chen Liang, Yiming Yang, and Tian Wang. 2023.
+\newblock Chameleon: Plug-and-play compositional reasoning with large language models.
+\newblock \emph{arXiv preprint arXiv:2304.09842}.
+
+\bibitem[{Fu et~al.(2025)Fu, Wang, Tian, and Zhao}]{fu2025deepthink}
+Yichao Fu, Xuewei Wang, Yuandong Tian, and Jiawei Zhao. 2025.
+\newblock \href {https://arxiv.org/abs/2508.15260} {Deep think with confidence}.
+\newblock \emph{arXiv preprint arXiv:2508.15260}.
+
+\bibitem[{Guo et~al.(2025)Guo, Yang, Zhang, Song, Zhang, Xu, Zhu, Ma, Wang, Bi et~al.}]{guo2025deepseek}
+Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et~al. 2025.
+\newblock \href {https://arxiv.org/abs/2501.12948} {Deepseek-r1: Incentivizing reasoning capability in {LLMs} via reinforcement learning}.
+\newblock \emph{arXiv preprint arXiv:2501.12948}.
+
+\bibitem[{Hassid et~al.(2025)Hassid, Synnaeve, Adi, and Schwartz}]{hassid2025short}
+Michael Hassid, Gabriel Synnaeve, Yossi Adi, and Roy Schwartz. 2025.
+\newblock \href {https://arxiv.org/abs/2505.17813} {Don't overthink it. preferring shorter thinking chains for improved llm reasoning}.
+\newblock \emph{arXiv preprint arXiv:2505.17813}.
+
+\bibitem[{He et~al.(2025)He, Liu, Wang, Li, Wang, Peng, and Zheng}]{he2025adadec}
+Kaifeng He, Mingwei Liu, Chong Wang, Zike Li, Yanlin Wang, Xin Peng, and Zibin Zheng. 2025.
+\newblock \href {https://arxiv.org/abs/2506.08980} {Adadec: Uncertainty-guided adaptive decoding for llm-based code generation}.
+\newblock \emph{arXiv preprint arXiv:2506.08980}.
+
+\bibitem[{Hong et~al.(2025)Hong, Guo, Singh, Choukse, and Ustiugov}]{hong2025slimsc}
+Colin Hong, Xu~Guo, Anand~Chaanan Singh, Esha Choukse, and Dmitrii Ustiugov. 2025.
+\newblock \href {https://arxiv.org/abs/2509.13990} {Slim-sc: Thought pruning for efficient scaling with self-consistency}.
+\newblock \emph{arXiv preprint arXiv:2509.13990}.
+
+\bibitem[{Jin et~al.(2025)Jin, Wei, and Brooks}]{jin2025energy}
+Yunho Jin, Gu-Yeon Wei, and David Brooks. 2025.
+\newblock \href {https://arxiv.org/abs/2505.14733} {The energy cost of reasoning: Analyzing energy usage in llms with test-time compute}.
+\newblock \emph{arXiv preprint arXiv:2505.14733}.
+
+\bibitem[{Khalifa et~al.(2025)Khalifa, Agarwal, Logeswaran, Kim, Peng, Lee, Lee, and Wang}]{khalifa2025process}
+Muhammad Khalifa, Rishabh Agarwal, Lajanugen Logeswaran, Jaekyeom Kim, Hao Peng, Moontae Lee, Honglak Lee, and Lu~Wang. 2025.
+\newblock \href {https://arxiv.org/abs/2504.16828} {Process reward models that think}.
+\newblock \emph{arXiv preprint arXiv:2504.16828}.
+
+\bibitem[{Kwon et~al.(2023)Kwon, Li, Zhuang, Sheng, Zheng, Yu, Gonzalez, Zhang, and Stoica}]{kwon2023efficient}
+Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody~Hao Yu, Joseph~E. Gonzalez, Hao Zhang, and Ion Stoica. 2023.
+\newblock Efficient memory management for large language model serving with pagedattention.
+\newblock In \emph{Proceedings of the 29th {ACM} Symposium on Operating Systems Principles}.
+
+\bibitem[{Liao et~al.(2025)Liao, Chen, Rajaee, Xu, Herold, S{\o}gaard, de~Rijke, and Monz}]{liao2025lost}
+Baohao Liao, Xinyi Chen, Sara Rajaee, Yuhui Xu, Christian Herold, Anders S{\o}gaard, Maarten de~Rijke, and Christof Monz. 2025.
+\newblock Lost at the beginning of reasoning.
+\newblock \emph{arXiv preprint arXiv:2506.22058}.
+
+\bibitem[{Lifshitz et~al.(2025)Lifshitz, McIlraith, and Du}]{lifshitz2025multi}
+Shalev Lifshitz, Sheila~A. McIlraith, and Yilun Du. 2025.
+\newblock \href {https://arxiv.org/abs/2502.20379} {Multi-agent verification: Scaling test-time compute with multiple verifiers}.
+\newblock \emph{arXiv preprint arXiv:2502.20379}.
+
+\bibitem[{Luo et~al.(2025)Luo, Du, Bi, Chung, Tang, Yang, Zhang, and Wang}]{luo2025peers}
+Tongxu Luo, Wenyu Du, Jiaxi Bi, Stephen Chung, Zhengyang Tang, Hao Yang, Min Zhang, and Benyou Wang. 2025.
+\newblock \href {https://arxiv.org/abs/2505.07787} {Learning from peers in reasoning models}.
+\newblock \emph{arXiv preprint arXiv:2505.07787}.
+
+\bibitem[{{Mathematical Association of America}(2024)}]{maa2024aime}
+{Mathematical Association of America}. 2024.
+\newblock American invitational mathematics examination (aime) 2024.
+\newblock \url{https://maa.org/math-competitions/american-invitational-mathematics-examination-aime}.
+\newblock Accessed: February 2024.
+
+\bibitem[{{Mathematical Association of America}(2025)}]{maa2025aime}
+{Mathematical Association of America}. 2025.
+\newblock American invitational mathematics examination (aime) 2025.
+\newblock \url{https://maa.org/math-competitions/american-invitational-mathematics-examination-aime}.
+\newblock Accessed: February 2025.
+
+\bibitem[{{NVIDIA Corporation}(2025)}]{nvidia2025inferencecost}
+{NVIDIA Corporation}. 2025.
+\newblock Llm inference benchmarking: How much does your llm inference cost?
+\newblock \url{https://developer.nvidia.com/blog/llm-inference-benchmarking-how-much-does-your-llm-inference-cost/}.
+\newblock Accessed: 2025-11-05.
+
+\bibitem[{{OpenAI}(2024)}]{openai2024a}
+{OpenAI}. 2024.
+\newblock \href {https://openai.com/index/learning-to-reason-with-llms/} {Learning to reason with {LLMs}}.
+\newblock Accessed: 2025-11-01.
+
+\bibitem[{{OpenAI}(2025)}]{openai2025gptoss}
+{OpenAI}. 2025.
+\newblock \href {https://openai.com/index/gpt-oss-model-card/} {gpt‑oss model card (gpt‑oss‑120b \& gpt‑oss‑20b)}.
+\newblock Accessed: 2025-11-01.
+
+\bibitem[{Rein et~al.(2024)Rein, Li~Hou, Stickland, Petty, Pang, Dirani, Michael, and Bowman}]{rein2024gpqa}
+David Rein, Betty Li~Hou, Asa~Cooper Stickland, Jackson Petty, Richard~Yuanzhe Pang, Julien Dirani, Julian Michael, and Samuel~R. Bowman. 2024.
+\newblock \href {https://openreview.net/forum?id=Ti67584b98} {Gpqa: A graduate-level google-proof q\&a benchmark}.
+\newblock In \emph{First Conference on Language Modeling (COLM)}.
+
+\bibitem[{Sharma and Chopra(2025)}]{sharma2025thinkjust}
+Aman Sharma and Paras Chopra. 2025.
+\newblock \href {https://arxiv.org/abs/2510.08146} {Think just enough: Sequence-level entropy as a confidence signal for llm reasoning}.
+\newblock \emph{arXiv preprint arXiv:2510.08146}.
+
+\bibitem[{Tu et~al.(2025)Tu, Li, Bai, Hou, and Li}]{tu2025deepprune}
+Shangqing Tu, Yaxuan Li, Yushi Bai, Lei Hou, and Juanzi Li. 2025.
+\newblock Deepprune: Parallel scaling without inter-trace redundancy.
+\newblock \emph{arXiv preprint arXiv:2510.08483}.
+
+\bibitem[{Wang et~al.(2024)Wang, Li, Shao, Xu, Dai, Li, Yao, and Sui}]{wang2024mathshepherd}
+Peiyi Wang, Lifan Li, Zhenyu Shao, Ruixuan Xu, Dong Dai, Yanzhe Li, Yuzhuo Yao, and Zhifang Sui. 2024.
+\newblock Math-shepherd: Verify and reinforce llms step-by-step without human annotations.
+\newblock In \emph{Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)}, pages 9426--9439, Bangkok, Thailand. Association for Computational Linguistics.
+
+\bibitem[{Wang et~al.(2022)Wang, Wei, Schuurmans, Le, Chi, and Narang}]{wang2022self}
+Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed~Chi, and Sharan Narang. 2022.
+\newblock Self-consistency improves chain of thought reasoning in language models.
+\newblock \emph{arXiv preprint arXiv:2203.11171}.
+
+\bibitem[{Wang et~al.(2025{\natexlab{a}})Wang, Zhang, Li, and Zhou}]{wang2025parallel}
+Yifan Wang, Yichi Zhang, Xinyi Li, and Jie Zhou. 2025{\natexlab{a}}.
+\newblock A survey on parallel reasoning.
+\newblock \emph{arXiv preprint arXiv:2510.12164}.
+
+\bibitem[{Wang et~al.(2025{\natexlab{b}})Wang, Niu, Gao, Zheng, Xu, Meng, Li, Liu, Chen, Zhu, Wu, Wang, and Chen}]{wang2025survey_parallel_reasoning}
+Ziqi Wang, Boye Niu, Zipeng Gao, Zhi Zheng, Tong Xu, Linghui Meng, Zhongli Li, Jing Liu, Yilong Chen, Chen Zhu, Hua Wu, Haifeng Wang, and Enhong Chen. 2025{\natexlab{b}}.
+\newblock \href {https://arxiv.org/abs/2510.12164} {A survey on parallel reasoning}.
+
+\bibitem[{Yao et~al.(2023)Yao, Yu, Zhao, Shafran, Griffiths, Cao, and Narasimhan}]{yao2023tree}
+Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Tom Griffiths, Yuan Cao, and Karthik Narasimhan. 2023.
+\newblock Tree of thoughts: Deliberate problem solving with large language models.
+\newblock In \emph{Advances in Neural Information Processing Systems}, volume~36, pages 11809--11822.
+
+\bibitem[{Zhao et~al.(2025)Zhao, Liu, Zhang, Zhou, Gao, Li, and Zhou}]{zhao2025genprm}
+Jian Zhao, Rui Liu, Kai Zhang, Zihan Zhou, Jun Gao, Dong Li, and Bowen Zhou. 2025.
+\newblock Genprm: Scaling test-time compute of process reward models via generative reasoning.
+\newblock \emph{arXiv preprint arXiv:2504.00891}.
+
+\end{thebibliography}

@@ -3,105 +3,126 @@
   font=\sffamily\scriptsize,
   >=Latex,
   line cap=round, line join=round,
-  panel/.style={draw=fsblue!30, line width=0.55pt, rounded corners=2pt, fill=white},
+  panel/.style={draw=black!20, line width=0.55pt, rounded corners=2.5pt, fill=white},
   head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
-  chip/.style={draw, rounded corners=1.2pt, inner sep=1.5pt, font=\tiny\sffamily, line width=0.4pt, align=center},
-  arr/.style={-{Latex[length=1.7mm,width=1.3mm]}, line width=0.55pt, draw=fsblue!75},
-  res/.style={draw, rounded corners=1pt, minimum width=1.15cm, minimum height=0.42cm,
-              inner sep=1pt, font=\tiny\sffamily, align=center},
+  box/.style={draw, rounded corners=1.6pt, inner sep=2.2pt, font=\tiny\sffamily,
+              line width=0.45pt, align=center, minimum height=0.42cm},
+  llm/.style={box, draw=fsblue!70, fill=fslight, minimum width=2.15cm, minimum height=0.72cm},
+  kv/.style={box, draw=fsgray!55, fill=black!4, minimum width=1.55cm},
+  arr/.style={-{Latex[length=1.7mm,width=1.3mm]}, line width=0.62pt, draw=fsblue!75},
 ]
-\path (0,0) rectangle (16.35,7.55);
+\path (0,0) rectangle (16.40,8.05);
 
-% fan-out strip
-\draw[panel, fill=black!3] (0.00,6.85) rectangle (16.35,7.55);
-\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.12,7.20) {Fan-out};
-\fill[fsblue!75] (1.45,7.02) rectangle (3.35,7.40);
-\node[font=\tiny\sffamily, text=white] at (2.40,7.21) {trunk $L$};
-\node[res, fill=fscommit, draw=fsgreen!70!black] at (4.35,7.21) {$\star$ live};
-\node[res, fill=fsmiss, draw=fsred!70] at (5.70,7.21) {loop};
-\node[res, fill=fsspec, draw=fsorange!80!black] at (7.05,7.21) {illegal};
-\node[res, fill=fscommit, draw=fsgreen!70!black] at (8.40,7.21) {live};
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (9.15,7.21) {index 0 is always kept};
+% ===== query / fan-out =====
+\draw[panel, fill=black!3] (0.00,7.28) rectangle (16.40,8.05);
+\node[box, draw=fsblue!60, fill=fslight, anchor=west] at (0.18,7.66) {Query};
+\draw[arr] (1.55,7.66) -- (2.05,7.66);
+\fill[fsblue!75] (2.10,7.44) rectangle (5.35,7.88);
+\node[font=\tiny\sffamily, text=white] at (3.72,7.66) {trunk $x$ of length $L$};
+\draw[arr] (5.40,7.66) -- (5.90,7.66);
+\node[box, fill=fscommit, draw=fsgreen!65!black] at (6.85,7.66) {$\rho_0$ viable};
+\node[box, fill=fsmiss, draw=fsred!65] at (8.55,7.66) {loop};
+\node[box, fill=fsspec, draw=fsorange!80!black] at (10.25,7.66) {illegal};
+\node[box, fill=fscommit, draw=fsgreen!65!black] at (12.05,7.66) {viable};
+\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (13.10,7.66) {$\rho_0$ always admitted};
 
-% three stages
-\draw[panel] (0.00,2.15) rectangle (4.85,6.65);
-\draw[panel] (5.15,2.15) rectangle (9.85,6.65);
-\draw[panel] (10.70,2.15) rectangle (16.35,6.65);
-\fill[fsorange!88!black] (0.00,6.22) rectangle (4.85,6.65);
-\fill[fsblue] (5.15,6.22) rectangle (9.85,6.65);
-\fill[fsgreen!75!black] (10.70,6.22) rectangle (16.35,6.65);
-\node[head] at (0.12,6.43) {1\quad Prefill gate};
-\node[head] at (5.27,6.43) {2\quad Prefill instance};
-\node[head] at (10.82,6.43) {3\quad Decode instance};
+% ===== three stages =====
+\draw[panel, fill=fsspec!35] (0.00,1.92) rectangle (5.15,7.12);
+\draw[panel, fill=fslight] (5.45,1.92) rectangle (10.75,7.12);
+\draw[panel, fill=fscommit] (11.05,1.92) rectangle (16.40,7.12);
+\fill[fsorange!88!black] (0.00,6.68) rectangle (5.15,7.12);
+\fill[fsblue] (5.45,6.68) rectangle (10.75,7.12);
+\fill[fsgreen!75!black] (11.05,6.68) rectangle (16.40,7.12);
+\node[head] at (0.14,6.90) {Stage I: Admit};
+\node[head] at (5.59,6.90) {Stage II: Prefill};
+\node[head] at (11.19,6.90) {Stage III: Probe and Resume};
 
-% gate body
-\node[font=\tiny\sffamily, align=left, anchor=north west] at (0.15,6.05)
-  {Reads the residual text.\\No kernel has started.};
-\node[chip, draw=fsorange!70, fill=fsspec, anchor=west] at (0.18,5.15)
-  {bar $\tau_{\mathrm{pre}}$};
-\node[font=\tiny\sffamily, anchor=west, text=fsred] at (0.22,4.55) {loop \quad below $\tau_{\mathrm{pre}}$ \quad drop};
-\node[font=\tiny\sffamily, anchor=west, text=fsorange!80!black] at (0.22,4.15) {illegal \quad above $\tau_{\mathrm{pre}}$ \quad admit};
-\node[font=\tiny\sffamily, anchor=west, text=fsgreen!60!black] at (0.22,3.75) {live \quad admit};
-\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (0.18,2.85)
-  {A repeated loop never enters\\the kernel, so it never enters $X$.};
-\draw[arr] (4.85,4.40) -- (5.15,4.40);
+% --- lane y: viable 5.85, loop 4.35, illegal 2.85 ---
+% Stage I scorer
+\node[box, draw=fsorange!75, fill=fsspec, minimum width=4.55cm, anchor=north]
+  at (2.575,6.55) {$s^{\mathrm{pre}}(\rho_i)$ on residual text \quad vs.\quad $\tau_{\mathrm{pre}}$};
 
-% prefill instance, DistServe-like
-\node[draw=fsorange!40, fill=fsspec, rounded corners=1.5pt, minimum width=4.4cm,
-      minimum height=1.55cm, anchor=north] at (7.65,5.95) {};
-\node[font=\tiny\sffamily\bfseries, anchor=west] at (5.55,5.62) {LLM weights};
-\node[font=\tiny\sffamily, anchor=west, text=fsgray] at (5.55,5.22) {GPU kernel on the admitted set};
-\foreach \x in {5.50,6.15,6.80,7.45} {
-  \fill[fsgreen!35] (\x,4.62) rectangle ({\x+0.52},4.98);
-  \draw[fsgreen!70!black] (\x,4.62) rectangle ({\x+0.52},4.98);
+% viable lane
+\node[box, fill=fscommit, draw=fsgreen!65!black, minimum width=2.05cm] at (1.55,5.85) {viable};
+\draw[arr, draw=fsgreen!55!black] (2.65,5.85) -- (3.15,5.85);
+\node[box, fill=white, draw=fsgreen!65!black, minimum width=1.35cm] at (3.95,5.85) {keep};
+
+% loop lane
+\node[box, fill=fsmiss, draw=fsred!65, minimum width=2.05cm] at (1.55,4.35) {loop};
+\draw[arr, draw=fsred!70] (2.65,4.35) -- (3.15,4.35);
+\node[box, fill=white, draw=fsred!65, minimum width=1.35cm] at (3.95,4.35) {drop};
+
+% illegal lane
+\node[box, fill=fsspec, draw=fsorange!80!black, minimum width=2.05cm] at (1.55,2.85) {illegal};
+\draw[arr, draw=fsorange!75] (2.65,2.85) -- (3.15,2.85);
+\node[box, fill=white, draw=fsorange!80!black, minimum width=1.35cm] at (3.95,2.85) {keep};
+
+\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (0.22,2.22)
+  {$\mathrm{keep}_i=[i{=}0\lor s^{\mathrm{pre}}{\ge}\tau_{\mathrm{pre}}]$. No kernel.};
+
+% arrows I -> II
+\draw[arr] (5.15,5.85) -- (5.45,5.85);
+\draw[arr, draw=fsred!55, densely dashed] (5.15,4.35) -- (5.45,4.35);
+\draw[arr] (5.15,2.85) -- (5.45,2.85);
+
+% Stage II
+\node[llm] at (6.85,5.85) {LLM (frozen)};
+\draw[arr] (8.00,5.85) -- (8.45,5.85);
+\node[kv] at (9.45,5.85) {KV $H_{\star}$};
+
+\node[draw=fsred!45, densely dashed, rounded corners=1.6pt, minimum width=4.70cm,
+      minimum height=0.72cm] at (8.10,4.35) {};
+\node[font=\tiny\sffamily, text=fsred] at (8.10,4.35) {withheld: $W{=}X{=}0$};
+
+\node[llm] at (6.85,2.85) {LLM (frozen)};
+\draw[arr] (8.00,2.85) -- (8.45,2.85);
+\node[kv] at (9.45,2.85) {KV $H_{i}$};
+
+\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (5.62,2.22)
+  {Kernel and transfer only on $\mathrm{Keep}$.};
+
+% arrows II -> III
+\draw[arr, draw=fsgreen!55!black] (10.75,5.85) -- (11.05,5.85);
+\draw[arr, draw=fsorange!70] (10.75,2.85) -- (11.05,2.85);
+
+% Stage III
+\node[box, draw=fsgreen!60, fill=fscommit, minimum width=2.35cm] at (12.40,5.85) {decode to $D$};
+\draw[arr, draw=fsgreen!55!black] (13.62,5.85) -- (14.12,5.85);
+\node[box, draw=fsgreen!65!black, fill=white, minimum width=1.55cm] at (15.10,5.85) {resume};
+
+\node[font=\tiny\sffamily, text=fsgray] at (13.72,4.35) {(no continuation)};
+
+\node[box, draw=fsorange!75, fill=fsspec, minimum width=2.35cm] at (12.40,2.85) {probe $t_0$};
+\draw[arr, draw=fsorange!75] (13.62,2.85) -- (14.12,2.85);
+\node[box, draw=fsred!65, fill=white, minimum width=1.55cm] at (15.10,2.85) {stop};
+
+\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (11.22,2.22)
+  {Extend iff $s^{\mathrm{dec}}(y_{1:t_0})\ge\tau_{\mathrm{dec}}$.};
+
+% ===== number lines =====
+\draw[panel, fill=black!2] (0.00,0.00) rectangle (16.40,1.76);
+\node[font=\tiny\sffamily\bfseries, anchor=west] at (0.16,1.48)
+  {The two thresholds are not interchangeable};
+
+\draw[fsorange!80!black, line width=0.75pt] (0.95,0.62) -- (7.85,0.62);
+\node[font=\tiny\sffamily, anchor=east] at (0.88,0.62) {prefill};
+\foreach \x in {0.95, 1.85, 3.55, 4.85, 7.85} {
+  \draw[fsorange!80!black] (\x,0.52) -- (\x,0.72);
 }
-\fill[fsmiss] (8.15,4.62) rectangle (8.62,4.98);
-\draw[fsred, densely dashed] (8.15,4.62) rectangle (8.62,4.98);
-\node[font=\tiny\sffamily, text=fsred, anchor=west] at (8.70,4.80) {withheld};
-\node[font=\tiny\sffamily, align=left, anchor=west] at (5.35,4.15)
-  {$W$ is the prefill of the admitted set.\\A dropped residual never enters it.};
-\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (5.35,3.15)
-  {Prefix cache still applies inside\\the admitted set. The gate decides\\who is submitted.};
-\draw[arr, draw=fsgreen!60!black, line width=0.7pt] (9.85,4.40) -- (10.70,4.40);
-\node[font=\tiny\sffamily, text=fsgreen!50!black, align=center] at (10.27,4.68) {Keep};
+\node[font=\tiny\sffamily, text=fsred] at (1.85,0.32) {loop};
+\node[font=\tiny\sffamily, text=fsorange!80!black] at (3.55,1.00) {$\tau_{\mathrm{pre}}$};
+\node[font=\tiny\sffamily, text=fsorange!80!black] at (4.95,0.32) {illegal};
+\node[font=\tiny\sffamily, text=fsgreen!60!black] at (7.45,1.00) {viable};
+\draw[fsorange!80!black, densely dashed] (3.55,0.28) -- (3.55,1.18);
 
-% decode instance
-\node[chip, draw=fsblue!55, fill=fslight, anchor=west] at (10.62,5.72) {live and index 0: decode to $D$};
-\node[chip, draw=fsorange!70, fill=fsspec, anchor=west] at (10.62,5.15) {other admitted: probe $t_0$};
-\node[chip, draw=fspurple!70, fill=white, anchor=west] at (10.62,4.55)
-  {prefix score, bar $\tau_{\mathrm{dec}}$};
-\node[font=\tiny\sffamily, anchor=west, text=fsred] at (10.70,3.95) {loop \quad stop};
-\node[font=\tiny\sffamily, anchor=west, text=fsorange!80!black] at (10.70,3.55) {illegal \quad below $\tau_{\mathrm{dec}}$ \quad stop};
-\node[font=\tiny\sffamily, anchor=west, text=fsgreen!60!black] at (10.70,3.15) {answer mark \quad extend to $D$};
-\node[font=\tiny\sffamily, text=fsgray, align=left, anchor=west] at (10.62,2.50)
-  {Weights are not the prefill weights.\\The bars are the pair $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$.};
-
-% number lines
-\draw[panel, fill=black!2] (0.00,0.00) rectangle (16.35,1.98);
-\node[font=\tiny\sffamily\bfseries, anchor=west] at (0.15,1.72) {Why one threshold cannot serve both stages};
-% prefill axis
-\draw[fsorange!80!black, line width=0.6pt] (2.55,1.28) -- (9.55,1.28);
-\node[font=\tiny\sffamily, anchor=east] at (2.45,1.28) {prefill};
-\foreach \x in {2.55, 3.15, 4.55, 5.55, 9.55} {
-  \draw[fsorange!80!black] (\x,1.20) -- (\x,1.36);
+\draw[fsblue, line width=0.75pt] (9.35,0.62) -- (16.05,0.62);
+\node[font=\tiny\sffamily, anchor=east] at (9.28,0.62) {decode};
+\foreach \x in {9.35, 10.10, 11.55, 13.85, 15.85} {
+  \draw[fsblue] (\x,0.52) -- (\x,0.72);
 }
-\node[font=\tiny\sffamily, text=fsred] at (3.15,1.00) {loop};
-\node[font=\tiny\sffamily, text=fsorange!80!black] at (4.55,0.95) {$\tau_{\mathrm{pre}}$};
-\node[font=\tiny\sffamily, text=fsorange!80!black] at (5.70,1.55) {illegal};
-\node[font=\tiny\sffamily, text=fsgreen!60!black] at (9.35,1.55) {live};
-\draw[fsorange!80!black, densely dashed] (4.55,1.08) -- (4.55,1.70);
-% decode axis
-\draw[fsblue, line width=0.6pt] (10.35,1.28) -- (16.05,1.28);
-\node[font=\tiny\sffamily, anchor=east] at (10.25,1.28) {decode};
-\foreach \x in {10.35, 10.85, 12.15, 14.35, 15.85} {
-  \draw[fsblue] (\x,1.20) -- (\x,1.36);
-}
-\node[font=\tiny\sffamily, text=fsred] at (10.85,1.00) {loop};
-\node[font=\tiny\sffamily, text=fsorange!80!black] at (12.15,1.00) {illegal};
-\node[font=\tiny\sffamily, text=fsblue] at (14.35,0.95) {$\tau_{\mathrm{dec}}$};
-\node[font=\tiny\sffamily, text=fsgreen!60!black] at (15.75,1.55) {answer};
-\draw[fsblue, densely dashed] (14.35,1.08) -- (14.35,1.70);
-\node[font=\tiny\sffamily, text=fsgray, anchor=west] at (0.15,0.38)
-  {Setting the prefill bar to $\tau_{\mathrm{dec}}$ drops illegal text before the kernel.
-   Setting the decode bar to $\tau_{\mathrm{pre}}$ extends a prefix that is still illegal.};
+\node[font=\tiny\sffamily, text=fsred] at (10.10,0.32) {loop};
+\node[font=\tiny\sffamily, text=fsorange!80!black] at (11.55,0.32) {illegal};
+\node[font=\tiny\sffamily, text=fsblue] at (13.85,1.00) {$\tau_{\mathrm{dec}}$};
+\node[font=\tiny\sffamily, text=fsgreen!60!black] at (15.70,0.32) {answer};
+\draw[fsblue, densely dashed] (13.85,0.28) -- (13.85,1.18);
 \end{tikzpicture}

@@ -1,0 +1,30 @@
+\section{Related Works} \label{sec: related}
+
+\textbf{Indirect Prompt Injection Attack}
+Different from the direct prompt injection attack \cite{perez2022ignore, yu2023assessing} that explicitly instructs the LLM with adversarial queries, the indirect prompt injection attack occurs when third-party instructions are injected into the prompt context \cite{liu2023prompt,zhan2024injecagent, wu2024wipi, liu2024automatic}. These instructions may be malicious or benign, but are not intended to be followed by the LLM.
+The success of indirect prompt inject attack  relies on the LLM's inability to distinguish between the data and instruction \cite{greshake2023not}, \emph{i.e.}, it happens when the LLM fails to leverage the context as pure data but responding to the injected instructions.
+
+\noindent\textbf{Defense}
+ There exists prior defense works following a \textit{Detection + Filtering} approach~\cite{abdelnabi2025get, piguard, embeddingdetect} that build classifiers to detect unauthorized injections and discard or refuse to answer such inputs. These methods are orthogonal to ours, as they focus on detection accuracy.
+Our setup is measured by \textit{Attack Success Rate (ASR)} and the accuracy in following user instructions, \emph{i.e.}, requiring the model to still produce a clean response regardless of whether an attack is present.
+% . In our setup, we measure a response must still be generated regardless of whether an attack is present.
+% For this line of research, existing works can be categorized into training-based and testing-based.
+Within this line of research, existing approaches can be broadly categorized into \textit{training-time} and \textit{testing-time} methods.
+% Previous defenses against prompt injection attacks can be categorized into training-based and testing-based. 
+For the training-time method, the LLM that is identified as subject to indirect prompt injection attack will be trained with extra SFT \cite{chen2024struq} or preference data \cite{chen2024aligning} that inform the model on input prompt structure over context vs. instructions.
+For testing time approach, existing approaches either modify the original prompt with prompt engineering   \cite{wu2023defending, hines2024defending}, or design complex workflows \cite{wang2024fath,jia2025task} that introduce extra computations or LLM calls in processing the response.
+In this paper, we mitigate the attack with a focus on the discretion between data and instructions.
+Specifically, we identify and pruning neurons associated with
+instruction-following during KV cache encoding of the prompt context.
+Our \textit{CachePrune} is compatible with the existing approaches, while not modifying the prompt or introducing extra test-time overhead in resposne processing. 
+% In addition, there are previous works (\emph{e.g.}, attribution patching) \cite{syed2023attribution, wu2024mitigating}  studying how to accurately attribute the outputs to the LLM's hidden states. We want to emphasize that our study aims at leveraging neuron attribution to understand the model's cognition on data vs. instruction, instead of proposing a completely new neuron intervention technique.
+
+% There are prior works following a Detection + Filtering approach [1-3] that build a classifier to detect unauthorized injection and discard or refuse to answer such inputs. These works are orthogonal to our approach since they focus on detection accuracy, while our setup focus on Attack Success Rate (ASR) and response quality since we require generating a response with or without attack. 
+% There are also prior works following a \textit{Detection + Filtering} approach~\cite{getmydrift, piguard, embeddingdetect} that build classifiers to detect unauthorized injections and discard or refuse to answer such inputs. These methods are orthogonal to ours, as they focus on detection accuracy, whereas our setup is measured by \textit{Attack Success Rate (ASR)} and response quality. In our setup, a response must still be generated regardless of whether an attack is present.
+
+
+In addition, our masking requires pre-knowing the context boundary.  As in \cite{piet2024jatmo}, this aligns with LLM-integrated APIs in which user queries are combined with third-party data using API-specific templates, \emph{i.e.}, the position of the context span is also known.
+This is a common setup within prior works, e.g., \citet{chen2024struq, chen2024aligning, piet2024jatmo, abdelnabi2024you}, which operates under fixed templates with known context.
+% Additionally, we notice that 
+
+% detection \cite{li2024injecguard}

@@ -27,9 +27,9 @@ Both are measured at a fixed batch width in Table~\ref{tab:best}.
 It is complementary to the hosts, since it does not modify their scoring rules.
 
 \paragraph{Controlled mix.}
-For each problem, half of the residuals are live strategy instructions and half alternate a repeated loop with illegal text.
-Index $0$ is always live.
-The mix is a controlled test of the two bars, not a production trace.
+For each problem, half of the residuals are viable strategy instructions and half alternate a repeated loop with illegal text.
+$\rho_0$ is always a viable strategy.
+The mix is a controlled test of the two thresholds, not a production trace.
 Worked strings are in Appendix~\ref{app:examples}.
 
 \section{Score Functions}
@@ -44,7 +44,7 @@ A loop scores $0.02$ on the residual and $0.04$ on a prefix.
 Illegal text scores $0.22$ on the residual and $0.16$ on a prefix.
 An answer mark scores $0.92$.
 Thus $\tau_{\mathrm{pre}}$ sits between a loop and illegal text, and $\tau_{\mathrm{dec}}$ sits between an illegal prefix and an answer mark.
-Raising the prefill bar to $\tau_{\mathrm{dec}}$ is the faster operating point reported in the tables.
+Raising the prefill threshold to $\tau_{\mathrm{dec}}$ is the faster operating point reported in the tables.
 
 Both scorers are deterministic functions of a string.
 They do not call the model.
@@ -60,7 +60,7 @@ Text & Reason & Prefill & Decode \\
 \midrule
 Repeated \texttt{*loop*} span & loop & 0.02 & 0.04 \\
 \texttt{undefined nan \ldots} & illegal & 0.22 & 0.16 \\
-Live strategy instruction & ok & $\approx 1.00$ & --- \\
+Viable strategy instruction & ok & $\approx 1.00$ & --- \\
 Prefix containing \texttt{\#\#\#\#} or \texttt{\textbackslash boxed} & answer & --- & 0.92 \\
 Empty string & empty & 0.00 & 0.00 \\
 \bottomrule
@@ -89,7 +89,7 @@ It is not substituted for $s^{\mathrm{pre}}$.
 
 \paragraph{Early prefix inside prefill.}
 A separate test, not used by the tables in Section~\ref{sec:eval}, inspects the first fraction $\alpha{=}0.20$ of a residual.
-It fires when that slice scores below $\tau_{\mathrm{pre}}$ for a reason other than ordinary text.
+It triggers when that slice scores below $\tau_{\mathrm{pre}}$ for a reason other than ordinary text.
 The reported measurements use the full-residual loop test rather than this partial abort.
 
 \section{Proof of Proposition~\ref{prop:invariance}}
@@ -107,7 +107,7 @@ Therefore the host cannot remove $z_i$ from the prefill batch: its cut acts on d
 Equation~\eqref{eq:keep} is computed from residual text before any kernel, so $\mathrm{Keep}$ is independent of the host.
 $W$ is defined as the tokens the kernel runs on that set.
 Hence $W$ is a function of $\mathrm{Keep}$ alone.
-The three hosts in Table~\ref{tab:hosts} therefore share one prefill column at each bar, and differ only in decode-to-cut.
+The three hosts in Table~\ref{tab:hosts} therefore share one prefill column at each threshold, and differ only in decode-to-cut.
 \end{proof}
 
 The proposition does not claim that end-to-end time is host-invariant.
@@ -133,11 +133,11 @@ Decode tokens are $n \bigl(c \cdot h + (a-c) \cdot D\bigr)$.
 \end{itemize}
 
 The mix explains the admission counts.
-For $k{=}16$, eight residuals are live and eight are not.
+For $k{=}16$, eight residuals are viable and eight are not.
 That half alternates loop and illegal text, four of each.
-$\tau_{\mathrm{pre}}$ drops the four loops and keeps the four illegal residuals: $8+4=12$.
-Raising the prefill bar to $\tau_{\mathrm{dec}}$ drops both kinds: $8$.
-Index $0$ is among the live eight, so the forced keep does not add a further slot.
+$\tau_{\mathrm{pre}}$ withholds the four loops and retains the four illegal residuals: $8+4=12$.
+Raising the prefill threshold to $\tau_{\mathrm{dec}}$ withholds both kinds: $8$.
+$\rho_0$ is among the viable eight, so the forced keep does not add a further slot.
 At $k{=}8$ the same halving admits $6$ at $\tau_{\mathrm{pre}}$ and $4$ at $\tau_{\mathrm{dec}}$.
 At $k{=}4$ it admits $3$ and $2$.
 
@@ -162,8 +162,8 @@ $k{=}8$ & 10.84\,s & 10.19\,s & $-6\%$ & $16{\to}16$ & $11{\to}9$ & $2624{\to}20
 $k{=}16$ & 17.05\,s & 14.13\,s & $-17\%$ & $16{\to}16$ & $11{\to}11$ & $5008{\to}3848$ \\
 \bottomrule
 \end{tabular}}
-\caption{ESC across fan-out width at the default prefill bar.
-The relative saving grows with $k$ because more loop residuals are refused.
+\caption{ESC across fan-out width at the default prefill threshold.
+The relative saving grows with $k$ because more loop residuals are withheld.
 At $k{=}4$ any-finished drops by one problem.
 At $k{=}8$ any-finished holds and the winner moves by two.}
 \label{tab:esc-width}
@@ -184,16 +184,16 @@ $k{=}8$, $\tau_{\mathrm{dec}}$ as prefill & 1448 & 4 & --- & 14/16 \\
 $k{=}4$, $\tau_{\mathrm{dec}}$ as prefill & 732 & 2 & --- & 14/16 \\
 \bottomrule
 \end{tabular}
-\caption{Why the default prefill bar is $\tau_{\mathrm{pre}}$.
+\caption{Why the default prefill threshold is $\tau_{\mathrm{pre}}$.
 At $k{=}16$, raising it to $\tau_{\mathrm{dec}}$ is faster and any-finished still holds.
-At $k{=}8$ and $k{=}4$ the same bar admits only the live half, which is four and two residuals, and any-finished falls to $14/16$.
-Speculative rejection at $k{=}16$ with that higher bar is $10.80$\,s and DPTS is $10.90$\,s, both $16/16$.}
+At $k{=}8$ and $k{=}4$ the same threshold admits only the viable half, which is four and two residuals, and any-finished falls to $14/16$.
+Speculative rejection at $k{=}16$ with that higher threshold is $10.80$\,s and DPTS is $10.90$\,s, both $16/16$.}
 \label{tab:why-015}
 \end{table}
 
 The $k{=}4$ row of Table~\ref{tab:esc-width} is the reason Section~\ref{sec:limit} does not describe $\tau_{\mathrm{pre}}$ as accuracy-neutral at every width.
-One problem that the full ESC fan-out solved is absent once the single loop residual at $k{=}4$ is refused.
-We keep $\tau_{\mathrm{pre}}$ because raising it to $\tau_{\mathrm{dec}}$, which looks better on the $k{=}16$ bars of Figure~\ref{fig:results}(a), fails the same test two widths down (Table~\ref{tab:why-015}).
+One problem that the full ESC fan-out solved is absent once the single loop residual at $k{=}4$ is withheld.
+We retain $\tau_{\mathrm{pre}}$ because raising it to $\tau_{\mathrm{dec}}$, which looks better on the $k{=}16$ groups of Figure~\ref{fig:results}(a), fails the same test two widths down (Table~\ref{tab:why-015}).
 
 \section{Probe Sweep}
 \label{app:probe}
@@ -227,7 +227,7 @@ At $k{=}8$, several rows land within two problems of the full fan-out; we do not
 Two comparisons in Table~\ref{tab:probe-full} fix the design of Algorithm~\ref{alg:grow}.
 Dropping loops and then decoding everyone else to $D$ is the prefill gate with no probe.
 At $k{=}16$ it is slightly faster than the probe ($71.4$\,s versus $72.2$\,s) and four problems less accurate.
-The accuracy belongs to the residuals that fail the prefill-side live test and still solve after a prefix is visible.
+The accuracy belongs to the residuals that fail the prefill-side viability test and still solve after a prefix is visible.
 A short decode that never consults $s^{\mathrm{dec}}$ reaches $17/32$: the extension test, not the mere existence of a short budget, is what returns the last problems.
 Including loops in the probe matches $20/32$ at $74.4$\,s.
 We still skip loops before the kernel.
@@ -245,9 +245,9 @@ The three hosts are unchanged except for the set \eqref{eq:keep} hands them.
 \paragraph{ESC.}
 The published stopping rule waits until a window of agreeing samples is full.
 The window length used here is $5$.
-The controlled fan-out does not fill that window: some branches are loops or illegal text, and the live strategies do not agree early.
+The controlled fan-out does not fill that window: some residuals are loops or illegal text, and the viable strategies do not agree early.
 Every admitted residual is therefore decoded to $D$.
-This is why ESC's baseline is the most expensive row in Table~\ref{tab:ablation}, and why refusing loops before prefill moves ESC more than it moves DPTS.
+This is why ESC's baseline is the most expensive row in Table~\ref{tab:ablation}, and why withholding loops before prefill reduces ESC more than it reduces DPTS.
 
 \paragraph{Speculative rejection.}
 The partial-reward horizon is $\tau{=}256$ tokens and the dropped fraction is $\alpha{=}0.5$, applied to the admitted set rather than to the original $k$.
@@ -262,7 +262,7 @@ The mini-step is the earliest of the three cuts, which is why DPTS is the fastes
 \paragraph{Order inside one problem.}
 The prefill gate runs before any decode kernel for that fan-out.
 The host then runs on the children that were admitted.
-Refused residuals are absent from the decode batch.
+Withheld residuals are absent from the decode batch.
 The gates are ordered by cost: a text test, then prefill, then a short probe or the host horizon, then the rest of $D$.
 Only admitted KV is eligible to cross to the decode instance.
 
@@ -278,7 +278,7 @@ A disaggregated prefill that has no admission computes every residual and ships 
 W = X = 10 \cdot 4 \cdot (256+32) = 11520
 \]
 tokens.
-Charging $12\,\mu\mathrm{s}$ per prefill token and $2\,\mu\mathrm{s}$ per transferred token, plus $0.8$\,ms to abort a refused child, gives a fan-out of $162.1$\,ms of which $23.0$\,ms is transfer.
+Charging $12\,\mu\mathrm{s}$ per prefill token and $2\,\mu\mathrm{s}$ per transferred token, plus $0.8$\,ms to abort a withheld child, gives a fan-out of $162.1$\,ms of which $23.0$\,ms is transfer.
 Refusing the loop before insert leaves three residuals, each still carrying its trunk under this model:
 \[
 W = X = 10 \cdot 3 \cdot 288 = 8640.
@@ -292,18 +292,18 @@ The measurements already include prefix caching, so the prefill column in Sectio
 \section{Winner-Only Admission}
 \label{app:best}
 
-Table~\ref{tab:best} uses batch size $8$ on the $k{=}16$ GSM8K mix at bar $\tau_{\mathrm{dec}}$.
+Table~\ref{tab:best} uses batch size $8$ on the $k{=}16$ GSM8K mix at threshold $\tau_{\mathrm{dec}}$.
 The score-blind rule fills one slot.
 Measured prefill is $414$ tokens and any-finished accuracy is $11/16$ under ESC and $9/16$ under speculative rejection.
-The score rule admits the eight live residuals ($2768$ prefill tokens) and both hosts return to $16/16$.
-The gap is the live strategies other than index $0$.
-Several problems are solved by a non-winner live residual and by none of the single reserved slots the blind rule happened to keep.
-Keeping the argmax of the prefill score would be a third policy; we do not claim the prefill score ranks answer correctness, only that thresholding it is a different decision from keeping one branch.
+The score rule admits the eight viable residuals ($2768$ prefill tokens) and both hosts return to $16/16$.
+The gap is the viable strategies other than $\rho_0$.
+Several problems are solved by a non-winner viable residual and by none of the single reserved slots the blind rule happened to retain.
+Retaining the argmax of the prefill score would be a third policy; we do not claim the prefill score ranks answer correctness, only that thresholding it is a different decision from retaining one residual.
 
 \section{Worked Residuals}
 \label{app:examples}
 
-The live half cycles through six instructions:
+The viable half cycles through six instructions:
 
 \begin{enumerate}
   \item Translate the story into equations, then solve for the missing value.

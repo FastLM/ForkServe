@@ -1,58 +1,42 @@
 \section{Introduction}
 \label{sec:intro}
 
-The rapid adoption of large language models as agents~\citep{tot,react,selfconsistency} has turned inference from a single continuation into a search process.
-An agentic step expands a committed trunk of length $L$ into $k$ residuals and later keeps a single spine (Figure~\ref{fig:problem}).
-This pattern is the serving unit of Tree-of-Thoughts, self-consistency, and tool-using loops, and it is where latency and memory are spent.
-However, existing stacks exhibit a critical inefficiency: residuals that the search will abort still incur GPU prefill, KV transfer, and decode until a prune score exists.
-That waste grows with fan-out width and is paid on every step, posing a significant cost to the reliability of agentic inference in real-world applications.
-
-The susceptibility of LLM serving to this waste stems from a fundamental limitation in parsing the fan-out, i.e., the inability to distinguish a residual that must be encoded from one that can be refused as text~\citep{esc,specrej,dpts}.
-In reducing that cost, replacing the search algorithm, or retraining the model to emit fewer thoughts, can be computationally prohibitive and is orthogonal to serving.
-Alternatively, existing mitigation strategies focus on scoring tokens that have already been generated~\citep{esc,specrej,dpts}, on recording a prefix only after a full block is hashed~\citep{vllm,sglang}, or on transferring every page a disaggregated prefiller has computed~\citep{distserve,splitwise}.
-Such strategies often provide only decode-side savings, or they ship KV that the search is about to drop.
-Additionally, imposing a single threshold on both prefill and decode can drop residuals that still solve, thereby undermining the quality of the kept spine.
+Agentic inference expands a committed prefix into multiple candidate residuals and subsequently retains a single trajectory~\citep{tot,react,selfconsistency}.
+This search-style generation has become standard for Tree-of-Thoughts, self-consistency, and tool-using loops.
+The resulting accuracy gains, however, come at a substantial serving cost: every residual incurs GPU prefill, KV transfer on a disaggregated connector, and decode until a pruning signal becomes available.
 
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_problem}}
-\caption{Illustration of wasted work in an agentic fan-out.
-(a)~Tree-of-Thoughts writes a thought and then values it~\citep{tot}.
-(b)~ESC, speculative rejection, and DPTS read a prefix that is already resident~\citep{esc,specrej,dpts}; on this GSM8K run their prefill token count is the same.
-(c)~Automatic prefix caching hashes a full block~\citep{vllm}, and a disaggregated runtime transfers the KV the prefiller has already computed~\citep{distserve}.
-GPU prefill $W$, connector payload $X$, and decode-to-cut are incurred before the abort.}
+\caption{The necessity of disaggregated prefill and decode pruning.
+(a)~Decode-time hosts score generated tokens, so every residual incurs prefill $W$, transfer $X$, and decode-to-cut before abort~\citep{esc,specrej,dpts}.
+(b)~\sys withholds repeated loops before the kernel and continues an uncertain residual only after a short probe.
+Unpromising prefixes are terminated early, reducing compute without replacing the host.}
 \label{fig:problem}
 \end{figure*}
 
-In this paper, we focus on the source of that inefficiency: the stack's confusion between a residual that must be prefilled and a residual that can be skipped.
-We start from a fundamental question: \emph{what makes the difference between a residual that should be encoded and one that should not, from the serving stack's perspective?}
-The engine relies on implicit criteria that only become observable after tokens exist.
-Concretely, from a cost perspective, a residual is \emph{live} if some continuation of it can still produce a correct answer, and \emph{abortable} if it is a repeated loop or illegal text that the search will drop.
-Waste arises when those implicit criteria fail to align with the live--abortable separation that is already present in the residual text.
-Our approach is motivated by solving that misalignment with the following two general steps.
+\paragraph{Why prune before decode?}
+Early-stopping self-consistency (ESC), speculative rejection, and dynamic parallel tree search (DPTS) terminate unpromising paths once generated tokens can be scored~\citep{esc,specrej,dpts}.
+As illustrated in Figure~\ref{fig:problem}(a), this policy still encodes every residual, so three hosts share one prefill.
+Automatic prefix caching records a block only after it is full~\citep{vllm,sglang}, and a disaggregated connector forwards every page the prefiller has computed~\citep{distserve,splitwise}.
+Section~\ref{sec:background} places each of these decisions on the fan-out.
+A single threshold on both prefill and decode can discard residuals that remain solvable once a prefix is observed.
+Admission therefore reads residual text, and continuation reads a generated prefix.
 
+\paragraph{\sys}
+We introduce \sys, which decouples the two decisions with ordered thresholds $(\tau_{\mathrm{pre}}, \tau_{\mathrm{dec}})$, $\tau_{\mathrm{pre}} < \tau_{\mathrm{dec}}$.
+The prefill score is computed from the residual and withholds a repeated loop before any kernel or KV transfer, so the disaggregated connector inserts only the admitted set.
+The decode score is computed from a generated prefix of length $t_0$ and extends a residual to the budget $D$ only when that prefix exceeds $\tau_{\mathrm{dec}}$.
+The designated residual $\rho_0$ is always admitted, so pruning cannot erase the trajectory retained when no sibling survives.
+We show that the split is host-invariant in prefill work: any decode-time pruner that scores only generated tokens shares one $W$, equal to the prefill of the admitted set.
+
+The inference pipeline comprises three stages---admission, prefill, and probe-and-resume---shown in Figure~\ref{fig:arch}.
+\sys leaves the host's decode cut unchanged and introduces no additional model calls at test time.
+
+\paragraph{Contributions.}
+Our main contributions are:
 \begin{itemize}
-  \item \textbf{Prefill scoring.}
-    We identify abortable residuals by a score on the residual text, whose activations bias the stack toward encoding the same span as a thought rather than as skippable text.
-  \item \textbf{Decode intervention.}
-    We prune the identified residuals over the prefill of the fan-out, and we continue an uncertain residual only when a short generated prefix clears a second bar.
-\end{itemize}
-
-Specifically, we introduce two unshared scores with ordered bars $(\tau_{\mathrm{pre}}, \tau_{\mathrm{dec}})$, $\tau_{\mathrm{pre}} < \tau_{\mathrm{dec}}$.
-The prefill score reads the residual and drops a repeated loop before the kernel and before any KV transfer.
-The decode score reads a generated prefix after a probe of $t_0$ tokens and continues to the budget $D$ only when that prefix clears $\tau_{\mathrm{dec}}$.
-We impose the invariant that index $0$ is always admitted, so pruning cannot erase the residual the search will keep if nothing else survives.
-We show that the proposed split is host-invariant in prefill work: any decode-time pruner that scores only generated tokens shares one $W$, and that $W$ is exactly the prefill of the admitted set.
-
-For compatibility with prefix caching and prefill--decode disaggregation~\citep{vllm,distserve,splitwise}, we apply pruning when encoding the KV cache of the residual, i.e., enabling efficient prompting when several residuals share the same trunk.
-We accordingly refer to our approach as \sys.
-Notably, \sys leaves the host's decode cut unchanged and is lightweight in computation, relying solely on a pair of string scores without extra test-time model calls.
-
-Our contributions are summarized as follows:
-\begin{itemize}
-  \item We propose \sys, which reduces wasted prefill in agentic inference by identifying and pruning abortable residuals during KV-cache encoding of the residual.
-    It steers the stack toward treating a loop as skippable text, while not interfering with the model's ability to follow live strategies.
-  \item In identifying these residuals, we propose a split scoring mechanism that allows effective pruning from surface tests on the residual and on a short prefix.
-    We also leverage an observed score gap---illegal text lies above $\tau_{\mathrm{pre}}$ on the residual and below $\tau_{\mathrm{dec}}$ on a still-illegal prefix---that further improves the fidelity of the split.
-  \item In experiments, \sys significantly reduces the prefill shared by ESC, speculative rejection, and DPTS while preserving any-finished accuracy, and a short probe restores full MATH-500 accuracy at lower end-to-end time.
+\item We identify a placement gap: search, decode-time pruning, prefix caching, and prefill--decode disaggregation all decide after tokens or pages exist, so three hosts with different cuts share one prefill and one transfer.
+\item We propose \sys, disaggregated prefill and decode pruning with unshared thresholds $(\tau_{\mathrm{pre}}, \tau_{\mathrm{dec}})$. The prefill score gates KV encoding and the connector; the decode score gates a short probe.
+\item We provide measurements showing that the prefill gate reduces shared prefill in front of ESC, speculative rejection, and DPTS while preserving any-finished accuracy, that a short probe restores full MATH-500 accuracy at lower end-to-end time, and that a three-turn Tree-of-Thoughts trace prefills $48$ of $192$ residuals.
 \end{itemize}

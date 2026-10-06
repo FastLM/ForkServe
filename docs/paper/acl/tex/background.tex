@@ -1,0 +1,70 @@
+\section{Background}
+\label{sec:background}
+
+Agentic inference is a branching execution.
+A parent holds a committed trunk $x$ of length $L$.
+The harness proposes $k$ residuals $\rho_i$ of length $\ell_i$, and after the step a single spine $x\circ\rho_\star$ remains.
+Tree-of-Thoughts makes that step explicit: a propose prompt writes candidate thoughts, and a value prompt then labels each thought sure, maybe, or impossible~\citep{tot}.
+The value score is a function of a thought that has already been written.
+Chain-of-thought, self-consistency, and ReAct share the same order: expand, then score, then retain one trajectory~\citep{cot,selfconsistency,react}.
+
+\paragraph{Where the prune score is read.}
+Decode-time pruners move the cut earlier, and the score is still a function of generated tokens.
+Early-stopping self-consistency waits until a window of complete answers agrees~\citep{esc}.
+On a window of length $5$ that has not yet closed, every sample has been prefilled and decoded toward the budget.
+Speculative rejection spends a partial-reward horizon of $256$ tokens and then drops the lower fraction of the batch~\citep{specrej}.
+The prefill and the first $256$ tokens are already resident when the quantile is applied.
+Dynamic parallel tree search generates a fixed mini-step on every active child and early-stops a child whose confidence is low~\citep{dpts}.
+In our reproduction that mini-step is $100$ tokens.
+An earlier cut inside this family shortens decode.
+It leaves the prefill unchanged, which is why ESC, speculative rejection, and DPTS share one prefill column when they run alone (Table~\ref{tab:hosts}).
+
+\paragraph{Serving the same fan-out.}
+Autoregressive serving splits that fan-out across two phases~\citep{orca,distserve,splitwise}.
+Prefill consumes the prompt in parallel and is compute-bound.
+Decode emits one token per step and is memory-bandwidth bound.
+PagedAttention stores KV in non-contiguous pages, and automatic prefix caching records a block only after the block is full~\citep{vllm}.
+RadixAttention indexes the same full prefix~\citep{sglang}.
+On the first fan-out those blocks are unpublished, so the engine materializes $k$ copies of the trunk,
+\[
+W_{\mathrm{APC}}=kL+\textstyle\sum_i\ell_i.
+\]
+A later replay of the winner is a hit.
+Prefill--decode disaggregation isolates time-to-first-token from inter-token latency by placing the two phases on separate instances~\citep{distserve,splitwise}.
+The connector then forwards every page the prefiller has computed.
+There is no admission on that path, so the transfer equals the first-expand prefill, including residuals the search will abort:
+\begin{equation}
+\label{eq:xfer-pd}
+X_{\mathrm{PD}}=kL+\textstyle\sum_i\ell_i.
+\end{equation}
+Table~\ref{tab:place} records the stage at which each method can refuse a residual.
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular}{@{}p{0.24\columnwidth}p{0.22\columnwidth}p{0.24\columnwidth}p{0.22\columnwidth}@{}}
+\toprule
+Method & Score input & First expand & Connector \\
+\midrule
+ToT value & written thought & every residual & --- \\
+ESC, SR, DPTS & generated prefix & shared $W$ & every child \\
+APC, radix & full block & $k$ copies of $L$ & none \\
+DistServe & none & $k$ copies of $L$ & \eqref{eq:xfer-pd} \\
+\sys & residual, then $t_0$ & admitted set & miss of $\mathrm{Keep}$ \\
+\bottomrule
+\end{tabular}
+\caption{Where one fan-out of $k$ residuals pays.
+``Score input'' is the earliest text the method can read.
+The \sys row is the rule in Section~\ref{sec:method}: a repeated loop is withheld before the kernel, and the connector inserts only the admitted miss.}
+\label{tab:place}
+\end{table}
+
+\paragraph{What the split has to separate.}
+The same surface string is read twice.
+As a residual it is a candidate for KV encoding.
+As a generated prefix it is a candidate for continuation.
+A loop falls below both thresholds.
+Illegal math text can sit above the prefill threshold and below the decode threshold, so one shared cutoff either withholds a residual that can still solve or extends a prefix the decode rule is designed to stop.
+Retraining the model to emit fewer thoughts requires a heavier budget than a pair of string scores, and it leaves the connector unchanged.
+These two readings are why admission and continuation use ordered thresholds, and why the disaggregated insert follows the admitted set.

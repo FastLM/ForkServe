@@ -1,5 +1,11 @@
-\begin{thebibliography}{13}
+\begin{thebibliography}{16}
 \providecommand{\natexlab}[1]{#1}
+
+\bibitem[{Bi et~al.(2026)Bi, Luo, Du, Tang, and Wang}]{stop}
+Jiaxi Bi, Tongxu Luo, Wenyu Du, Zhengyang Tang, and Benyou Wang. 2026.
+\newblock Cut your losses! learning to prune paths early for efficient parallel
+  reasoning.
+\newblock In \emph{ACL}.
 
 \bibitem[{Ding et~al.(2025)Ding, Jiang, Liu, Jing, Guo, Wang, Zhang, Wang, Liu,
   Du, Liu, and Tao}]{dpts}
@@ -28,6 +34,12 @@ Yiwei Li, Peiwen Yuan, Shaoxiong Feng, Boyuan Pan, Xinglin Wang, Bin Sun, Heda
 \newblock Escape sky-high cost: Early-stopping self-consistency for multi-step
   reasoning.
 \newblock In \emph{ICLR}.
+
+\bibitem[{Liu et~al.(2026)Liu, Chen, Zhang, Liu, and Lian}]{equivpruner}
+Jiawei Liu, Qisi Chen, Jianshu Zhang, Quan Liu, and Defu Lian. 2026.
+\newblock {EquivPruner}: Boosting efficiency and quality in {LLM}-based search
+  via action pruning.
+\newblock In \emph{ACL}.
 
 \bibitem[{Patel et~al.(2024)Patel, Choukse, Zhang, Shah, Goiri, Maleki, and
   Bianchini}]{splitwise}
@@ -58,6 +70,14 @@ Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed~Chi, Sharan Narang,
 \newblock Self-consistency improves chain of thought reasoning in language
   models.
 \newblock In \emph{ICLR}.
+
+\bibitem[{Wei et~al.(2022)Wei, Wang, Schuurmans, Bosma, Ichter, Xia, Chi, Le,
+  and Zhou}]{cot}
+Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia,
+  Ed~Chi, Quoc Le, and Denny Zhou. 2022.
+\newblock Chain-of-thought prompting elicits reasoning in large language
+  models.
+\newblock In \emph{NeurIPS}.
 
 \bibitem[{Yao et~al.(2023{\natexlab{a}})Yao, Yu, Zhao, Shafran, Griffiths, Cao,
   and Narasimhan}]{tot}

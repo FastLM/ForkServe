@@ -10,6 +10,7 @@
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{booktabs}
 \usepackage{placeins}
+\usepackage{float}
 \usepackage{graphicx}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
@@ -32,7 +33,7 @@
 \newtheorem{proposition}{Proposition}
 \newtheorem*{proposition*}{Proposition}
 
-\title{\sys{}: Split Prefill and Decode Pruning\\ for Efficient Agentic Inference}
+\title{\sys{}: Disaggregated Prefill and Decode Pruning\\ for Efficient Agentic Inference}
 
 \author{Anonymous ACL submission}
 
@@ -40,17 +41,17 @@
 \maketitle
 
 \begin{abstract}
-Large language models used as agents expand one committed trunk into several residuals and later keep a single spine.
-This serving pattern is inefficient: search and early-stop methods score tokens that have already been generated, so residuals that will be aborted still pay GPU prefill, KV transfer, and decode until a prune score exists.
-The waste stems from the stack's inability to refuse a residual before tokens or pages exist.
-We propose \sys, which reduces that waste by identifying and pruning abortable residuals during KV-cache encoding of the residual, then deciding continuation from a short generated prefix.
-The pruning steers the stack toward treating a loop as skippable text rather than as a thought to encode, while a separate decode score preserves residuals that can still solve once a prefix is visible.
-To identify what to prune, we introduce two unshared scores with ordered bars $(\tau_{\mathrm{pre}}, \tau_{\mathrm{dec}})$, and we connect the prefill bar to an invariance of prefill work across decode-time hosts.
-Our approach does not replace the host's cut or incur extra model calls at test time.
-Experiments show that \sys reduces the prefill shared by three decode-time pruners while preserving any-finished accuracy, and that a short probe restores full MATH-500 accuracy at lower end-to-end time.
+Large language models perform agentic inference by expanding a committed prefix into multiple candidate residuals and retaining a single trajectory.
+Existing search and early-stopping methods assign pruning scores only after tokens have been generated, so unpromising residuals still incur GPU prefill, KV transfer on a disaggregated connector, and decode.
+To address this, we propose \sys, which identifies unpromising residuals during KV-cache encoding and defers continuation decisions to a short generated prefix.
+We introduce two unshared scores with ordered thresholds $(\tau_{\mathrm{pre}}, \tau_{\mathrm{dec}})$: the prefill score reads residual text and withholds repeated loops before the kernel and before transfer, while the decode score reads a probed prefix and extends a residual only when that prefix exceeds $\tau_{\mathrm{dec}}$.
+The two scores do not share weights; collapsing them onto a single threshold discards trajectories that remain solvable.
+Under disaggregation the connector inserts KV only for the admitted set.
+Experiments on Qwen3-8B show that \sys reduces the prefill shared by three decode-time pruners while preserving any-finished accuracy, that a short probe restores full MATH-500 accuracy at lower end-to-end time, and that a three-turn Tree-of-Thoughts trace prefills $48$ of $192$ residuals.
 \end{abstract}
 
 \input{tex/intro}
+\input{tex/background}
 \input{tex/method}
 \input{tex/related}
 \input{tex/eval}
