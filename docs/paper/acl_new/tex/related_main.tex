@@ -1,0 +1,28 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Search.}
+Chain-of-thought writes one trace; Tree-of-Thoughts, self-consistency, and Monte Carlo tree search write many and then keep a beam, a majority, or a backed-up value~\cite{cot,tot,selfconsistency,mctsllm}.
+The accuracy gain scales with the number of traces, and so does the token cost.
+EquivPruner isolates a further redundancy inside that widening: textually distinct steps can be the same mathematical action, and a learned detector keeps one representative of each equivalence class~\cite{equivpruner}.
+\sys does not replace the search and does not decide semantic equivalence.
+It takes the residuals the harness has already proposed and chooses, from the residual text and the radix index, which of them are prefilled.
+
+\paragraph{Path pruning.}
+ESC, Speculative Rejection, and DPTS drop a child after generation has started: an agreeing window, a partial-reward horizon, and a fixed mini-step~\cite{esc,specrej,dpts}.
+STOP groups these signals by source and learnability and shows that a learned internal token can fire on a short prefix~\cite{stoploss}.
+The shared input is text that already resides in the KV cache, so the prefill column does not move when the cut moves.
+\Cref{prop:host} is that fact, and \eqref{eq:dec} is the change: a repeated loop is withheld before the kernel, and every other low score is extended past $t_0$ only when the probe meets $\tau_{\mathrm{dec}}$.
+A learned early-stop or equivalence signal can sit on top of that gate.
+The experiments keep the host as the decode policy and the residual score as the prefill policy (\S\ref{sec:eval-ablate}).
+
+\paragraph{Serving and cache edits.}
+Orca schedules at iteration granularity; vLLM pages the KV cache and hashes full blocks; SGLang shares prefixes in a radix; Sarathi overlaps a chunked prefill with decode~\cite{orca,vllm,sglang,sarathi}.
+DistServe and Splitwise place the two phases on separate pools and move every computed page across a connector~\cite{distserve,splitwise}.
+The hash is the right index for a replay of the winner.
+It is not an admission test for the children that will be aborted, which is why a same-batch fan-out still pays \eqref{eq:xfer-stock}.
+Program schedulers raise the unit of scheduling above the request, and retention systems keep the current context across a tool gap~\cite{autellix,continuum,mori,forkkv}.
+They leave the siblings of one fan-out unshared.
+CachePrune edits neurons inside one request so the model does not follow instructions embedded in retrieved context~\cite{cacheprune}; classical speculative decoding drafts output tokens rather than a future prompt prefix~\cite{speculative,medusa}.
+\eqref{eq:action} is the missing decision: one action sets $\Work_i$ and $\Xfer_i$ from the unmatched suffix.
+\S\ref{sec:related-full} expands each line.

@@ -1,0 +1,12 @@
+Agentic serving expands one trunk of length $L$ into $k$ residuals and keeps one spine.
+Disaggregated prefill--decode transfers every computed page, and decode-time pruning can score a child only after that transfer.
+
+\sys admits each residual on the prefill side of the same cut (\Cref{fig:system}).
+A full-page hit moves nothing, a partial hit moves the miss, a repeated loop never enters the kernel, and every other residual is prefilled.
+A low decode score continues past a $t_0$-token probe only when the generated prefix meets the threshold.
+The cutoffs are $(0.15, 0.45)$.
+The trunk is an alias, so $L$ is absent from the kernel and from the connector.
+
+On Qwen3-8B GSM8K, $\tau_{\mathrm{pre}}{=}0.15$ cuts prefill from $5008$ to $3848$ tokens at $16/16$ any-finished and reduces ESC time from $17.05$\,s to $14.14$\,s.
+On MATH-500 a $128$-token probe restores $20/32$ at $72.2$\,s against $104.1$\,s.
+The Qwen3-14B spine matches prefix-cache accuracy at $0.72\times$ the median peak KV.

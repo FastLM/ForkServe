@@ -1,0 +1,112 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={draw=black!55, line width=0.2pt},
+  ax/.style={black!55, line width=0.35pt},
+  grid/.style={black!15, line width=0.25pt},
+  tick/.style={font=\tiny, text=black!60, inner sep=0pt},
+  val/.style={font=\tiny, inner sep=0.2pt},
+  wl/.style={font=\tiny, text=black!55, inner sep=0pt},
+]
+\definecolor{APC}{HTML}{E8B86D}
+\definecolor{FS}{HTML}{D97B2F}
+\definecolor{FSp}{HTML}{4A2878}
+
+% (a) expand ms/problem. y = 0.38 + 0.0026 * ms. Axis 0--700 ms.
+\begin{scope}[shift={(0,2.95)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0.62,2.72) {(a) Expand (prefill) per problem};
+  \draw[grid] (0.62,0.38) -- (5.85,0.38);
+  \draw[grid] (0.62,1.29) -- (5.85,1.29);
+  \draw[grid] (0.62,2.20) -- (5.85,2.20);
+  \draw[ax] (0.62,0.38) -- (5.85,0.38);
+  \draw[ax] (0.62,0.38) -- (0.62,2.26);
+  \node[tick, anchor=east] at (0.54,0.38) {0};
+  \node[tick, anchor=east] at (0.54,1.29) {350};
+  \node[tick, anchor=east] at (0.54,2.20) {700};
+  \node[tick, rotate=90, anchor=south] at (0.02,1.32) {ms};
+  \node[font=\tiny\bfseries] at (1.89,2.46) {Qwen3-4B};
+  \node[font=\tiny\bfseries] at (4.43,2.46) {Qwen3-8B};
+  \draw[black!20] (3.16,0.38) -- (3.16,2.20);
+  % 4B GSM8K: 429, 83, 55
+  \fill[bar, APC] (0.78,0.38) rectangle (1.06,1.495);
+  \fill[bar, FS]  (1.12,0.38) rectangle (1.40,0.596);
+  \fill[bar, FSp] (1.46,0.38) rectangle (1.74,0.523);
+  \node[val] at (0.92,1.60) {429};
+  \node[val] at (1.26,0.70) {83};
+  \node[val] at (1.60,0.63) {55};
+  \node[wl] at (1.26,0.16) {GSM8K};
+  % 4B Game24: 435, 87, 53
+  \fill[bar, APC] (2.05,0.38) rectangle (2.33,1.511);
+  \fill[bar, FS]  (2.39,0.38) rectangle (2.67,0.606);
+  \fill[bar, FSp] (2.73,0.38) rectangle (3.01,0.518);
+  \node[val] at (2.19,1.62) {435};
+  \node[val] at (2.53,0.71) {87};
+  \node[val] at (2.87,0.62) {53};
+  \node[wl] at (2.53,0.16) {Game24};
+  % 8B GSM8K: 597, 94, 58
+  \fill[bar, APC] (3.32,0.38) rectangle (3.60,1.932);
+  \fill[bar, FS]  (3.66,0.38) rectangle (3.94,0.624);
+  \fill[bar, FSp] (4.00,0.38) rectangle (4.28,0.531);
+  \node[val] at (3.46,2.04) {597};
+  \node[val] at (3.80,0.73) {94};
+  \node[val] at (4.14,0.64) {58};
+  \node[wl] at (3.80,0.16) {GSM8K};
+  % 8B Game24: 598, 94, 56
+  \fill[bar, APC] (4.59,0.38) rectangle (4.87,1.935);
+  \fill[bar, FS]  (4.93,0.38) rectangle (5.21,0.624);
+  \fill[bar, FSp] (5.27,0.38) rectangle (5.55,0.526);
+  \node[val] at (4.73,2.04) {598};
+  \node[val] at (5.07,0.73) {94};
+  \node[val] at (5.41,0.63) {56};
+  \node[wl] at (5.07,0.16) {Game24};
+\end{scope}
+
+% (b) expand speedup vs APC. y = 0.38 + 0.15167 * ratio. Axis 0--12x.
+\begin{scope}[shift={(0,0)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0.62,2.72) {(b) Expand speedup over APC};
+  \draw[grid] (0.62,0.38) -- (5.85,0.38);
+  \draw[grid] (0.62,1.29) -- (5.85,1.29);
+  \draw[grid] (0.62,2.20) -- (5.85,2.20);
+  \draw[ax] (0.62,0.38) -- (5.85,0.38);
+  \draw[ax] (0.62,0.38) -- (0.62,2.26);
+  \draw[black!45, dashed] (0.62,0.532) -- (5.85,0.532);
+  \node[tick, anchor=east] at (0.54,0.38) {0};
+  \node[tick, anchor=east] at (0.54,0.532) {1};
+  \node[tick, anchor=east] at (0.54,1.29) {6};
+  \node[tick, anchor=east] at (0.54,2.20) {12};
+  \node[tick, rotate=90, anchor=south] at (0.02,1.32) {$\times$ APC};
+  \node[font=\tiny\bfseries] at (1.89,2.46) {Qwen3-4B};
+  \node[font=\tiny\bfseries] at (4.43,2.46) {Qwen3-8B};
+  \draw[black!20] (3.16,0.38) -- (3.16,2.20);
+  % 5.2, 7.9
+  \fill[bar, FS]  (0.90,0.38) rectangle (1.22,1.169);
+  \fill[bar, FSp] (1.30,0.38) rectangle (1.62,1.578);
+  \node[val] at (1.06,1.28) {5.2};
+  \node[val] at (1.46,1.69) {7.9};
+  \node[wl] at (1.26,0.16) {GSM8K};
+  % 5.0, 8.2
+  \fill[bar, FS]  (2.17,0.38) rectangle (2.49,1.138);
+  \fill[bar, FSp] (2.57,0.38) rectangle (2.89,1.624);
+  \node[val] at (2.33,1.25) {5.0};
+  \node[val] at (2.73,1.73) {8.2};
+  \node[wl] at (2.53,0.16) {Game24};
+  % 6.4, 10.2
+  \fill[bar, FS]  (3.44,0.38) rectangle (3.76,1.351);
+  \fill[bar, FSp] (3.84,0.38) rectangle (4.16,1.927);
+  \node[val] at (3.60,1.46) {6.4};
+  \node[val] at (4.00,2.04) {10.2};
+  \node[wl] at (3.80,0.16) {GSM8K};
+  % 6.3, 10.6
+  \fill[bar, FS]  (4.71,0.38) rectangle (5.03,1.336);
+  \fill[bar, FSp] (5.11,0.38) rectangle (5.43,1.988);
+  \node[val] at (4.87,1.45) {6.3};
+  \node[val] at (5.27,2.10) {10.6};
+  \node[wl] at (5.07,0.16) {Game24};
+\end{scope}
+
+\fill[APC] (0.70,-0.72) rectangle (0.92,-0.56);
+\node[font=\tiny, anchor=west] at (0.98,-0.64) {APC};
+\fill[FS] (1.85,-0.72) rectangle (2.07,-0.56);
+\node[font=\tiny, anchor=west] at (2.13,-0.64) {\sys};
+\fill[FSp] (3.55,-0.72) rectangle (3.77,-0.56);
+\node[font=\tiny, anchor=west] at (3.83,-0.64) {\plus};
+\end{tikzpicture}

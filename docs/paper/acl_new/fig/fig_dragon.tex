@@ -1,0 +1,91 @@
+% One radix tree. Five edges are the five actions.
+% Green = page in H. Orange = grown by prefill. Gray = withheld.
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Stealth,
+  line cap=round, line join=round,
+  root/.style={draw=fsblue!80!black, fill=fslight, rounded corners=1.4pt, line width=0.6pt,
+    align=center, font=\scriptsize\sffamily\bfseries, inner sep=3pt,
+    minimum width=1.7cm, minimum height=1.05cm},
+  pg/.style={draw, rounded corners=1pt, minimum width=0.62cm, minimum height=0.42cm,
+    inner sep=0pt, font=\tiny\ttfamily, line width=0.4pt},
+  inH/.style={pg, draw=fsgreen!70!black, fill=fscommit},
+  pref/.style={pg, draw=fsorange!85!black, fill=fsspec},
+  hold/.style={pg, draw=fsgray, fill=black!4, densely dashed},
+  edge/.style={line width=0.65pt, draw=fsblue!75},
+  dashE/.style={edge, densely dashed, draw=fsgray},
+  lab/.style={font=\scriptsize\sffamily\bfseries, anchor=west},
+  meta/.style={font=\tiny\sffamily, anchor=west, text=black!75},
+  cut/.style={draw=fsorange!90!black, line width=0.75pt},
+]
+\path (0,-0.15) rectangle (16.2,5.55);
+
+\node[inH] at (0.40,5.25) {};
+\node[meta] at (0.85,5.25) {in $H$};
+\node[pref] at (2.35,5.25) {};
+\node[meta] at (2.80,5.25) {prefill};
+\node[hold] at (4.45,5.25) {};
+\node[meta] at (4.90,5.25) {withheld};
+\node[meta] at (7.15,5.25) {one box $=P$ tokens, shared radix root};
+\draw[fsblue!20, line width=0.3pt] (0.05,4.92) -- (16.10,4.92);
+
+\node[root] (R) at (1.15,2.35) {radix root\\$x_u$};
+
+% vertical bus of the radix tree
+\draw[edge] (R.east) -- (2.55,2.35);
+\draw[edge] (2.55,4.45) -- (2.55,0.35);
+
+% row helper: #1 y, #2 label, #3 formula, then three page styles and edge styles drawn by hand
+
+% (a) HS
+\draw[edge] (2.55,4.45) -- (3.15,4.45);
+\node[inH] (a1) at (3.55,4.45) {};
+\node[inH] (a2) at (4.30,4.45) {};
+\node[inH] (a3) at (5.05,4.45) {};
+\draw[edge] (a1) -- (a2) -- (a3);
+\node[lab] at (5.70,4.55) {(a)\ $\mathrm{HS}$};
+\node[meta] at (5.70,4.22) {$m_i{=}\ell_i$,\ \ $\Work_i{=}\Xfer_i{=}0$};
+
+% (b) HP
+\draw[edge] (2.55,3.40) -- (3.15,3.40);
+\node[inH] (b1) at (3.55,3.40) {};
+\node[pref] (b2) at (4.30,3.40) {};
+\node[pref] (b3) at (5.05,3.40) {};
+\draw[edge] (b1) -- (b2);
+\draw[edge] (b2) -- (b3);
+\coordinate (kb) at ($(b1.east)!0.5!(b2.west)$);
+\draw[cut] ($(kb)+(0,-0.28)$) -- ($(kb)+(0,0.28)$);
+\node[lab] at (5.70,3.50) {(b)\ $\mathrm{HP}$};
+\node[meta] at (5.70,3.17) {$0{<}m_i{<}\ell_i$,\ \ $\Work_i{=}\ell_i{-}m_i$};
+
+% (c) EA
+\draw[edge] (2.55,2.35) -- (3.15,2.35);
+\node[pref] (c1) at (3.55,2.35) {};
+\node[hold] (c2) at (4.30,2.35) {};
+\node[hold] (c3) at (5.05,2.35) {};
+\draw[dashE] (c1) -- (c2) -- (c3);
+\coordinate (kc) at ($(c1.east)!0.5!(c2.west)$);
+\draw[cut] ($(kc)+(0,-0.28)$) -- ($(kc)+(0,0.28)$);
+\node[lab] at (5.70,2.45) {(c)\ $\mathrm{EA}$};
+\node[meta] at (5.70,2.12) {$F_i{=}1$,\ \ $\Work_i{=}\lceil\alpha\ell_i\rceil$,\ \ $\Xfer_i{=}0$};
+
+% (d) PF
+\draw[edge] (2.55,1.30) -- (3.15,1.30);
+\node[pref] (d1) at (3.55,1.30) {};
+\node[pref] (d2) at (4.30,1.30) {};
+\node[pref] (d3) at (5.05,1.30) {};
+\draw[edge] (d1) -- (d2) -- (d3);
+\node[lab] at (5.70,1.40) {(d)\ $\mathrm{PF}$};
+\node[meta] at (5.70,1.07) {$m_i{=}0,\ i{\notin}\Lambda,\ \neg F_i$,\ \ $\Work_i{=}\ell_i$};
+
+% (e) DS
+\draw[dashE] (2.55,0.35) -- (3.15,0.35);
+\node[hold] (e1) at (3.55,0.35) {};
+\node[hold] (e2) at (4.30,0.35) {};
+\node[hold] (e3) at (5.05,0.35) {};
+\draw[dashE] (e1) -- (e2) -- (e3);
+\node[font=\scriptsize\sffamily\bfseries, text=fsred, anchor=west] at (5.50,0.35) {$\times$};
+\node[lab] at (5.85,0.48) {(e)\ $\mathrm{DS}$};
+\node[meta] at (5.85,0.15) {$i{\in}\Lambda$,\ \ $\Work_i{=}\Xfer_i{=}0$};
+\end{tikzpicture}

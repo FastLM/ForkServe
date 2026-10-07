@@ -1,0 +1,57 @@
+\section{Introduction}
+\label{sec:intro}
+
+Large language models improve on hard problems when inference is allowed to search: chain-of-thought writes the intermediate steps, and tree search, self-consistency, and parallel decoding expand several of those steps from one prefix~\cite{cot,tot,selfconsistency,esc}.
+The accuracy gain is bought with tokens.
+On GSM8K and MATH, and in agent programs that interleave model calls with tools, most of the expanded branches are not the continuation that is kept~\cite{gsm8k,math,react,sweagent}.
+Recent path pruners attack that waste by dropping a branch once a window agrees, a partial reward falls below a quantile, or a learned token marks the prefix as futile~\cite{esc,specrej,dpts,equivpruner,stoploss}.
+Those tests read text the model has already produced.
+On a serving stack the prefill, and under disaggregation the KV transfer, have already been paid.
+
+The serving unit is therefore a \emph{branching execution}: one trunk of length $L$, $k$ residuals $\ell_i$, and one committed spine.
+Three families of systems apply to that execution, and each incurs branch cost at a fixed stage (\S\ref{sec:problem}).
+Automatic prefix caching (APC)~\cite{vllm} and RadixAttention~\cite{sglang} reuse a trunk after a full block has been published, so a same-batch fan-out still materializes $k$ copies of $L$.
+Prefill--decode disaggregation~\cite{distserve,splitwise} isolates \ttft{} from inter-token latency and then transfers every page the prefiller computed, aborted residuals included.
+Decode-time pruning scores a child from tokens that are already resident: ESC~\cite{esc} waits for an agreeing window, Speculative Rejection~\cite{specrej} waits for a partial-reward horizon, and DPTS~\cite{dpts} waits for a mini-step.
+In each case the residual has already been prefilled.
+Program-, session-, and workflow-level schedulers~\cite{autellix,thunderagent,continuum,mori,ayo,parrot,pythia} raise the scheduling unit above the request and still issue the next call as a unique continuation.
+Once KV retention has removed trunk recompute~\cite{continuum,mori}, the remaining \ttft{} term is residual-suffix prefill of children the harness can name before the observation returns.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_pd}}
+\caption{\textbf{\sys{} on a prefill--decode cut} (\S\ref{sec:app}).
+(a)~Stock disaggregation prefills every residual, including a copy of the trunk, and the connector carries $kL+\sum_i\ell_i$.
+Decode-time pruning runs only after those pages arrive.
+(b)~The two pools stay separate.
+Admission runs before the prefill kernels: a repeated loop never enters a GPU, a full-page hit moves nothing, and the connector carries the miss tail of $\Keep$.
+The trunk is one alias, so $L$ does not cross.
+Decode extends a $t_0$ probe only when the prefix meets $\tau_{\mathrm{dec}}$; abort leaves the spine.}
+\label{fig:system}
+\end{figure*}
+
+\paragraph{This work.}
+\sys is one admission rule on a shared trunk (\Cref{fig:system}, \S\ref{sec:app}).
+For residual $\rho_i$, $m_i$ is the longest page-aligned prefix already in the radix index.
+That length fixes both the prefill $\Work_i$ and the transfer $\Xfer_i$: a full hit moves nothing, a partial hit moves the miss, a repeated loop ($i{\in}\Lambda$) is withheld, and every other miss is prefilled.
+A score below the decode threshold extends past $t_0$ tokens only if the probe meets the threshold.
+The two cutoffs are not the same number.
+The prefill threshold $\tau_{\mathrm{pre}}{=}0.15$ reads the residual and drops a loop ($0.02$) while still starting illegal text ($0.22$); the decode threshold $0.45$ reads the generated prefix, where text that is still illegal scores $0.16$ and a finished answer marker scores $0.92$ (\S\ref{sec:split}).
+Index $0$ stays in $\Keep$, so the connector carries the miss tail of the retained set rather than the $k$-way trunk~\cite{distserve,splitwise}.
+The trunk is aliased at \texttt{fork} (\S\ref{sec:state}), which is why $L$ is absent from $\Work_i$ and from $\Xfer_i$; abort leaves $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+Decode slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$, and any further prefill uses the budget left after committed decode (\S\ref{sec:schedule}).
+\eqref{eq:lcp} binds the observed prompt; speculative tokens stay out of the sampler.
+Where a table separates the alias from the gate, FS is the alias and \plus{} is the same system with the admission rule enabled.
+
+\S\ref{sec:eval} measures that rule.
+On Qwen3-8B GSM8K, $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC, Speculative Rejection, or DPTS admits $12$ of $16$ residuals, cuts computed prefill by $23\%$ ($5008$ to $3848$), keeps $16/16$ any-finished at $k{=}8$ and $k{=}16$, and reduces ESC time from $17.05$\,s to $14.14$\,s; $\tau_{\mathrm{pre}}{=}0.45$ is faster at $k{=}16$ ($10.93$\,s, still $16/16$) and loses two problems at smaller fan-out (\Cref{tab:prefill-bar,tab:plugin,tab:ablate}).
+On Qwen3-8B MATH-500, withholding every score below $\tau$ drops any-finished accuracy from $20/32$ to $13/32$ at $k{=}16$; a $128$-token probe restores $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s (\Cref{tab:grow}).
+Across three turns, $48$ of $192$ residuals are prefilled and expand time is $7.9$--$10.6\times$ below APC (\Cref{tab:mt,tab:mt-split}).
+The Qwen3-14B spine matches APC accuracy at $0.72\times$ median peak KV, and six model families stay in $0.72$--$0.75\times$ ($n{=}40$).
+
+Our contributions are:
+\begin{itemize}
+\item We treat one fan-out as a trunk, $k$ residuals, and a spine, and show that prefix caching, prefill--decode disaggregation, and decode-time pruning each pay for non-winners before a residual can be rejected (\S\ref{sec:problem}).
+\item We introduce \sys, which aliases the trunk, assigns each residual one action that sets both the prefill and the connector payload, and uses separate prefill and decode thresholds so that only a repeated loop is dropped before the kernel (\S\ref{sec:design}).
+\item On Qwen3-8B and Qwen3-14B we show that the same gate, placed in front of ESC, Speculative Rejection, and DPTS, cuts computed prefill by $23\%$ at matched any-finished accuracy, and that a short probe recovers the accuracy a blanket prefill drop loses (\S\ref{sec:eval}).
+\end{itemize}

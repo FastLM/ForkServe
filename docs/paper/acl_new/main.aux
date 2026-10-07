@@ -1,0 +1,461 @@
+\relax 
+\bibstyle{acl_natbib}
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{cot,tot,selfconsistency,esc}
+\citation{gsm8k,math,react,sweagent}
+\citation{esc,specrej,dpts,equivpruner,stoploss}
+\citation{vllm}
+\citation{sglang}
+\citation{distserve,splitwise}
+\citation{esc}
+\citation{specrej}
+\citation{dpts}
+\citation{autellix,thunderagent,continuum,mori,ayo,parrot,pythia}
+\citation{continuum,mori}
+\citation{distserve,splitwise}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\newlabel{sec:intro@cref}{{[section][1][]1}{[1][1][]1}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{This work.}{1}{section*.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {\textsf  {PD-Prune}\xspace  {} on a prefill--decode cut} (\S  \ref {sec:app}). (a)~Stock disaggregation prefills every residual, including a copy of the trunk, and the connector carries $kL+\DOTSB \sum@ \slimits@ _i\ell _i$. Decode-time pruning runs only after those pages arrive. (b)~The two pools stay separate. Admission runs before the prefill kernels: a repeated loop never enters a GPU, a full-page hit moves nothing, and the connector carries the miss tail of $\mathcal  {K}$. The trunk is one alias, so $L$ does not cross. Decode extends a $t_0$ probe only when the prefix meets $\tau _{\mathrm  {dec}}$; abort leaves the spine.}}{2}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:system}{{1}{2}{\textbf {\sys {} on a prefill--decode cut} (\S \ref {sec:app}). (a)~Stock disaggregation prefills every residual, including a copy of the trunk, and the connector carries $kL+\sum _i\ell _i$. Decode-time pruning runs only after those pages arrive. (b)~The two pools stay separate. Admission runs before the prefill kernels: a repeated loop never enters a GPU, a full-page hit moves nothing, and the connector carries the miss tail of $\Keep $. The trunk is one alias, so $L$ does not cross. Decode extends a $t_0$ probe only when the prefix meets $\tau _{\mathrm {dec}}$; abort leaves the spine}{figure.caption.1}{}}
+\newlabel{fig:system@cref}{{[figure][1][]1}{[1][1][]2}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Formulation}{2}{section.2}\protected@file@percent }
+\newlabel{sec:problem}{{2}{2}{Formulation}{section.2}{}}
+\newlabel{sec:problem@cref}{{[section][2][]2}{[1][2][]2}{}{}{}}
+\newlabel{def:step}{{1}{2}{Branching step}{definition.1}{}}
+\newlabel{def:step@cref}{{[definition][1][]1}{[1][2][]2}{}{}{}}
+\citation{vllm,distserve,splitwise}
+\citation{vllm}
+\newlabel{eq:mem}{{1}{3}{Formulation}{equation.1}{}}
+\newlabel{eq:mem@cref}{{[equation][1][]1}{[1][3][]3}{}{}{}}
+\newlabel{eq:xfer-stock}{{2}{3}{Formulation}{equation.2}{}}
+\newlabel{eq:xfer-stock@cref}{{[equation][2][]2}{[1][3][]3}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Where the Fan-out Is Paid}{3}{subsection.2.1}\protected@file@percent }
+\newlabel{sec:traditional}{{2.1}{3}{Where the Fan-out Is Paid}{subsection.2.1}{}}
+\newlabel{sec:traditional@cref}{{[subsection][1][2]2.1}{[1][3][]3}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Method}{3}{section.3}\protected@file@percent }
+\newlabel{sec:design}{{3}{3}{Method}{section.3}{}}
+\newlabel{sec:design@cref}{{[section][3][]3}{[1][3][]3}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}One Action per Residual}{3}{subsection.3.1}\protected@file@percent }
+\newlabel{sec:app}{{3.1}{3}{One Action per Residual}{subsection.3.1}{}}
+\newlabel{sec:app@cref}{{[subsection][1][3]3.1}{[1][3][]3}{}{}{}}
+\newlabel{eq:mi}{{3}{3}{One Action per Residual}{equation.3}{}}
+\newlabel{eq:mi@cref}{{[equation][3][]3}{[1][3][]3}{}{}{}}
+\newlabel{def:action}{{2}{3}{Residual action}{definition.2}{}}
+\newlabel{def:action@cref}{{[definition][2][]2}{[1][3][]3}{}{}{}}
+\newlabel{eq:action}{{4}{3}{Residual action}{equation.4}{}}
+\newlabel{eq:action@cref}{{[equation][4][]4}{[1][3][]3}{}{}{}}
+\newlabel{eq:work}{{5}{3}{One Action per Residual}{equation.5}{}}
+\newlabel{eq:work@cref}{{[equation][5][]5}{[1][3][]3}{}{}{}}
+\newlabel{eq:xfer}{{6}{3}{One Action per Residual}{equation.6}{}}
+\newlabel{eq:xfer@cref}{{[equation][6][]6}{[1][3][]3}{}{}{}}
+\newlabel{eq:agg}{{7}{3}{One Action per Residual}{equation.7}{}}
+\newlabel{eq:agg@cref}{{[equation][7][]7}{[1][3][]3}{}{}{}}
+\newlabel{eq:lcp}{{8}{3}{One Action per Residual}{equation.8}{}}
+\newlabel{eq:lcp@cref}{{[equation][8][]8}{[1][3][]3}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Where each method pays for one fan-out of $k$ residuals on a trunk of length $L$. ``First expand'' is the GPU prefill issued before any child has published a block. ``Rejection'' is the earliest point at which a non-winner can leave. The \textsf  {PD-Prune}\xspace  row is the action of \S  \ref {sec:app}.}}{4}{table.caption.3}\protected@file@percent }
+\newlabel{tab:trad}{{1}{4}{Where each method pays for one fan-out of $k$ residuals on a trunk of length $L$. ``First expand'' is the GPU prefill issued before any child has published a block. ``Rejection'' is the earliest point at which a non-winner can leave. The \sys row is the action of \S \ref {sec:app}}{table.caption.3}{}}
+\newlabel{tab:trad@cref}{{[table][1][]1}{[1][3][]4}{}{}{}}
+\newlabel{lem:dom}{{1}{4}{First-fan-out dominance}{theorem.1}{}}
+\newlabel{lem:dom@cref}{{[theorem][1][]1}{[1][3][]4}{}{}{}}
+\newlabel{eq:tfan}{{9}{4}{One Action per Residual}{equation.9}{}}
+\newlabel{eq:tfan@cref}{{[equation][9][]9}{[1][4][]4}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Separate Prefill and Decode Thresholds}{4}{subsection.3.2}\protected@file@percent }
+\newlabel{sec:split}{{3.2}{4}{Separate Prefill and Decode Thresholds}{subsection.3.2}{}}
+\newlabel{sec:split@cref}{{[subsection][2][3]3.2}{[1][4][]4}{}{}{}}
+\newlabel{eq:drej}{{10}{4}{Separate Prefill and Decode Thresholds}{equation.10}{}}
+\newlabel{eq:drej@cref}{{[equation][10][]10}{[1][4][]4}{}{}{}}
+\newlabel{eq:dec}{{11}{4}{Separate Prefill and Decode Thresholds}{equation.11}{}}
+\newlabel{eq:dec@cref}{{[equation][11][]11}{[1][4][]4}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Draft scores on the two strings the thresholds read. \eqref  {eq:sep-pre} holds at $\tau _{\mathrm  {pre}}{=}0.15$ because a loop is $0.02$ and illegal text is $0.22$. \eqref  {eq:sep-dec} holds at $\tau _{\mathrm  {dec}}{=}0.45$ because a still-illegal prefix is $0.16$ and an answer marker is $0.92$.}}{4}{table.caption.4}\protected@file@percent }
+\newlabel{tab:scores}{{2}{4}{Draft scores on the two strings the thresholds read. \eqref {eq:sep-pre} holds at $\tau _{\mathrm {pre}}{=}0.15$ because a loop is $0.02$ and illegal text is $0.22$. \eqref {eq:sep-dec} holds at $\tau _{\mathrm {dec}}{=}0.45$ because a still-illegal prefix is $0.16$ and an answer marker is $0.92$}{table.caption.4}{}}
+\newlabel{tab:scores@cref}{{[table][2][]2}{[1][4][]4}{}{}{}}
+\newlabel{prop:sep}{{2}{4}{Threshold separation}{theorem.2}{}}
+\newlabel{prop:sep@cref}{{[theorem][2][]2}{[1][4][]4}{}{}{}}
+\newlabel{eq:sep-pre}{{12}{4}{Threshold separation}{equation.12}{}}
+\newlabel{eq:sep-pre@cref}{{[equation][12][]12}{[1][4][]4}{}{}{}}
+\newlabel{eq:sep-dec}{{13}{4}{Threshold separation}{equation.13}{}}
+\newlabel{eq:sep-dec@cref}{{[equation][13][]13}{[1][4][]4}{}{}{}}
+\newlabel{prop:host}{{3}{4}{Host-invariant prefill}{theorem.3}{}}
+\newlabel{prop:host@cref}{{[theorem][3][]3}{[1][4][]4}{}{}{}}
+\newlabel{eq:host}{{14}{4}{Host-invariant prefill}{equation.14}{}}
+\newlabel{eq:host@cref}{{[equation][14][]14}{[1][4][]4}{}{}{}}
+\citation{stoploss}
+\citation{equivpruner}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces \textsf  {PD-Prune}\xspace  admission. $H$ stores full pages only. $\Lambda $ is the repeated-loop set. $0\in \mathcal  {K}$ always. \eqref  {eq:dec} sets $d_i$; \eqref  {eq:drej} would have set $d_i{=}0$ for every $s_i{<}\tau _{\mathrm  {dec}}$.}}{5}{algorithm.1}\protected@file@percent }
+\newlabel{alg:app}{{1}{5}{\sys admission. $H$ stores full pages only. $\Lambda $ is the repeated-loop set. $0\in \Keep $ always. \eqref {eq:dec} sets $d_i$; \eqref {eq:drej} would have set $d_i{=}0$ for every $s_i{<}\tau _{\mathrm {dec}}$}{algorithm.1}{}}
+\newlabel{alg:app@cref}{{[algorithm][1][]1}{[1][5][]5}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Reading one cold fan-out.}{5}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Three quantities inside one latency.}{5}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{The trunk is an alias.}{5}{section*.7}\protected@file@percent }
+\newlabel{eq:slots-main}{{15}{5}{The trunk is an alias}{equation.15}{}}
+\newlabel{eq:slots-main@cref}{{[equation][15][]15}{[1][5][]5}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Experiments}{6}{section.4}\protected@file@percent }
+\newlabel{sec:eval}{{4}{6}{Experiments}{section.4}{}}
+\newlabel{sec:eval@cref}{{[section][4][]4}{[1][6][]6}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{6}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Prefill is host-invariant.}{6}{section*.11}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Any-finished and the committed spine.}{6}{section*.13}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{The probe is the decode threshold.}{6}{section*.15}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{The spine is the live set.}{6}{section*.18}\protected@file@percent }
+\citation{cot,tot,selfconsistency,mctsllm}
+\citation{equivpruner}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Context tree.} (a)~Each edge is one \texttt  {fork}: the child aliases the parent and allocates only a residual ($+$r). The live paths share the trunk; A1b1x and A3a2x also share $+$r$_A$. Fork C dies at depth 2, so abort cascades to C and stops at the root, which still has A and B. (b)~A shared layer is one physical page set with refcount greater than one. Aborting a leaf frees only that residual.}}{7}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:tree}{{2}{7}{\textbf {Context tree.} (a)~Each edge is one \texttt {fork}: the child aliases the parent and allocates only a residual ($+$r). The live paths share the trunk; A1b1x and A3a2x also share $+$r$_A$. Fork C dies at depth 2, so abort cascades to C and stops at the root, which still has A and B. (b)~A shared layer is one physical page set with refcount greater than one. Aborting a leaf frees only that residual}{figure.caption.8}{}}
+\newlabel{fig:tree@cref}{{[figure][2][]2}{[1][5][]7}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Main results. The GSM8K block is Qwen3-8B, $k{=}16$, $D{=}512$. One $\tau _{\mathrm  {pre}}$ cuts prefill for every host (\Cref  {prop:host}); any-finished stays $16/16$. The MATH-500 block is the same model, $n{=}32$, $D{=}1024$, $\tau _{\mathrm  {dec}}{=}0.45$. Dropping every $s{<}\tau _{\mathrm  {dec}}$ before the kernel is \eqref  {eq:drej}. The probe is \eqref  {eq:dec} at $t_0{=}128$. The last row is Qwen3-14B, $n{=}1319$, median peak KV.}}{7}{table.caption.10}\protected@file@percent }
+\newlabel{tab:main}{{3}{7}{Main results. The GSM8K block is Qwen3-8B, $k{=}16$, $D{=}512$. One $\tau _{\mathrm {pre}}$ cuts prefill for every host (\Cref {prop:host}); any-finished stays $16/16$. The MATH-500 block is the same model, $n{=}32$, $D{=}1024$, $\tau _{\mathrm {dec}}{=}0.45$. Dropping every $s{<}\tau _{\mathrm {dec}}$ before the kernel is \eqref {eq:drej}. The probe is \eqref {eq:dec} at $t_0{=}128$. The last row is Qwen3-14B, $n{=}1319$, median peak KV}{table.caption.10}{}}
+\newlabel{tab:main@cref}{{[table][3][]3}{[1][6][]7}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only. Any-finished is exact match on a full-budget branch. $\tau _{\mathrm  {pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text. Time is trunk warm plus fan-out, in seconds.}}{7}{table.caption.14}\protected@file@percent }
+\newlabel{tab:prefill-bar}{{4}{7}{GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only. Any-finished is exact match on a full-budget branch. $\tau _{\mathrm {pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text. Time is trunk warm plus fan-out, in seconds}{table.caption.14}{}}
+\newlabel{tab:prefill-bar@cref}{{[table][4][]4}{[1][6][]7}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$. Each cell is any-finished and seconds. ``Drop $s{<}\tau $'' is \eqref  {eq:drej}. ``Grow $t_0$'' is \eqref  {eq:dec}: loops stay at $d_i{=}0$; every other low score is probed and continues to $D$ only if $s'_i\ge 0.45$.}}{7}{table.caption.17}\protected@file@percent }
+\newlabel{tab:grow}{{5}{7}{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$. Each cell is any-finished and seconds. ``Drop $s{<}\tau $'' is \eqref {eq:drej}. ``Grow $t_0$'' is \eqref {eq:dec}: loops stay at $d_i{=}0$; every other low score is probed and continues to $D$ only if $s'_i\ge 0.45$}{table.caption.17}{}}
+\newlabel{tab:grow@cref}{{[table][5][]5}{[1][6][]7}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Related Work}{7}{section.5}\protected@file@percent }
+\newlabel{sec:related}{{5}{7}{Related Work}{section.5}{}}
+\newlabel{sec:related@cref}{{[section][5][]5}{[1][7][]7}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Search.}{7}{section*.22}\protected@file@percent }
+\citation{esc,specrej,dpts}
+\citation{stoploss}
+\citation{orca,vllm,sglang,sarathi}
+\citation{distserve,splitwise}
+\citation{autellix,continuum,mori,forkkv}
+\citation{cacheprune}
+\citation{speculative,medusa}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Prefill threshold on GSM8K} (\Cref  {tab:prefill-bar,tab:plugin}). (a)~Wall-clock under ESC. Labels are any-finished. $\tau _{\mathrm  {pre}}{=}0.45$ is $14/16$ at $k{=}4$ and $k{=}8$, and $16/16$ at $k{=}16$. (b)~Computed prefill, $-23\%$ at $0.15$ and $-45\%$ at $0.45$. (c)~The same $0.15$ threshold in front of each host at $k{=}16$. Every row stays $16/16$.}}{8}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:eval-admit}{{3}{8}{\textbf {Prefill threshold on GSM8K} (\Cref {tab:prefill-bar,tab:plugin}). (a)~Wall-clock under ESC. Labels are any-finished. $\tau _{\mathrm {pre}}{=}0.45$ is $14/16$ at $k{=}4$ and $k{=}8$, and $16/16$ at $k{=}16$. (b)~Computed prefill, $-23\%$ at $0.15$ and $-45\%$ at $0.45$. (c)~The same $0.15$ threshold in front of each host at $k{=}16$. Every row stays $16/16$}{figure.caption.12}{}}
+\newlabel{fig:eval-admit@cref}{{[figure][3][]3}{[1][6][]8}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Probe admission on MATH-500} (\Cref  {tab:grow}). Dropping every $s{<}\tau $ is the fast, low-count curve. Grow $t_0{=}128$ returns to $20/32$ at $k{=}16$ and cuts $104.1$\,s to $72.2$\,s. At $k{=}8$, grow $t_0{=}64$ is $16/32$ in $42.0$\,s, above the full fan-out.}}{8}{figure.caption.16}\protected@file@percent }
+\newlabel{fig:eval-grow}{{4}{8}{\textbf {Probe admission on MATH-500} (\Cref {tab:grow}). Dropping every $s{<}\tau $ is the fast, low-count curve. Grow $t_0{=}128$ returns to $20/32$ at $k{=}16$ and cuts $104.1$\,s to $72.2$\,s. At $k{=}8$, grow $t_0{=}64$ is $16/32$ in $42.0$\,s, above the full fan-out}{figure.caption.16}{}}
+\newlabel{fig:eval-grow@cref}{{[figure][4][]4}{[1][6][]8}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Three-turn Tree-of-Thoughts, $n{=}16$, $k{=}4$, $\mathrm  {tp}{=}2$. End-to-end time is seconds per problem. Peak KV is tokens on the live spine. FS is the alias; FS+ is \textsf  {PD-Prune+}.}}{8}{table.caption.20}\protected@file@percent }
+\newlabel{tab:mt}{{6}{8}{Three-turn Tree-of-Thoughts, $n{=}16$, $k{=}4$, $\mathrm {tp}{=}2$. End-to-end time is seconds per problem. Peak KV is tokens on the live spine. FS is the alias; FS+ is \plus }{table.caption.20}{}}
+\newlabel{tab:mt@cref}{{[table][6][]6}{[1][7][]8}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Path pruning.}{8}{section*.23}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Serving and cache edits.}{8}{section*.24}\protected@file@percent }
+\bibcite{infercept}{{1}{}{{}}{{}}}
+\bibcite{sarathi}{{2}{}{{}}{{}}}
+\bibcite{sarathisplit}{{3}{}{{}}{{}}}
+\bibcite{claude_code}{{4}{}{{}}{{}}}
+\bibcite{spork}{{5}{}{{}}{{}}}
+\bibcite{sutradhara}{{6}{}{{}}{{}}}
+\bibcite{medusa}{{7}{}{{}}{{}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textbf  {Peak KV on six model families} ($n{=}40$, $\mathrm  {tp}{=}2$). Bars are recompute, APC, \textsf  {PD-Prune}\xspace  , and \textsf  {PD-Prune+}. \textsf  {PD-Prune}\xspace  and \textsf  {PD-Prune+}{} share the spine. The annotated ratio is $M_{\mathrm  {spine}}/M_{\mathrm  {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24.}}{9}{figure.caption.19}\protected@file@percent }
+\newlabel{fig:eval-multi}{{5}{9}{\textbf {Peak KV on six model families} ($n{=}40$, $\mathrm {tp}{=}2$). Bars are recompute, APC, \sys , and \plus . \sys and \plus {} share the spine. The annotated ratio is $M_{\mathrm {spine}}/M_{\mathrm {APC}}$: $0.72$--$0.75\times $ on GSM8K and $0.57$--$0.61\times $ on Game24}{figure.caption.19}{}}
+\newlabel{fig:eval-multi@cref}{{[figure][5][]5}{[1][7][]9}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{9}{section.6}\protected@file@percent }
+\newlabel{sec:conclusion}{{6}{9}{Conclusion}{section.6}{}}
+\newlabel{sec:conclusion@cref}{{[section][6][]6}{[1][9][]9}{}{}{}}
+\bibcite{murakkab}{{8}{}{{}}{{}}}
+\bibcite{idlespec}{{9}{}{{}}{{}}}
+\bibcite{contextrot}{{10}{}{{}}{{}}}
+\bibcite{conserve}{{11}{}{{}}{{}}}
+\bibcite{pie}{{12}{}{{}}{{}}}
+\bibcite{saga}{{13}{}{{}}{{}}}
+\bibcite{metagpt}{{14}{}{{}}{{}}}
+\bibcite{swebench}{{15}{}{{}}{{}}}
+\bibcite{thunderagent}{{16}{}{{}}{{}}}
+\bibcite{vllm}{{17}{}{{}}{{}}}
+\bibcite{speculative}{{18}{}{{}}{{}}}
+\bibcite{dpts}{{19}{}{{}}{{}}}
+\bibcite{continuum}{{20}{}{{}}{{}}}
+\bibcite{esc}{{21}{}{{}}{{}}}
+\bibcite{eagledraft}{{22}{}{{}}{{}}}
+\bibcite{parrot}{{23}{}{{}}{{}}}
+\bibcite{hermes}{{24}{}{{}}{{}}}
+\bibcite{autellix}{{25}{}{{}}{{}}}
+\bibcite{hive}{{26}{}{{}}{{}}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces \textbf  {Three-turn Tree-of-Thoughts} ($n{=}16$, $\mathrm  {tp}{=}2$). (a)~End-to-end seconds per problem. (b)~Peak KV on the live spine. \textsf  {PD-Prune+}{} prefills one of four residuals.}}{10}{figure.caption.21}\protected@file@percent }
+\newlabel{fig:eval-mt}{{6}{10}{\textbf {Three-turn Tree-of-Thoughts} ($n{=}16$, $\mathrm {tp}{=}2$). (a)~End-to-end seconds per problem. (b)~Peak KV on the live spine. \plus {} prefills one of four residuals}{figure.caption.21}{}}
+\newlabel{fig:eval-mt@cref}{{[figure][6][]6}{[1][7][]10}{}{}{}}
+\bibcite{gaia}{{27}{}{{}}{{}}}
+\bibcite{astraea}{{28}{}{{}}{{}}}
+\bibcite{memgpt}{{29}{}{{}}{{}}}
+\bibcite{smoothagent}{{30}{}{{}}{{}}}
+\bibcite{specrej}{{31}{}{{}}{{}}}
+\bibcite{splitwise}{{32}{}{{}}{{}}}
+\bibcite{gorilla}{{33}{}{{}}{{}}}
+\bibcite{osfork}{{34}{}{{}}{{}}}
+\bibcite{toolformer}{{35}{}{{}}{{}}}
+\bibcite{ayo}{{36}{}{{}}{{}}}
+\bibcite{tanenbaumos}{{37}{}{{}}{{}}}
+\bibcite{forkkv}{{38}{}{{}}{{}}}
+\bibcite{openhands}{{39}{}{{}}{{}}}
+\bibcite{selfconsistency}{{40}{}{{}}{{}}}
+\bibcite{augserve}{{41}{}{{}}{{}}}
+\bibcite{autogen}{{42}{}{{}}{{}}}
+\bibcite{mori}{{43}{}{{}}{{}}}
+\bibcite{sweagent}{{44}{}{{}}{{}}}
+\bibcite{tot}{{45}{}{{}}{{}}}
+\bibcite{react}{{46}{}{{}}{{}}}
+\bibcite{orca}{{47}{}{{}}{{}}}
+\bibcite{pythia}{{48}{}{{}}{{}}}
+\bibcite{kairospower}{{49}{}{{}}{{}}}
+\bibcite{compoundai}{{50}{}{{}}{{}}}
+\bibcite{mctsllm}{{51}{}{{}}{{}}}
+\bibcite{jitserve}{{52}{}{{}}{{}}}
+\bibcite{sglang}{{53}{}{{}}{{}}}
+\bibcite{distserve}{{54}{}{{}}{{}}}
+\bibcite{webarena}{{55}{}{{}}{{}}}
+\bibcite{cot}{{56}{}{{}}{{}}}
+\bibcite{gsm8k}{{57}{}{{}}{{}}}
+\bibcite{math}{{58}{}{{}}{{}}}
+\bibcite{math500}{{59}{}{{}}{{}}}
+\bibcite{equivpruner}{{60}{}{{}}{{}}}
+\bibcite{stoploss}{{61}{}{{}}{{}}}
+\bibcite{cacheprune}{{62}{}{{}}{{}}}
+\citation{tot,selfconsistency,react}
+\citation{cot}
+\citation{tot,selfconsistency,mctsllm}
+\citation{tot}
+\citation{react,sweagent,openhands}
+\citation{gsm8k,math,math500}
+\citation{equivpruner,stoploss}
+\citation{esc,selfconsistency}
+\citation{specrej}
+\citation{dpts}
+\citation{stoploss}
+\citation{equivpruner}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Background}{12}{appendix.A}\protected@file@percent }
+\newlabel{sec:bg-full}{{A}{12}{Background}{appendix.A}{}}
+\newlabel{sec:bg-full@cref}{{[section][1][]A}{[1][12][]12}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Parallel Reasoning as a Fan-out}{12}{subsection.A.1}\protected@file@percent }
+\newlabel{sec:bg-search}{{A.1}{12}{Parallel Reasoning as a Fan-out}{subsection.A.1}{}}
+\newlabel{sec:bg-search@cref}{{[subsection][1][1]A.1}{[1][12][]12}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Decode-Time Path Pruning}{12}{subsection.A.2}\protected@file@percent }
+\newlabel{sec:bg-prune}{{A.2}{12}{Decode-Time Path Pruning}{subsection.A.2}{}}
+\newlabel{sec:bg-prune@cref}{{[subsection][2][1]A.2}{[1][12][]12}{}{}{}}
+\citation{vllm,sglang}
+\citation{distserve,splitwise}
+\citation{autellix,thunderagent,continuum,mori}
+\citation{orca,distserve,splitwise}
+\citation{vllm}
+\citation{sglang}
+\citation{sarathi}
+\citation{continuum,mori}
+\citation{vllm}
+\citation{sglang}
+\citation{esc}
+\citation{specrej}
+\citation{dpts}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Prefix Caching and Disaggregated Transfer}{13}{subsection.A.3}\protected@file@percent }
+\newlabel{sec:bg-pd}{{A.3}{13}{Prefix Caching and Disaggregated Transfer}{subsection.A.3}{}}
+\newlabel{sec:bg-pd@cref}{{[subsection][3][1]A.3}{[1][13][]13}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}Prefill, Decode, and Idle}{13}{subsection.A.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.5}Traditional Methods on a Fan-out}{13}{subsection.A.5}\protected@file@percent }
+\newlabel{sec:traditional-app}{{A.5}{13}{Traditional Methods on a Fan-out}{subsection.A.5}{}}
+\newlabel{sec:traditional-app@cref}{{[subsection][5][1]A.5}{[1][13][]13}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{First-expand cost.}{13}{section*.26}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.6}Fan-out Model}{13}{subsection.A.6}\protected@file@percent }
+\newlabel{sec:model}{{A.6}{13}{Fan-out Model}{subsection.A.6}{}}
+\newlabel{sec:model@cref}{{[subsection][6][1]A.6}{[1][13][]13}{}{}{}}
+\citation{continuum,mori}
+\citation{speculative,medusa}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Notation for Definition~\ref {def:step} and for \eqref  {eq:action}--\eqref  {eq:xfer}.}}{14}{table.caption.27}\protected@file@percent }
+\newlabel{tab:notation}{{7}{14}{Notation for Definition~\ref {def:step} and for \eqref {eq:action}--\eqref {eq:xfer}}{table.caption.27}{}}
+\newlabel{tab:notation@cref}{{[table][7][]7}{[1][14][]14}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {B}System Detail}{14}{appendix.B}\protected@file@percent }
+\newlabel{sec:design-full}{{B}{14}{System Detail}{appendix.B}{}}
+\newlabel{sec:design-full@cref}{{[section][2][]B}{[1][14][]14}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.1}API}{14}{subsection.B.1}\protected@file@percent }
+\newlabel{sec:overview}{{B.1}{14}{API}{subsection.B.1}{}}
+\newlabel{sec:overview@cref}{{[subsection][1][2]B.1}{[1][14][]14}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.2}Copy-on-Write Context Tree}{14}{subsection.B.2}\protected@file@percent }
+\newlabel{sec:state}{{B.2}{14}{Copy-on-Write Context Tree}{subsection.B.2}{}}
+\newlabel{sec:state@cref}{{[subsection][2][2]B.2}{[1][14][]14}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.3}Admission and Commit}{14}{subsection.B.3}\protected@file@percent }
+\newlabel{sec:speculate}{{B.3}{14}{Admission and Commit}{subsection.B.3}{}}
+\newlabel{sec:speculate@cref}{{[subsection][3][2]B.3}{[1][14][]14}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{LCP commit.}{14}{section*.29}\protected@file@percent }
+\newlabel{eq:lcp-iv}{{16}{14}{LCP commit}{equation.16}{}}
+\newlabel{eq:lcp-iv@cref}{{[equation][16][]16}{[1][14][]14}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.4}Admission Rule}{14}{subsection.B.4}\protected@file@percent }
+\newlabel{sec:app-detail}{{B.4}{14}{Admission Rule}{subsection.B.4}{}}
+\newlabel{sec:app-detail@cref}{{[subsection][4][2]B.4}{[1][14][]14}{}{}{}}
+\citation{vllm}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces \textbf  {Context-tree page pool.} \texttt  {fork} aliases the trunk in $O(1)$ and allocates only $\rho $~\textcircled {1}--\textcircled {3}. LCP commit publishes $x_\star $ into $H$~\textcircled {4}\textcircled {6}. \texttt  {abort} returns residual frames only, so live occupancy is the spine $M_{\mathrm  {spine}}{=}b(L{+}\ell _\star )$~\textcircled {5}\textcircled {7}.}}{15}{figure.caption.28}\protected@file@percent }
+\newlabel{fig:pool}{{7}{15}{\textbf {Context-tree page pool.} \texttt {fork} aliases the trunk in $O(1)$ and allocates only $\rho $~\textcircled {1}--\textcircled {3}. LCP commit publishes $x_\star $ into $H$~\textcircled {4}\textcircled {6}. \texttt {abort} returns residual frames only, so live occupancy is the spine $M_{\mathrm {spine}}{=}b(L{+}\ell _\star )$~\textcircled {5}\textcircled {7}}{figure.caption.28}{}}
+\newlabel{fig:pool@cref}{{[figure][7][]7}{[1][14][]15}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Action.}{15}{section*.32}\protected@file@percent }
+\newlabel{eq:mi-iv}{{17}{15}{Action}{equation.17}{}}
+\newlabel{eq:mi-iv@cref}{{[equation][17][]17}{[1][15][]15}{}{}{}}
+\newlabel{eq:action-iv}{{18}{15}{Action}{equation.18}{}}
+\newlabel{eq:action-iv@cref}{{[equation][18][]18}{[1][15][]15}{}{}{}}
+\newlabel{eq:work-iv}{{19}{15}{Action}{equation.19}{}}
+\newlabel{eq:work-iv@cref}{{[equation][19][]19}{[1][15][]15}{}{}{}}
+\newlabel{eq:xfer-iv}{{20}{15}{Action}{equation.20}{}}
+\newlabel{eq:xfer-iv@cref}{{[equation][20][]20}{[1][15][]15}{}{}{}}
+\newlabel{eq:drej-iv}{{21}{15}{Action}{equation.21}{}}
+\newlabel{eq:drej-iv@cref}{{[equation][21][]21}{[1][15][]15}{}{}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Cold-index restriction of \Cref  {alg:app}: every $m_i{=}0$. Probe admission, replacing \eqref  {eq:drej}. $\Lambda $ is the repeated-loop set. $y_i$ is a probe of $t_0$ tokens and $s'_i$ is its draft score. Iverson brackets select the decode length. $\mathrm  {DS}$ applies only to $\Lambda $.}}{15}{algorithm.2}\protected@file@percent }
+\newlabel{alg:probe}{{2}{15}{Cold-index restriction of \Cref {alg:app}: every $m_i{=}0$. Probe admission, replacing \eqref {eq:drej}. $\Lambda $ is the repeated-loop set. $y_i$ is a probe of $t_0$ tokens and $s'_i$ is its draft score. Iverson brackets select the decode length. $\mathrm {DS}$ applies only to $\Lambda $}{algorithm.2}{}}
+\newlabel{alg:probe@cref}{{[algorithm][2][]2}{[1][15][]15}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{From the action to the wire.}{15}{section*.35}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces \textbf  {The admission rule and where it sits on the path.} (a)~$a_i$ is the first match of \eqref  {eq:action}. Only $W_i$ for $i{\in }\mathcal  {K}$ reaches \texttt  {insert}. (b)~APC and baseline disaggregation copy the trunk. The alias removes $L$ from $W$ and from $X$. The overlap row prefills the next miss during decode. The tool-interval row prefills a suffix with $p{=}1$ while $T_{\mathrm  {pre}}\le T_{\mathrm  {idle}}$.}}{16}{figure.caption.30}\protected@file@percent }
+\newlabel{fig:app}{{8}{16}{\textbf {The admission rule and where it sits on the path.} (a)~$a_i$ is the first match of \eqref {eq:action}. Only $\Work _i$ for $i{\in }\Keep $ reaches \texttt {insert}. (b)~APC and baseline disaggregation copy the trunk. The alias removes $L$ from $\Work $ and from $\Xfer $. The overlap row prefills the next miss during decode. The tool-interval row prefills a suffix with $p{=}1$ while $\Pref \le \Idle $}{figure.caption.30}{}}
+\newlabel{fig:app@cref}{{[figure][8][]8}{[1][15][]16}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Work, transfer, and memory spans (bottleneck in \textcolor {fsred}{red}). $W_{\mathrm  {pre}}$ is GPU prefill tokens; $X$ is connector tokens; $M$ is live KV after abort; $T_{\mathrm  {ab}}$ is abort cost in pages; replay is a later \texttt  {open} of the published winner. $\mathrm  {PAR}$ is the number of trunk copies touched on the first expand.}}{16}{table.caption.34}\protected@file@percent }
+\newlabel{tab:span}{{8}{16}{Work, transfer, and memory spans (bottleneck in \textcolor {fsred}{red}). $W_{\mathrm {pre}}$ is GPU prefill tokens; $X$ is connector tokens; $M$ is live KV after abort; $T_{\mathrm {ab}}$ is abort cost in pages; replay is a later \texttt {open} of the published winner. $\mathrm {PAR}$ is the number of trunk copies touched on the first expand}{table.caption.34}{}}
+\newlabel{tab:span@cref}{{[table][8][]8}{[1][15][]16}{}{}{}}
+\newlabel{eq:tfan-iv}{{22}{16}{From the action to the wire}{equation.22}{}}
+\newlabel{eq:tfan-iv@cref}{{[equation][22][]22}{[1][16][]16}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.5}Separate Prefill and Decode Thresholds}{16}{subsection.B.5}\protected@file@percent }
+\newlabel{sec:split-detail}{{B.5}{16}{Separate Prefill and Decode Thresholds}{subsection.B.5}{}}
+\newlabel{sec:split-detail@cref}{{[subsection][5][2]B.5}{[1][16][]16}{}{}{}}
+\citation{sarathi}
+\citation{jitserve}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces \textbf  {Control plane behind \Cref  {fig:system}.} (1)~$\sigma _u$ aliases one trunk; \texttt  {fork} is $O(1)$; \eqref  {eq:lcp} binds the winner. (2)~One action $a_i$ (\eqref  {eq:action}). A full-page hit issues no kernel; a partial hit prefills the miss; $i{\in }\Lambda $ is withheld. $X$ sums $W_i$ over $\mathcal  {K}$. (3)~After abort the live set is the spine.}}{17}{figure.caption.31}\protected@file@percent }
+\newlabel{fig:arch-detail}{{9}{17}{\textbf {Control plane behind \Cref {fig:system}.} (1)~$\sigma _u$ aliases one trunk; \texttt {fork} is $O(1)$; \eqref {eq:lcp} binds the winner. (2)~One action $a_i$ (\eqref {eq:action}). A full-page hit issues no kernel; a partial hit prefills the miss; $i{\in }\Lambda $ is withheld. $\Xfer $ sums $\Work _i$ over $\Keep $. (3)~After abort the live set is the spine}{figure.caption.31}{}}
+\newlabel{fig:arch-detail@cref}{{[figure][9][]9}{[1][15][]17}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {B.6}Critical-Path Placement}{17}{subsection.B.6}\protected@file@percent }
+\newlabel{sec:schedule}{{B.6}{17}{Critical-Path Placement}{subsection.B.6}{}}
+\newlabel{sec:schedule@cref}{{[subsection][6][2]B.6}{[1][17][]17}{}{}{}}
+\newlabel{eq:slots}{{23}{17}{Critical-Path Placement}{equation.23}{}}
+\newlabel{eq:slots@cref}{{[equation][23][]23}{[1][17][]17}{}{}{}}
+\newlabel{eq:theta}{{24}{17}{Critical-Path Placement}{equation.24}{}}
+\newlabel{eq:theta@cref}{{[equation][24][]24}{[1][17][]17}{}{}{}}
+\newlabel{eq:bc}{{25}{17}{Critical-Path Placement}{equation.25}{}}
+\newlabel{eq:bc@cref}{{[equation][25][]25}{[1][17][]17}{}{}{}}
+\newlabel{eq:bs}{{26}{17}{Critical-Path Placement}{equation.26}{}}
+\newlabel{eq:bs@cref}{{[equation][26][]26}{[1][17][]17}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Full Evaluation}{17}{appendix.C}\protected@file@percent }
+\newlabel{sec:eval-full}{{C}{17}{Full Evaluation}{appendix.C}{}}
+\newlabel{sec:eval-full@cref}{{[section][3][]C}{[1][17][]17}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{17}{section*.36}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces \textbf  {One radix tree, five actions} (\eqref  {eq:action}--\eqref  {eq:xfer}). The root is the aliased trunk $x_u$. Each edge is one page of $P$ tokens. Green pages are in $H$; orange pages are prefilled; gray pages are withheld. (a)~$\mathrm  {HS}$: $m_i{=}\ell _i$, $W_i{=}X_i{=}0$. (b)~$\mathrm  {HP}$: $0{<}m_i{<}\ell _i$, $W_i{=}\ell _i{-}m_i$. (c)~$\mathrm  {EA}$: $m_i{=}0$, $F_i{=}1$, $W_i{=}\lceil \alpha \ell _i\rceil $, $X_i{=}0$. (d)~$\mathrm  {PF}$: $m_i{=}0$, $i{\notin  }\Lambda $, $\neg F_i$, $W_i{=}\ell _i$. (e)~$\mathrm  {DS}$: $i{\in }\Lambda $, $W_i{=}X_i{=}0$. A score below $\tau $ with $i{\notin  }\Lambda $ is prefilled and probed (\Cref  {alg:app}).}}{18}{figure.caption.33}\protected@file@percent }
+\newlabel{fig:radix}{{10}{18}{\textbf {One radix tree, five actions} (\eqref {eq:action}--\eqref {eq:xfer}). The root is the aliased trunk $x_u$. Each edge is one page of $P$ tokens. Green pages are in $H$; orange pages are prefilled; gray pages are withheld. (a)~$\mathrm {HS}$: $m_i{=}\ell _i$, $\Work _i{=}\Xfer _i{=}0$. (b)~$\mathrm {HP}$: $0{<}m_i{<}\ell _i$, $\Work _i{=}\ell _i{-}m_i$. (c)~$\mathrm {EA}$: $m_i{=}0$, $F_i{=}1$, $\Work _i{=}\lceil \alpha \ell _i\rceil $, $\Xfer _i{=}0$. (d)~$\mathrm {PF}$: $m_i{=}0$, $i{\notin }\Lambda $, $\neg F_i$, $\Work _i{=}\ell _i$. (e)~$\mathrm {DS}$: $i{\in }\Lambda $, $\Work _i{=}\Xfer _i{=}0$. A score below $\tau $ with $i{\notin }\Lambda $ is prefilled and probed (\Cref {alg:app})}{figure.caption.33}{}}
+\newlabel{fig:radix@cref}{{[figure][10][]10}{[1][15][]18}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces GSM8K test, Qwen3-14B, $\mathrm  {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green.}}{18}{table.caption.38}\protected@file@percent }
+\newlabel{tab:gsm}{{9}{18}{GSM8K test, Qwen3-14B, $\mathrm {tp}{=}2$, $n{=}1319$. Median over $165$ batches of eight. Best storage in green}{table.caption.38}{}}
+\newlabel{tab:gsm@cref}{{[table][9][]9}{[1][18][]18}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.1}GPU forest}{18}{subsection.C.1}\protected@file@percent }
+\newlabel{sec:eval-gpu}{{C.1}{18}{GPU forest}{subsection.C.1}{}}
+\newlabel{sec:eval-gpu@cref}{{[subsection][1][3]C.1}{[1][18][]18}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{18}{section*.37}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Storage and expand latency.}{18}{section*.39}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.2}Prefill pruning}{18}{subsection.C.2}\protected@file@percent }
+\newlabel{sec:eval-app}{{C.2}{18}{Prefill pruning}{subsection.C.2}{}}
+\newlabel{sec:eval-app@cref}{{[subsection][2][3]C.2}{[1][18][]18}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{18}{section*.40}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Fan-out.}{18}{section*.42}\protected@file@percent }
+\citation{esc}
+\citation{specrej}
+\citation{dpts}
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; \textsf  {PD-Prune+}in green. Not GPU wall-clock.}}{19}{table.caption.41}\protected@file@percent }
+\newlabel{tab:app}{{10}{19}{Control-plane fan-out ($10$ sessions, $k{=}4$, $L{=}256$, $\ell {=}32$). Bottleneck in red; \plus in green. Not GPU wall-clock}{table.caption.41}{}}
+\newlabel{tab:app@cref}{{[table][10][]10}{[1][18][]19}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Decoding-time pruning on the \Cref  {tab:app} fan-out ($10{\times }4$, $L{=}256$). Decode-to-cut is the prefix that must be generated before a child can be dropped. ``On losers'' counts that prefix on the two low-score children. Same $12\,\mu \mathrm  {s}/\mathrm  {token}$ clock. Not GPU wall-clock.}}{19}{table.caption.44}\protected@file@percent }
+\newlabel{tab:decode-prune}{{11}{19}{Decoding-time pruning on the \Cref {tab:app} fan-out ($10{\times }4$, $L{=}256$). Decode-to-cut is the prefix that must be generated before a child can be dropped. ``On losers'' counts that prefix on the two low-score children. Same $12\,\mu \mathrm {s}/\mathrm {token}$ clock. Not GPU wall-clock}{table.caption.44}{}}
+\newlabel{tab:decode-prune@cref}{{[table][11][]11}{[1][19][]19}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Decoding-time pruning.}{19}{section*.43}\protected@file@percent }
+\newlabel{sec:eval-grow}{{C.2}{19}{Probe admission}{section*.46}{}}
+\newlabel{sec:eval-grow@cref}{{[subsection][2][3]C.2}{[1][19][]19}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Probe admission.}{19}{section*.46}\protected@file@percent }
+\newlabel{sec:eval-prefill}{{C.2}{19}{Accuracy--speed trade-off}{section*.47}{}}
+\newlabel{sec:eval-prefill@cref}{{[subsection][2][3]C.2}{[1][19][]19}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Accuracy--speed trade-off.}{19}{section*.47}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces \textbf  {Stacked KV occupancy} over the expand$\rightarrow $abort$\rightarrow $decode phase. (a)~One GSM8K batch of eight on Qwen3-14B (per-panel $y$-scale; peaks $4136$ / $1430$ / $1030$). Annotated fractions are trunk vs.\ residual under the $k{=}4$, $L{=}256$, $\ell {=}32$ model. (b)~Two workloads ($n{=}40$): GSM8K (bottom) plus Game24 (top) for APC, \textsf  {PD-Prune}\xspace  , and \textsf  {APP}\xspace  . \textsf  {PD-Prune}\xspace  {} and \textsf  {APP}\xspace  {} share $M$; \textsf  {APP}\xspace  {} drops residual $W$ earlier. Percentages are the share of the stacked live tokens.}}{20}{figure.caption.45}\protected@file@percent }
+\newlabel{fig:eval-stack}{{11}{20}{\textbf {Stacked KV occupancy} over the expand$\rightarrow $abort$\rightarrow $decode phase. (a)~One GSM8K batch of eight on Qwen3-14B (per-panel $y$-scale; peaks $4136$ / $1430$ / $1030$). Annotated fractions are trunk vs.\ residual under the $k{=}4$, $L{=}256$, $\ell {=}32$ model. (b)~Two workloads ($n{=}40$): GSM8K (bottom) plus Game24 (top) for APC, \sys , and \app . \sys {} and \app {} share $M$; \app {} drops residual $\Work $ earlier. Percentages are the share of the stacked live tokens}{figure.caption.45}{}}
+\newlabel{fig:eval-stack@cref}{{[figure][11][]11}{[1][19][]20}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Same GSM8K slice, $k{=}16$, $\tau _{\mathrm  {pre}}{=}0.15$ in front of three host decoders. Admitted children and computed prefill tokens are identical across hosts: prefill admission does not read $\tau $, $d_{\mathrm  {DPTS}}$, or $\alpha $. Any-finished stays $16/16$.}}{20}{table.caption.48}\protected@file@percent }
+\newlabel{tab:plugin}{{12}{20}{Same GSM8K slice, $k{=}16$, $\tau _{\mathrm {pre}}{=}0.15$ in front of three host decoders. Admitted children and computed prefill tokens are identical across hosts: prefill admission does not read $\tau $, $d_{\mathrm {DPTS}}$, or $\alpha $. Any-finished stays $16/16$}{table.caption.48}{}}
+\newlabel{tab:plugin@cref}{{[table][12][]12}{[1][20][]20}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.3}Decoding, prefill, and the combination}{20}{subsection.C.3}\protected@file@percent }
+\newlabel{sec:eval-ablate}{{C.3}{20}{Decoding, prefill, and the combination}{subsection.C.3}{}}
+\newlabel{sec:eval-ablate@cref}{{[subsection][3][3]C.3}{[1][20][]20}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces GSM8K, Qwen3-8B, $n{=}16$, $k{=}16$, $D{=}512$. Decoding pruning sets no $\tau _{\mathrm  {pre}}$ and cuts only during decode. Prefill pruning cuts before the kernel and then decodes every admitted residual to $D$. The combined rows apply the same $\tau _{\mathrm  {pre}}$ and then the host's own cut. ``Stopped later'' is the number of admitted residuals the host drops at its decode cut. Any-finished stays $16/16$.}}{21}{table.caption.49}\protected@file@percent }
+\newlabel{tab:ablate}{{13}{21}{GSM8K, Qwen3-8B, $n{=}16$, $k{=}16$, $D{=}512$. Decoding pruning sets no $\tau _{\mathrm {pre}}$ and cuts only during decode. Prefill pruning cuts before the kernel and then decodes every admitted residual to $D$. The combined rows apply the same $\tau _{\mathrm {pre}}$ and then the host's own cut. ``Stopped later'' is the number of admitted residuals the host drops at its decode cut. Any-finished stays $16/16$}{table.caption.49}{}}
+\newlabel{tab:ablate@cref}{{[table][13][]13}{[1][20][]21}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.4}Score-based admission}{21}{subsection.C.4}\protected@file@percent }
+\newlabel{sec:eval-wide}{{C.4}{21}{Score-based admission}{subsection.C.4}{}}
+\newlabel{sec:eval-wide@cref}{{[subsection][4][3]C.4}{[1][21][]21}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Concurrency from measured KV.}{21}{section*.50}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.5}GPU \textsf  {PD-Prune+}}{21}{subsection.C.5}\protected@file@percent }
+\newlabel{sec:eval-plus}{{C.5}{21}{GPU \texorpdfstring {\plus }{PD-Prune+}}{subsection.C.5}{}}
+\newlabel{sec:eval-plus@cref}{{[subsection][5][3]C.5}{[1][21][]21}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{21}{section*.52}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm  {tp}$. Game24 / HumanEval peaks stay with the spine.}}{21}{table.caption.53}\protected@file@percent }
+\newlabel{tab:plus}{{14}{21}{Qwen3-8B GPU forest, $n{=}80$, $D{=}512$. Peak KV is independent of $\mathrm {tp}$. Game24 / HumanEval peaks stay with the spine}{table.caption.53}{}}
+\newlabel{tab:plus@cref}{{[table][14][]14}{[1][21][]21}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.6}Multi-turn Tree-of-Thoughts}{21}{subsection.C.6}\protected@file@percent }
+\newlabel{sec:eval-mt}{{C.6}{21}{Multi-turn Tree-of-Thoughts}{subsection.C.6}{}}
+\newlabel{sec:eval-mt@cref}{{[subsection][6][3]C.6}{[1][21][]21}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{21}{section*.54}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Occupancy across turns.}{21}{section*.55}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces \textbf  {SLO sweep} from the measured DeepSeek-R1 GSM8K peaks ($761$ APC tokens, $561$ spine tokens, $n{=}16$, $k{=}4$). An $8$\,GiB pool at $147456$ bytes/token holds $76$ and $103$ trees. Each slot serves $640$ tokens/s, so offered load saturates at $48640$ and $65920$ tokens/s. Under the same model the $1$\,s P99 TTFT\xspace  {} line is crossed by APC at $448$ QPS and is still met by \textsf  {PD-Prune}\xspace  at $512$ QPS ($0.81$\,s).}}{22}{figure.caption.51}\protected@file@percent }
+\newlabel{fig:eval-slo}{{12}{22}{\textbf {SLO sweep} from the measured DeepSeek-R1 GSM8K peaks ($761$ APC tokens, $561$ spine tokens, $n{=}16$, $k{=}4$). An $8$\,GiB pool at $147456$ bytes/token holds $76$ and $103$ trees. Each slot serves $640$ tokens/s, so offered load saturates at $48640$ and $65920$ tokens/s. Under the same model the $1$\,s P99 \ttft {} line is crossed by APC at $448$ QPS and is still met by \sys at $512$ QPS ($0.81$\,s)}{figure.caption.51}{}}
+\newlabel{fig:eval-slo@cref}{{[figure][12][]12}{[1][21][]22}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces Expand versus decode, milliseconds per problem. Expand is the prefill of the $k$ residuals across three turns. On APC that timer also includes the two $32$-token step decodes; \textsf  {PD-Prune}\xspace  and \textsf  {PD-Prune+}charge those steps to decode. Speedup in \Cref  {fig:eval-mt-split} is APC expand time over the other system. Shortest time in each trio in green.}}{22}{table.caption.56}\protected@file@percent }
+\newlabel{tab:mt-split}{{15}{22}{Expand versus decode, milliseconds per problem. Expand is the prefill of the $k$ residuals across three turns. On APC that timer also includes the two $32$-token step decodes; \sys and \plus charge those steps to decode. Speedup in \Cref {fig:eval-mt-split} is APC expand time over the other system. Shortest time in each trio in green}{table.caption.56}{}}
+\newlabel{tab:mt-split@cref}{{[table][15][]15}{[1][22][]22}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.7}Cross-model forest}{22}{subsection.C.7}\protected@file@percent }
+\newlabel{sec:eval-multi}{{C.7}{22}{Cross-model forest}{subsection.C.7}{}}
+\newlabel{sec:eval-multi@cref}{{[subsection][7][3]C.7}{[1][22][]22}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{22}{section*.58}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Peak occupancy.}{22}{section*.60}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {C.8}Branching, pruning, and long traces}{22}{subsection.C.8}\protected@file@percent }
+\newlabel{sec:eval-sens}{{C.8}{22}{Branching, pruning, and long traces}{subsection.C.8}{}}
+\newlabel{sec:eval-sens@cref}{{[subsection][8][3]C.8}{[1][22][]22}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Setup.}{22}{section*.63}\protected@file@percent }
+\citation{cot}
+\citation{tot,mctsllm}
+\citation{selfconsistency}
+\citation{equivpruner}
+\citation{tot}
+\citation{esc}
+\citation{specrej}
+\citation{dpts}
+\citation{stoploss}
+\citation{equivpruner}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces \textbf  {Expand versus APC} on the same four runs as \Cref  {tab:mt-split}. (a)~Expand milliseconds per problem. (b)~Speedup of that expand over APC. The dashed line is $1\times $. \textsf  {PD-Prune}\xspace  is $5.0$--$6.4\times $ and \textsf  {PD-Prune+}is $7.9$--$10.6\times $. Decode in \Cref  {tab:mt-split} does not repeat that ratio. \textsf  {PD-Prune+}is where end-to-end time falls, to $0.70$--$0.77\times $ APC on the three runs whose emitted tokens shrink.}}{23}{figure.caption.57}\protected@file@percent }
+\newlabel{fig:eval-mt-split}{{13}{23}{\textbf {Expand versus APC} on the same four runs as \Cref {tab:mt-split}. (a)~Expand milliseconds per problem. (b)~Speedup of that expand over APC. The dashed line is $1\times $. \sys is $5.0$--$6.4\times $ and \plus is $7.9$--$10.6\times $. Decode in \Cref {tab:mt-split} does not repeat that ratio. \plus is where end-to-end time falls, to $0.70$--$0.77\times $ APC on the three runs whose emitted tokens shrink}{figure.caption.57}{}}
+\newlabel{fig:eval-mt-split@cref}{{[figure][13][]13}{[1][22][]23}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{The ratio falls with $k$.}{23}{section*.66}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces \textbf  {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm  {tp}{=}2$, $D{=}512$). Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better. (a)~GSM8K. (b)~Game24. \Cref  {fig:eval-radar} shows that \textsf  {PD-Prune}\xspace  and \textsf  {PD-Prune+}lower peak KV below APC on both workloads ($0.75\times $ on GSM8K, $0.62\times $ on Game24) while GSM8K quality stays with APC, and that \textsf  {PD-Prune+}also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s.}}{23}{figure.caption.59}\protected@file@percent }
+\newlabel{fig:eval-radar}{{14}{23}{\textbf {Four systems on Qwen3-8B} ($n{=}80$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel has its own axis. Quality is higher-better; peak KV and end-to-end time are the measured values, so a shorter bar is better. (a)~GSM8K. (b)~Game24. \Cref {fig:eval-radar} shows that \sys and \plus lower peak KV below APC on both workloads ($0.75\times $ on GSM8K, $0.62\times $ on Game24) while GSM8K quality stays with APC, and that \plus also lowers GSM8K end-to-end time from $36.0$\,s to $28.2$\,s}{figure.caption.59}{}}
+\newlabel{fig:eval-radar@cref}{{[figure][14][]14}{[1][22][]23}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Extended Related Work}{23}{appendix.D}\protected@file@percent }
+\newlabel{sec:related-full}{{D}{23}{Extended Related Work}{appendix.D}{}}
+\newlabel{sec:related-full@cref}{{[section][4][]D}{[1][23][]23}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Inference-time search.}{23}{section*.68}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Path pruning.}{23}{section*.69}\protected@file@percent }
+\citation{orca}
+\citation{vllm}
+\citation{sglang}
+\citation{sarathi,sarathisplit}
+\citation{distserve,splitwise}
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces \textbf  {Per-item decode-length histograms} ($n{=}40$, $\mathrm  {tp}{=}2$, $D{=}512$). Each panel overlays APC, \textsf  {PD-Prune}\xspace  , and \textsf  {PD-Prune+}(bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \textsf  {PD-Prune}\xspace  , and \textsf  {PD-Prune+}. Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead.}}{24}{figure.caption.61}\protected@file@percent }
+\newlabel{fig:eval-hist}{{15}{24}{\textbf {Per-item decode-length histograms} ($n{=}40$, $\mathrm {tp}{=}2$, $D{=}512$). Each panel overlays APC, \sys , and \plus (bin width $64$). Boxes report $\mu $, $\sigma $, and $n$. GSM8K (top) and Game24 (bottom) overlay APC, \sys , and \plus . Llama-3-8B Game24 is omitted (all lengths $1$); Mistral-7B is shown instead}{figure.caption.61}{}}
+\newlabel{fig:eval-hist@cref}{{[figure][15][]15}{[1][22][]24}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {16}{\ignorespaces Spine peak versus an optional last-line decode stop, $n{=}32$, $\mathrm  {tp}{=}2$. \textsf  {PD-Prune+}is the prefill admission stack on the aliased trunk: hash skip, draft prune, residual-prefix abort, and the connector gate. It keeps the same spine as the alias row and does not stop decode. This slice also ends committed decode when the last non-empty line is a finished answer; that processor is separate, and it is what moves accuracy and $D^{+}$. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green.}}{24}{table.caption.62}\protected@file@percent }
+\newlabel{tab:r1stop}{{16}{24}{Spine peak versus an optional last-line decode stop, $n{=}32$, $\mathrm {tp}{=}2$. \plus is the prefill admission stack on the aliased trunk: hash skip, draft prune, residual-prefix abort, and the connector gate. It keeps the same spine as the alias row and does not stop decode. This slice also ends committed decode when the last non-empty line is a finished answer; that processor is separate, and it is what moves accuracy and $D^{+}$. Peak is the max over chunks. GSM8K $D{=}512$; Game24 $D{=}256$. R1-8B is DeepSeek-R1-Distill-Llama-8B; L8B is Llama-3-8B; M7B is Mistral-7B. Best storage in green}{table.caption.62}{}}
+\newlabel{tab:r1stop@cref}{{[table][16][]16}{[1][22][]24}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {17}{\ignorespaces GSM8K peak KV versus branching ($n{=}16$, $\mathrm  {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green.}}{24}{table.caption.64}\protected@file@percent }
+\newlabel{tab:branch}{{17}{24}{GSM8K peak KV versus branching ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). The spine peak is invariant in $k$; the APC peak increases with $k$. ratio is FS/APC. L8B is Llama-3-8B; M7B is Mistral-7B; R1-8B is DeepSeek-R1-Distill-Llama-8B. Best storage in green}{table.caption.64}{}}
+\newlabel{tab:branch@cref}{{[table][17][]17}{[1][23][]24}{}{}{}}
+\citation{autellix}
+\citation{jitserve}
+\citation{hermes,thunderagent,saga}
+\citation{infercept,continuum,mori,conserve}
+\citation{sutradhara}
+\citation{smoothagent,idlespec}
+\citation{forkkv}
+\citation{cacheprune}
+\citation{speculative,medusa,eagledraft}
+\providecommand\NAT@force@numbers{}\NAT@force@numbers
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces \textbf  {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm  {tp}{=}2$, $D{=}512$). \textsf  {PD-Prune+}matches the \textsf  {PD-Prune}\xspace  bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$.}}{25}{figure.caption.65}\protected@file@percent }
+\newlabel{fig:eval-branch}{{16}{25}{\textbf {GSM8K peak KV versus branching} ($n{=}16$, $\mathrm {tp}{=}2$, $D{=}512$). \plus matches the \sys bar. The spine peak is invariant in $k$; the APC peak grows with the hashed union, so the ratio falls from $0.89$--$0.90$ to $0.53$--$0.55$}{figure.caption.65}{}}
+\newlabel{fig:eval-branch@cref}{{[figure][16][]16}{[1][23][]25}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {18}{\ignorespaces Contest forest, $D{=}2048$, $k{=}4$, $\mathrm  {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage and shortest end-to-end time in green.}}{25}{table.caption.67}\protected@file@percent }
+\newlabel{tab:longcot}{{18}{25}{Contest forest, $D{=}2048$, $k{=}4$, $\mathrm {tp}{=}2$. MATH-500 is $n{=}200$; AIME is $n{=}73$. R1 is DeepSeek-R1; 4B is Qwen3-4B. Best storage and shortest end-to-end time in green}{table.caption.67}{}}
+\newlabel{tab:longcot@cref}{{[table][18][]18}{[1][23][]25}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Request-level serving.}{25}{section*.70}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Program- and SLO-aware scheduling.}{25}{section*.71}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{KV retention, overlap, and cache edits.}{25}{section*.72}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Speculative decoding.}{25}{section*.73}\protected@file@percent }
+\gdef \@abspage@last{25}

@@ -1,0 +1,66 @@
+\section{Formulation}
+\label{sec:problem}
+
+A branching step is the object \sys admits.
+\S\ref{sec:bg-full} is the reason prefix caching, disaggregation, and decode-time pruning each pay for a non-winner before that admission can run;
+\Cref{tab:trad,tab:notation} record the stage and the symbols.
+
+\begin{definition}[Branching step]
+\label{def:step}
+A parent $u$ holds a committed trunk $x_u$ with $|x_u|{=}L$.
+A fan-out is a set of residuals $\{\rho_i\}_{i=0}^{k-1}$, $|\rho_i|{=}\ell_i$.
+The bound winner $\star$ leaves the spine $x_\star=x_u\Vert\rho_\star$, $|x_\star|{=}L{+}\ell_\star$.
+\end{definition}
+
+Let $b$ be KV bytes per token.
+The three occupancies of one step are
+\begin{align}
+M_{\mathrm{clone}} &= b\bigl(kL+\textstyle\sum_i\ell_i\bigr), \label{eq:mem}\\
+M_{\mathrm{CoW}} &= b\bigl(L+\textstyle\sum_i\ell_i\bigr), \nonumber\\
+M_{\mathrm{spine}} &= b\bigl(L+\ell_\star\bigr). \nonumber
+\end{align}
+$M_{\mathrm{clone}}$ is the first-expand footprint of recompute, APC, and baseline disaggregation.
+$M_{\mathrm{CoW}}$ is one shared trunk with every residual live.
+$M_{\mathrm{spine}}$ is the footprint after abort.
+On a cold radix the same span is what disaggregation transfers,
+\begin{equation}
+\label{eq:xfer-stock}
+\Xfer_{\mathrm{PD}}=\Work_{\mathrm{APC}}=kL+\textstyle\sum_i\ell_i,
+\end{equation}
+because a block hash exists only after the tokens do, and the connector moves every page the prefiller computed~\cite{vllm,distserve,splitwise}.
+$\Work$ is the token count issued to a prefill kernel before $\star$ is known.
+$\Xfer$ is the token count inserted on that connector.
+The admission rule below replaces both with the miss tail of the residuals it keeps, so $L$ is absent from $\Work$ and from $\Xfer$.
+
+\subsection{Where the Fan-out Is Paid}
+\label{sec:traditional}
+
+Four mechanisms already sit on this step, and each one can reject a child only after a fixed stage (\Cref{tab:trad}).
+Recompute clones the trunk.
+APC and a radix index share a block only after that block has been published, so the first fan-out in a batch still materializes $k$ copies of $L$; a later replay of the winner is a hit.
+Prefill--decode disaggregation transfers the pages the prefiller has already computed, aborted residuals included, which is why $\Xfer_{\mathrm{PD}}=\Work_{\mathrm{APC}}$ on a cold index.
+ESC, Speculative Rejection, and DPTS score a generated prefix, so the residual prefill, and under disaggregation the transfer, precede the drop.
+\sys aliases one trunk, withholds a repeated loop before the kernel, and continues every other low score only through the probe in \eqref{eq:dec}.
+The connector then carries the miss tail of $\Keep$, not the $k$-way clone.
+
+\begin{table*}[t]
+\centering
+\caption{Where each method pays for one fan-out of $k$ residuals on a trunk of length $L$.
+``First expand'' is the GPU prefill issued before any child has published a block.
+``Rejection'' is the earliest point at which a non-winner can leave.
+The \sys row is the action of \S\ref{sec:app}.}
+\label{tab:trad}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}p{0.18\textwidth}p{0.22\textwidth}p{0.30\textwidth}p{0.22\textwidth}@{}}
+\toprule
+Method & First expand & Rejection & Connector \\
+\midrule
+Recompute & $k$ clones of $L$ & end of the request & none \\
+APC, radix, hash prefill & $k$ clones of $L$ & LRU after a block is published & none; a later replay of the winner is a hit \\
+P/D disaggregation & $k$ clones of $L$ & after \texttt{insert} & $kL+\sum_i\ell_i$ \\
+ESC, Speculative Rejection, DPTS & every residual & after a generated prefix & KV of every prefilled child \\
+\sys & one alias of $L$ & loop before the kernel; other low scores after a $t_0$ probe & miss tail of $\Keep$ \\
+\bottomrule
+\end{tabular}
+\end{table*}

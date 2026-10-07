@@ -1,0 +1,212 @@
+\section{Experiments}
+\label{sec:eval}
+
+The comparisons below are the ones that fix the default gate.
+\S\ref{sec:eval-full} is the control-plane model, the per-host token ablation, the cross-model forest, and the branching sweeps.
+
+\paragraph{Setup.}
+GPU runs use vLLM on four A100-SXM4 40GB GPUs, \texttt{bfloat16} weights, temperature $0$, and prefix caching on.
+The prefill gate is measured on Qwen3-8B at $\mathrm{tp}{=}1$: GSM8K with $n{=}16$ and $D{=}512$, and the first $32$ MATH-500 problems at level $\ge 4$ with $D{=}1024$.
+The KV comparison is the full GSM8K test ($n{=}1319$) on Qwen3-14B at $\mathrm{tp}{=}2$.
+A math answer counts when the final number matches the reference.
+Any-finished asks that some full-budget branch match; the winner column in \S\ref{sec:eval-ablate} asks that the committed spine match.
+
+\begin{table*}[t]
+\centering
+\caption{Main results.
+The GSM8K block is Qwen3-8B, $k{=}16$, $D{=}512$.
+One $\tau_{\mathrm{pre}}$ cuts prefill for every host (\Cref{prop:host}); any-finished stays $16/16$.
+The MATH-500 block is the same model, $n{=}32$, $D{=}1024$, $\tau_{\mathrm{dec}}{=}0.45$.
+Dropping every $s{<}\tau_{\mathrm{dec}}$ before the kernel is \eqref{eq:drej}.
+The probe is \eqref{eq:dec} at $t_0{=}128$.
+The last row is Qwen3-14B, $n{=}1319$, median peak KV.}
+\label{tab:main}
+\scriptsize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+ & & admit & prefill & time (s) & any \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{GSM8K.} Hosts alone share the prefill; the gate moves it.} \\
+ESC / SR / DPTS & no $\tau_{\mathrm{pre}}$ & $16$ & $5008$ & $17.05$ / $13.14$ / $11.86$ & $16/16$ \\
+ESC / SR / DPTS & $\tau_{\mathrm{pre}}{=}0.15$ & $12$ & \win{$3848$} & \win{$14.14$} / $12.47$ / $11.49$ & $16/16$ \\
+ESC / SR / DPTS & $\tau_{\mathrm{pre}}{=}0.45$ & $8$ & \win{$2768$} & \win{$10.93$} / $10.80$ / $10.90$ & $16/16$ \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{MATH-500.} A probe restores the branches \eqref{eq:drej} drops.} \\
+full fan-out &  & $16$ & --- & $104.1$ & $20/32$ \\
+drop $s{<}\tau_{\mathrm{dec}}$ & \eqref{eq:drej} & --- & --- & $52.1$ & \botn{$13/32$} \\
+probe $t_0{=}128$ & \eqref{eq:dec} & --- & --- & \win{$72.2$} & \win{$20/32$} \\
+\midrule
+\multicolumn{6}{@{}l}{\emph{Qwen3-14B spine.} $M_{\mathrm{spine}}/M_{\mathrm{APC}}=0.72\times$ at accuracy $0.845$ vs.\ $0.844$.} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Prefill is host-invariant.}
+\Cref{tab:main} is \Cref{prop:host} on the GPU.
+ESC, Speculative Rejection, and DPTS alone each prefill $5008$ tokens, because each score is computed from tokens that already reside.
+They differ only in $D^{+}$: a $512$-token window, a $256$-token partial-reward horizon, and a $100$-token mini-step, which is why the times are $17.05$\,s, $13.14$\,s, and $11.86$\,s.
+Placing $\tau_{\mathrm{pre}}{=}0.15$ in front of any of them admits $12$ of $16$ residuals and cuts the prefill to $3848$ tokens ($-23\%$).
+Any-finished stays $16/16$.
+ESC, the host that would have decoded the loop to the end of its window, falls from $17.05$\,s to $14.14$\,s.
+The same gate at $0.45$ admits $8$ residuals, cuts the prefill to $2768$ tokens, and reaches $10.93$\,s on ESC, still at $16/16$ for this $k$.
+It is not the default.
+\Cref{tab:prefill-bar} sweeps the same ESC host across width.
+At $\tau_{\mathrm{pre}}{=}0.15$ any-finished is $15/16$, $16/16$, $16/16$ for $k{=}4,8,16$, and the wall-clock reduction grows with the tree ($-5\%$, $-6\%$, $-17\%$) because a wider fan-out contains more repeated loops.
+Computed prefill falls from $1320/2624/5008$ tokens to $1018/2020/3848$.
+Raising the prefill threshold to $0.45$ is faster at every width ($-9\%$, $-21\%$, $-36\%$) and still $16/16$ at $k{=}16$, but it drops illegal text together with the loop and loses two problems at $k{=}4$ and $k{=}8$.
+The default is the cutoff that satisfies \eqref{eq:sep-pre} at every $k$.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_eval_admit}}
+\caption{\textbf{Prefill threshold on GSM8K} (\Cref{tab:prefill-bar,tab:plugin}).
+(a)~Wall-clock under ESC. Labels are any-finished.
+$\tau_{\mathrm{pre}}{=}0.45$ is $14/16$ at $k{=}4$ and $k{=}8$, and $16/16$ at $k{=}16$.
+(b)~Computed prefill, $-23\%$ at $0.15$ and $-45\%$ at $0.45$.
+(c)~The same $0.15$ threshold in front of each host at $k{=}16$. Every row stays $16/16$.}
+\label{fig:eval-admit}
+\end{figure*}
+
+\paragraph{Any-finished and the committed spine.}
+Any-finished counts a problem when some full-budget branch matches the reference.
+The winner column of \Cref{tab:ablate} counts a problem when the committed spine matches.
+On this GSM8K slice the three hosts alone are all $16/16$ any-finished, while the spine matches on $11/16$ under ESC and on $12/16$ under Speculative Rejection and DPTS.
+The prefill stays $5008$ tokens.
+The hosts differ in decode tokens ($131072$, $98304$, $78336$) and in how many admitted residuals they stop later ($0$, $8$, $8$).
+Placing $\tau_{\mathrm{pre}}{=}0.15$ in front of ESC keeps that winner at $11/16$ and cuts decode tokens to $98304$, because the four loops never start.
+The same gate in front of DPTS keeps the winner at $12/16$ and finishes in $11.49$\,s; Speculative Rejection with the same gate finishes in $12.47$\,s and loses one winner, to $10/16$.
+At $0.45$ every combined row falls to a $10/16$ winner: the residuals a $0.45$ prefill cutoff withholds include branches that would have matched the reference.
+Retaining one unscored child is stricter.
+At the same $k$ and $\tau{=}0.45$ that policy prefills $414$ tokens and reaches $11/16$ any-finished under ESC and $9/16$ under Speculative Rejection, against $16/16$ when the eight residuals that clear the score are admitted (\S\ref{sec:eval-wide}).
+The gate is a threshold on every residual, and index $0$ is held out of it.
+
+\begin{table}[t]
+\centering
+\caption{GSM8K, Qwen3-8B, $n{=}16$, $D{=}512$, ESC only.
+Any-finished is exact match on a full-budget branch.
+$\tau_{\mathrm{pre}}{=}0.15$ drops the loop; $0.45$ also drops illegal text.
+Time is trunk warm plus fan-out, in seconds.}
+\label{tab:prefill-bar}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+ESC & $16/16$, $8.65$ & $16/16$, $10.84$ & $16/16$, $17.05$ \\
+\rowcolor{tblalt}
+\app $\tau_{\mathrm{pre}}{=}0.15$ & $15/16$, $8.22$ & \win{$16/16$}, $10.19$ & \win{$16/16$}, $14.14$ \\
+\app $\tau_{\mathrm{pre}}{=}0.45$ & \botn{$14/16$}, $7.89$ & \botn{$14/16$}, $8.60$ & \win{$16/16$}, \win{$10.93$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The probe is the decode threshold.}
+On MATH-500 at $k{=}16$, \eqref{eq:drej} drops any-finished accuracy from $20/32$ to $13/32$.
+\eqref{eq:dec} with $t_0{=}128$ returns the count to $20/32$ and cuts end-to-end time from $104.1$\,s to $72.2$\,s.
+The loop is the only residual that stays at $d_i{=}0$.
+Illegal text is prefilled, probed, and extended when the prefix clears $0.45$, which is the separation in \eqref{eq:sep-pre}--\eqref{eq:sep-dec}.
+\Cref{tab:grow} is the same rule at three widths.
+Dropping every score below $\tau_{\mathrm{dec}}$ cuts any-finished from $12/32$ to $6/32$ at $k{=}4$ and from $20/32$ to $13/32$ at $k{=}16$.
+Skipping only the loop is safe at every width: those branches finish $0$ for $0$.
+The probe length depends on $k$.
+At $k{=}16$, $t_0{=}128$ extends every illegal residual and returns $20/32$ in $72.2$\,s, with decode tokens falling from $524288$ to $393216$.
+At $k{=}8$ the shorter probe is the one that holds the count ($16/32$ in $42.0$\,s, above the full fan-out).
+At $k{=}4$ neither probe recovers $12/32$; decoding the single illegal residual all the way to $D$ is the closer point ($11/32$ in $23.0$\,s).
+Keeping one unscored residual instead of the eight that clear $0.45$ falls to $11/16$ under ESC and $9/16$ under Speculative Rejection (\S\ref{sec:eval-wide}).
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_eval_grow}}
+\caption{\textbf{Probe admission on MATH-500} (\Cref{tab:grow}).
+Dropping every $s{<}\tau$ is the fast, low-count curve.
+Grow $t_0{=}128$ returns to $20/32$ at $k{=}16$ and cuts $104.1$\,s to $72.2$\,s.
+At $k{=}8$, grow $t_0{=}64$ is $16/32$ in $42.0$\,s, above the full fan-out.}
+\label{fig:eval-grow}
+\end{figure*}
+
+\begin{table}[t]
+\centering
+\caption{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$.
+Each cell is any-finished and seconds.
+``Drop $s{<}\tau$'' is \eqref{eq:drej}.
+``Grow $t_0$'' is \eqref{eq:dec}: loops stay at $d_i{=}0$; every other low score is probed and continues to $D$ only if $s'_i\ge 0.45$.}
+\label{tab:grow}
+\scriptsize
+\setlength{\tabcolsep}{3.0pt}
+\begin{tabular}{lrrr}
+\rowcolor{tblhead}
+\toprule
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+\midrule
+Full fan-out & $12/32$, $25.3$ & $15/32$, $52.5$ & $20/32$, $104.1$ \\
+\rowcolor{tblalt}
+Drop $s{<}\tau$ & $6/32$, $19.1$ & $11/32$, $25.6$ & $13/32$, $52.1$ \\
+Skip loops only & $11/32$, $23.0$ & $17/32$, $41.5$ & $16/32$, $71.4$ \\
+\rowcolor{tblalt}
+Grow $t_0{=}64$ & $8/32$, $24.0$ & \win{$16/32$}, $42.0$ & $18/32$, $72.5$ \\
+Grow $t_0{=}128$ & $9/32$, $24.7$ & $13/32$, $43.3$ & \win{$20/32$}, $72.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The spine is the live set.}
+On Qwen3-14B the committed spine matches APC accuracy at $0.72\times$ the median peak KV (\Cref{tab:gsm}).
+The same ratio stays in $0.72$--$0.75\times$ on six model families (\Cref{fig:eval-multi}).
+Over three Tree-of-Thoughts turns the same gate runs before each fan-out (\S\ref{sec:eval-mt}).
+On Game of 24 the turns propose an equation, continue on the cards that remain, and write the expression that uses all four cards; on GSM8K they set up the algebra, rewrite the previous step, and collect the final number.
+Across $16$ problems, three turns, and $k{=}4$, that is $192$ residuals, of which \plus{} prefills $48$.
+End-to-end time on Qwen3-8B falls from $2.48$\,s to $1.91$\,s on GSM8K and from $2.15$\,s to $1.52$\,s on Game of 24.
+Expand time is $7.9$--$10.6\times$ below APC (\Cref{tab:mt-split}).
+Accuracy stays with APC on GSM8K and rises on Game of 24, from $6/16$ to $9/16$ on Qwen3-4B and from $9/16$ to $10/16$ on Qwen3-8B (\Cref{tab:mt,fig:eval-mt}).
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_eval_bars}}
+\caption{\textbf{Peak KV on six model families} ($n{=}40$, $\mathrm{tp}{=}2$).
+Bars are recompute, APC, \sys, and \plus.
+\sys and \plus{} share the spine.
+The annotated ratio is $M_{\mathrm{spine}}/M_{\mathrm{APC}}$: $0.72$--$0.75\times$ on GSM8K and $0.57$--$0.61\times$ on Game24.}
+\label{fig:eval-multi}
+\end{figure*}
+
+\begin{table}[t]
+\centering
+\caption{Three-turn Tree-of-Thoughts, $n{=}16$, $k{=}4$, $\mathrm{tp}{=}2$.
+End-to-end time is seconds per problem.
+Peak KV is tokens on the live spine.
+FS is the alias; FS+ is \plus.}
+\label{tab:mt}
+\scriptsize
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular}{lrrrrrr}
+\rowcolor{tblhead}
+\toprule
+ & \multicolumn{3}{c}{Qwen3-4B} & \multicolumn{3}{c}{Qwen3-8B} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & APC & FS & FS+ & APC & FS & FS+ \\
+\midrule
+GSM8K acc. & $0.938$ & $0.938$ & $0.938$ & $1.000$ & $0.938$ & $0.938$ \\
+\rowcolor{tblalt}
+GSM8K e2e (s) & $1.66$ & $1.76$ & \win{$1.63$} & $2.48$ & $2.56$ & \win{$1.91$} \\
+GSM8K peak & $318$ & \win{$275$} & \win{$275$} & $318$ & \win{$275$} & \win{$275$} \\
+\rowcolor{tblalt}
+Game24 acc. & $0.375$ & $0.500$ & $0.562$ & $0.562$ & $0.562$ & $0.625$ \\
+Game24 e2e (s) & $1.61$ & $1.64$ & \win{$1.13$} & $2.15$ & $2.15$ & \win{$1.52$} \\
+\rowcolor{tblalt}
+Game24 peak & $265$ & \win{$216$} & \win{$216$} & $265$ & \win{$216$} & \win{$216$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{\input{fig/fig_eval_mt}}
+\caption{\textbf{Three-turn Tree-of-Thoughts} ($n{=}16$, $\mathrm{tp}{=}2$).
+(a)~End-to-end seconds per problem.
+(b)~Peak KV on the live spine.
+\plus{} prefills one of four residuals.}
+\label{fig:eval-mt}
+\end{figure}

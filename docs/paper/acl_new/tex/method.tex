@@ -1,0 +1,278 @@
+\section{Method}
+\label{sec:design}
+
+\sys is one first-match action per residual.
+The action fixes the prefill, the connector payload, and the decode length.
+\S\ref{sec:design-full} is the copy-on-write pool, the radix picture, and the span table that realize the same quantities.
+
+\subsection{One Action per Residual}
+\label{sec:app}
+
+Let $H$ be the published radix and $P$ the page size.
+Only full pages enter $H$~\cite{vllm}.
+The page-aligned match, the repeated-loop set, and the early-abort bit are
+\begin{align}
+m_i &= \max\{jP: jP\le\ell_i,\;\rho_i[0{:}jP)\in H\}, \label{eq:mi}\\
+\Lambda &= \{i\neq 0:\mathrm{Loop}(\rho_i)\}, \nonumber\\
+F_i &= \bigl[\mathrm{Score}_{\mathrm{pre}}\bigl(\rho_i[0{:}\lceil\alpha\ell_i\rceil]\bigr)<\tau_{\mathrm{pre}}\bigr]. \nonumber
+\end{align}
+The trunk is an alias, $\sigma_i\leftarrow(\sigma_u,|x_u|)$, so $L\notin\Work_i$.
+Index $0$ is forced into the retained set $\Keep$, and therefore $a_0\in\{\mathrm{HS},\mathrm{HP},\mathrm{PF}\}$.
+
+\begin{definition}[Residual action]
+\label{def:action}
+With $\Act=\{\mathrm{HS},\mathrm{HP},\mathrm{DS},\mathrm{EA},\mathrm{PF}\}$, the first match is
+\begin{equation}
+\label{eq:action}
+a_i=
+\begin{cases}
+\mathrm{HS} & \text{if } m_i=\ell_i,\\
+\mathrm{HP} & \text{if } 0<m_i<\ell_i,\\
+\mathrm{DS} & \text{if } m_i=0 \land i\in\Lambda,\\
+\mathrm{EA} & \text{if } m_i=0 \land i\notin\Lambda \land F_i,\\
+\mathrm{PF} & \text{if } m_i=0 \land i\notin\Lambda \land \neg F_i.
+\end{cases}
+\end{equation}
+\end{definition}
+
+\noindent
+$\mathrm{HS}$ is a full-page hit, $\mathrm{HP}$ a partial hit, $\mathrm{DS}$ a repeated loop withheld before the kernel, $\mathrm{EA}$ an early abort at fraction $\alpha$ of the residual, and $\mathrm{PF}$ a full prefill.
+The Iverson expansion of the same first match is \eqref{eq:action-iv}.
+The lengths are
+\begin{align}
+\Work_i &=
+\begin{cases}
+0 & \text{if } a_i\in\{\mathrm{HS},\mathrm{DS}\},\\
+\ell_i-m_i & \text{if } a_i=\mathrm{HP},\\
+\lceil\alpha\ell_i\rceil & \text{if } a_i=\mathrm{EA},\\
+\ell_i & \text{if } a_i=\mathrm{PF},
+\end{cases}
+\label{eq:work}\\
+\Xfer_i &= \Work_i\,[i\in\Keep]\,[a_i\in\{\mathrm{HP},\mathrm{PF}\}].
+\label{eq:xfer}
+\end{align}
+Summing over the fan-out gives the kernel, the connector, and the decode budget
+\begin{align}
+\Work &=\textstyle\sum_{i=0}^{k-1}\Work_i, &
+\Xfer &=\textstyle\sum_{i=0}^{k-1}\Xfer_i, \nonumber\\
+D^{+} &=\textstyle\sum_{i=0}^{k-1}d_i.
+\label{eq:agg}
+\end{align}
+$\Xfer_i{=}0$ on $\mathrm{HS}$, $\mathrm{DS}$, and $\mathrm{EA}$: a hit is already on the decoder, a withheld loop is never inserted, and an early abort is not transferred.
+Baseline disaggregation moves \eqref{eq:xfer-stock}; the rule moves \eqref{eq:xfer}.
+
+On prompt $x$ at $u$, commit binds the observed continuation and aborts every sibling,
+\begin{equation}
+\label{eq:lcp}
+v^\star=\arg\max_{v}\mathrm{LCP}(x,x_v),\qquad g_u\leftarrow g_u+1.
+\end{equation}
+Pages of the LCP become the next trunk.
+A job tagged with a stale generation drops in $O(1)$.
+Speculative tokens stay outside the sampler, so the emitted tokens match a baseline that prefills committed tokens only.
+
+\begin{lemma}[First-fan-out dominance]
+\label{lem:dom}
+On a cold index, $\Work_{\mathrm{APP}}\le\Work_{\mathrm{CoW}}\le\Work_{\mathrm{APC}}=\Work_{\mathrm{PD}}$ and $\Xfer_{\mathrm{APP}}\le\Xfer_{\mathrm{PD}}$.
+The inequality on $\Work$ is strict whenever at least one repeated loop is withheld, and the inequality on $\Xfer$ is strict whenever $\Keep\neq[k]$ or any kept residual is a hash hit.
+\end{lemma}
+
+\begin{proof}
+A cold index has $m_i{=}0$, so \eqref{eq:action} never returns $\mathrm{HS}$ or $\mathrm{HP}$.
+Aliasing the trunk removes the $k$ copies of $L$ from $\Work_{\mathrm{APC}}$, which leaves $\Work_{\mathrm{CoW}}=L+\sum_i\ell_i$ against $\Work_{\mathrm{APC}}=kL+\sum_i\ell_i$.
+\eqref{eq:work} then drops every $i\in\Lambda$ and charges $\lceil\alpha\ell_i\rceil$ on $\mathrm{EA}$, so $\Work_{\mathrm{APP}}\le\sum_i\ell_i\le\Work_{\mathrm{CoW}}$ after the shared trunk is counted once.
+\eqref{eq:xfer} sums $\Work_i$ only over $\Keep\cap\{\mathrm{HP},\mathrm{PF}\}$, which is a subset of the pages \eqref{eq:xfer-stock} transfers.
+\end{proof}
+
+The resulting wall-clock of one fan-out is
+\begin{equation}
+\label{eq:tfan}
+T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
+\end{equation}
+where $T_{\mathrm{CoW}}$ is a pointer swap and $T_{\mathrm{abort}}$ frees residual pages only.
+\Cref{tab:span} compares the six spans.
+
+\subsection{Separate Prefill and Decode Thresholds}
+\label{sec:split}
+
+The prefill score and the decode score read different strings, so the thresholds are a pair $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$ rather than one cutoff reused at both stages.
+A blanket prefill drop,
+\begin{equation}
+\label{eq:drej}
+d_i^{\times}=D\cdot[i=0\lor s_i\ge\tau_{\mathrm{dec}}],
+\end{equation}
+sets $d_i^{\times}{=}0$ for every low score and never runs the kernel on that residual.
+\eqref{eq:dec} replaces that rule outside $\Lambda$.
+
+\begin{equation}
+\label{eq:dec}
+d_i=
+\begin{cases}
+0 & i\in\Lambda,\\
+D & i{=}0 \text{ or } s_i\ge\tau_{\mathrm{dec}},\\
+t_0 & s'_i<\tau_{\mathrm{dec}},\\
+D & s'_i\ge\tau_{\mathrm{dec}}.
+\end{cases}
+\end{equation}
+where $y_i=\mathrm{Dec}(x_u\Vert\rho_i,\,t_0)$ is a probe of $t_0$ tokens and $s'_i=\mathrm{Score}_{\mathrm{dec}}(y_i)$.
+Loops never enter the kernel.
+Every other residual is prefilled.
+A residual whose prefill score lies below $\tau_{\mathrm{dec}}$ continues from $t_0$ to $D$ only when the probe itself clears $\tau_{\mathrm{dec}}$.
+Index $0$ is in the second case, so the spine is never probed away.
+
+\begin{proposition}[Threshold separation]
+\label{prop:sep}
+Let $s_i=\mathrm{Score}_{\mathrm{pre}}(\rho_i)$ and $s'_i=\mathrm{Score}_{\mathrm{dec}}(y_i)$.
+The pair $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$ withholds loops before the kernel and extends a probe only after an answer marker when
+\begin{align}
+\sup_{i\in\Lambda} s_i \;<\; \tau_{\mathrm{pre}} \;&\le\; \inf_{i\notin\Lambda,\,i\neq 0} s_i, \label{eq:sep-pre}\\
+\sup_{\,y\,\mathrm{illegal}} s'(y) \;<\; \tau_{\mathrm{dec}} \;&\le\; \inf_{\,y\,\mathrm{marked}} s'(y). \label{eq:sep-dec}
+\end{align}
+\end{proposition}
+
+\begin{table}[t]
+\centering
+\caption{Draft scores on the two strings the thresholds read.
+\eqref{eq:sep-pre} holds at $\tau_{\mathrm{pre}}{=}0.15$ because a loop is $0.02$ and illegal text is $0.22$.
+\eqref{eq:sep-dec} holds at $\tau_{\mathrm{dec}}{=}0.45$ because a still-illegal prefix is $0.16$ and an answer marker is $0.92$.}
+\label{tab:scores}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & loop & illegal & live text \\
+\midrule
+$\mathrm{Score}_{\mathrm{pre}}$, residual & $0.02$ & $0.22$ & $1.00$ \\
+$\mathrm{Score}_{\mathrm{dec}}$, probe & $0.04$ & $0.16$ & $0.92$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:scores} is the measured witness for \Cref{prop:sep}.
+The operating point is $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})=(0.15,0.45)$.
+Swapping the two numbers breaks one of the inequalities.
+Using $0.45$ as $\tau_{\mathrm{pre}}$ puts illegal text ($0.22$) on the same side of the cutoff as a loop, which is \eqref{eq:drej} and drops the residual before the probe exists.
+Using $0.15$ as $\tau_{\mathrm{dec}}$ leaves a still-illegal prefix ($0.16$) above the line, so the probe runs out to $D$.
+\Cref{alg:app} is the pair: $\tau_{\mathrm{pre}}$ enters only through $\Lambda$ and $F_i$, and $\tau_{\mathrm{dec}}$ enters only through $d_i$.
+
+\begin{proposition}[Host-invariant prefill]
+\label{prop:host}
+On a cold index, with $F_i{=}0$ for every $i\notin\Lambda$,
+\begin{equation}
+\label{eq:host}
+\Work(\mathrm{host})=\sum_{i\notin\Lambda}\ell_i
+\end{equation}
+for every decode-time host that reads a generated prefix.
+The host changes $D^{+}$, not $\Work$.
+\end{proposition}
+
+\begin{proof}
+$m_i{=}0$ and $i\notin\Lambda$ and $\neg F_i$ force $a_i{=}\mathrm{PF}$ in \eqref{eq:action}, so $\Work_i{=}\ell_i$.
+Every $i\in\Lambda$ takes $\mathrm{DS}$ and contributes $0$.
+ESC, Speculative Rejection, and DPTS are applied to tokens that \eqref{eq:dec} has already admitted, after $\Work_i$ has been issued.
+\end{proof}
+
+\noindent
+\Cref{prop:host} is why those three hosts, run alone, report the same prefill, and why one $\tau_{\mathrm{pre}}$ moves that column for all three (\S\ref{sec:eval}).
+
+\begin{algorithm}[t]
+\caption{\sys admission.
+$H$ stores full pages only.
+$\Lambda$ is the repeated-loop set.
+$0\in\Keep$ always.
+\eqref{eq:dec} sets $d_i$; \eqref{eq:drej} would have set $d_i{=}0$ for every $s_i{<}\tau_{\mathrm{dec}}$.}
+\label{alg:app}
+\small
+\begin{algorithmic}[1]
+\REQUIRE $\{\rho_i\}_{i=0}^{k-1}$, radix $H$, page $P$, $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$, probe $t_0$, budget $D$, fraction $\alpha$
+\ENSURE $a_i$, $\Work_i$, $\Xfer_i$, $d_i$, and $\Keep$
+\STATE $\Lambda\leftarrow\{i\neq 0:\mathrm{Loop}(\rho_i)\}$
+\FOR{$i=0$ \TO $k-1$}
+  \STATE $m_i\leftarrow\max\{jP:jP\le\ell_i,\;\rho_i[0{:}jP)\in H\}$ \COMMENT{\eqref{eq:mi}}
+  \STATE $s_i\leftarrow\mathrm{Score}_{\mathrm{pre}}(\rho_i)$
+  \STATE $F_i\leftarrow[\mathrm{Score}_{\mathrm{pre}}(\rho_i[0{:}\lceil\alpha\ell_i\rceil])<\tau_{\mathrm{pre}}]$
+  \IF{$m_i=\ell_i$}
+    \STATE $a_i\leftarrow\mathrm{HS}$
+  \ELSIF{$0<m_i<\ell_i$}
+    \STATE $a_i\leftarrow\mathrm{HP}$
+  \ELSIF{$i\in\Lambda$}
+    \STATE $a_i\leftarrow\mathrm{DS}$
+  \ELSIF{$F_i$}
+    \STATE $a_i\leftarrow\mathrm{EA}$
+  \ELSE
+    \STATE $a_i\leftarrow\mathrm{PF}$
+  \ENDIF
+  \STATE $\Work_i$ by \eqref{eq:work}
+  \IF{$i\in\Lambda$}
+    \STATE $d_i\leftarrow 0$
+  \ELSIF{$i=0 \lor s_i\ge\tau_{\mathrm{dec}}$}
+    \STATE $d_i\leftarrow D$
+  \ELSE
+    \STATE $y_i\leftarrow\mathrm{Dec}(x_u\Vert\rho_i,\,t_0)$; \quad $s'_i\leftarrow\mathrm{Score}_{\mathrm{dec}}(y_i)$
+    \STATE $d_i\leftarrow D[s'_i\ge\tau_{\mathrm{dec}}]+t_0[s'_i<\tau_{\mathrm{dec}}]$
+  \ENDIF
+  \STATE $\Xfer_i\leftarrow\Work_i\,[i{=}0\lor a_i\neq\mathrm{DS}]\,[a_i\in\{\mathrm{HP},\mathrm{PF}\}]$
+\ENDFOR
+\STATE $\Keep\leftarrow\{0\}\cup\{i:a_i\neq\mathrm{DS}\}$
+\STATE $\Work\leftarrow\sum_i\Work_i$;\quad $\Xfer\leftarrow\sum_i\Xfer_i$;\quad $D^{+}\leftarrow\sum_i d_i$
+\end{algorithmic}
+\end{algorithm}
+
+On a cold index every $m_i{=}0$, and the action step collapses to the probe listing \Cref{alg:probe}.
+
+\paragraph{Reading one cold fan-out.}
+With $m_i{=}0$, \eqref{eq:action} returns only $\mathrm{DS}$, $\mathrm{EA}$, or $\mathrm{PF}$.
+The three prefill scores in \Cref{tab:scores} then fix the action before any token is generated.
+A loop scores $0.02$.
+That lies below $\tau_{\mathrm{pre}}{=}0.15$, so $i{\in}\Lambda$, $a_i{=}\mathrm{DS}$, $\Work_i{=}0$, $\Xfer_i{=}0$, and the first case of \eqref{eq:dec} sets $d_i{=}0$: the kernel, the connector, and the decoder all skip it.
+Illegal text scores $0.22$.
+That clears $\tau_{\mathrm{pre}}$, so $a_i{=}\mathrm{PF}$ and $\Work_i{=}\ell_i$.
+A probe of that residual that is still illegal scores $0.16$, below $\tau_{\mathrm{dec}}{=}0.45$, and \eqref{eq:dec} stops at $t_0$ rather than continuing to $D$.
+Live text scores $1.00$ on the residual and $0.92$ once an answer marker appears, so it is prefilled and decoded to the budget.
+Index $0$ is the second case of \eqref{eq:dec} even when its own score is low, which is why the spine cannot be probed away.
+Raising $\tau_{\mathrm{pre}}$ to $0.45$ puts the illegal residual ($0.22$) on the same side of the cutoff as the loop.
+\eqref{eq:sep-pre} then fails, $F_i$ fires, and the residual takes $\mathrm{EA}$ or, under \eqref{eq:drej}, never enters the kernel at all.
+On the GSM8K slice that is the difference between admitting $12$ residuals ($3848$ prefill tokens) and admitting $8$ ($2768$).
+
+\paragraph{Three quantities inside one latency.}
+\Cref{lem:dom} separates terms that a single end-to-end time adds together.
+Aliasing removes the $k$ copies of $L$ from $\Work_{\mathrm{APC}}$ and leaves one trunk, $\Work_{\mathrm{CoW}}=L+\sum_i\ell_i$.
+The action then drops every $i{\in}\Lambda$ and, on $\mathrm{EA}$, replaces $\ell_i$ by $\lceil\alpha\ell_i\rceil$, which is why $\Work_{\mathrm{APP}}\le\sum_i\ell_i$ once the trunk has been counted once.
+The connector is a further subset.
+\eqref{eq:xfer} moves a page only when the residual is in $\Keep$ and the action is $\mathrm{HP}$ or $\mathrm{PF}$; a kept hash hit still has $\Xfer_i{=}0$, because that page is already on the decoder.
+Decode length is independent of all three.
+ESC, Speculative Rejection, and DPTS rewrite $d_i$ after $\Work_i$ has been issued (\Cref{prop:host}), so they change $D^{+}$ and not the prefill column.
+A learned early-stop token can replace $\mathrm{Score}_{\mathrm{dec}}$ inside \eqref{eq:dec}~\cite{stoploss}.
+It does not replace $\mathrm{Score}_{\mathrm{pre}}$, which reads $\rho_i$ before generation.
+A semantic merger such as EquivPruner can shrink the residual set the harness proposes~\cite{equivpruner}; \sys runs after that set exists.
+
+\paragraph{The trunk is an alias.}
+\texttt{fork} copies two words, the parent page table and the alias length, and increments the reference count on the trunk frames.
+That copy is $O(1)$ in $L$, which is why $L$ is absent from \eqref{eq:work} and from \eqref{eq:xfer}.
+A write that finds a shared page copies only the modified rows.
+Abort frees the residual frames of the dropped child, $b\ell_i$ bytes, and leaves the spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.
+The same pool therefore admits
+\begin{equation}
+\label{eq:slots-main}
+C=\bigl\lfloor H/M_{\mathrm{spine}}\bigr\rfloor
+\end{equation}
+sessions where a prefix cache that still holds aborted residuals would have admitted $\lfloor H/M_{\mathrm{APC}}\rfloor$.
+On the measured DeepSeek-R1 GSM8K peaks, an $8$\,GiB pool holds $76$ APC trees and $103$ spines (\S\ref{sec:eval-full}).
+Committed decode takes the chunk budget first (\eqref{eq:bc}); whatever remains prefills the next miss tail (\eqref{eq:bs}).
+Speculative tokens stay outside the sampler.
+
+\Cref{fig:tree} is that alias across depth.
+Each edge allocates a residual and points at the parent's pages.
+A leaf below the threshold frees only its own residual.
+A fork whose children have all died cascades back to the first ancestor that still has a live child.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_tree}}
+\caption{\textbf{Context tree.}
+(a)~Each edge is one \texttt{fork}: the child aliases the parent and allocates only a residual ($+$r).
+The live paths share the trunk; A1b1x and A3a2x also share $+$r$_A$.
+Fork C dies at depth 2, so abort cascades to C and stops at the root, which still has A and B.
+(b)~A shared layer is one physical page set with refcount greater than one.
+Aborting a leaf frees only that residual.}
+\label{fig:tree}
+\end{figure*}

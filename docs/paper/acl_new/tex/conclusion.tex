@@ -1,0 +1,12 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+\sys keeps the prefill pool and the decode pool, and changes the pages that cross between them.
+One action per residual sets both the kernel and the connector to the radix miss of the residuals that are kept.
+A repeated loop never enters that kernel.
+A low decode score runs a $t_0$-token probe and continues only when the prefix meets $\tau_{\mathrm{dec}}$.
+The pair is $(0.15, 0.45)$.
+The trunk is an alias, so the miss excludes $L$, and abort leaves the spine.
+
+On Qwen3-8B the gate cuts GSM8K prefill by $23\%$ at matched any-finished accuracy, and the MATH-500 probe restores the $20/32$ a blanket drop loses, at $72.2$\,s against $104.1$\,s.
+The committed spine is $0.72$--$0.75\times$ the prefix-cache peak.

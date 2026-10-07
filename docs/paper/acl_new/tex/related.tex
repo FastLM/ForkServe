@@ -1,0 +1,59 @@
+\section{Extended Related Work}
+\label{sec:related-full}
+
+\paragraph{Inference-time search.}
+Chain-of-thought prompting showed that intermediate steps improve multi-step reasoning~\cite{cot}.
+Tree-of-Thoughts and related graph search expand several of those steps, score them, and backtrack~\cite{tot,mctsllm}.
+Self-consistency samples many complete traces and keeps a majority answer~\cite{selfconsistency}.
+The accuracy gain scales with the number of traces, and so does the token cost.
+EquivPruner identifies the redundancy that remains after naive widening: textually distinct steps can be the same mathematical action, and exploring every member of an equivalence class spends tokens without adding a new state~\cite{equivpruner}.
+\sys does not replace the search procedure and does not decide semantic equivalence.
+It takes the residuals the harness has already proposed and decides, from the residual text and the radix index, which of them are prefilled and which pages cross the prefill--decode connector.
+
+\paragraph{Path pruning.}
+Decode-time pruners drop a candidate after generation has started.
+Beam search in Tree-of-Thoughts scores a finished step and keeps the top beams~\cite{tot}.
+ESC draws a window of complete samples and skips later samples only once that window agrees~\cite{esc}.
+Speculative Rejection ranks partial generations and halts the lower quantile after a partial-reward horizon~\cite{specrej}.
+DPTS generates a fixed mini-step on every active node, then early-stops low-confidence children~\cite{dpts}.
+STOP gives these methods a common taxonomy, by whether the signal is internal or external and whether it is learned, and shows that a learned internal token can prune a path from a short prefix~\cite{stoploss}.
+EquivPruner prunes at action granularity: a lightweight equivalence detector, trained on mathematical statement pairs, retains one representative of each equivalent set during search~\cite{equivpruner}.
+The shared limitation is the input to the score.
+ESC, Speculative Rejection, DPTS, and STOP read tokens that already reside in the KV cache; EquivPruner compares candidate steps that have already been written.
+\sys withholds a repeated loop before the prefill kernel and continues every other low score past a $t_0$-token probe only when the generated prefix meets the decode threshold (\S\ref{sec:split}).
+The gate is host-agnostic.
+\S\ref{sec:eval-ablate} places the same $\tau_{\mathrm{pre}}$ in front of ESC, Speculative Rejection, and DPTS, and the prefill column moves while the host's later cut still applies.
+A learned equivalence or early-stop signal can sit on top of that gate; the experiments treat the host as the decode policy and the residual score as the prefill policy.
+
+\paragraph{Request-level serving.}
+Orca introduced iteration-level scheduling~\cite{orca}.
+vLLM paged the KV cache and hashes full blocks for automatic prefix caching~\cite{vllm}.
+SGLang added radix prefix sharing for structured programs~\cite{sglang}.
+Sarathi chunked prefills so a decode batch can share the GPU with a prompt~\cite{sarathi,sarathisplit}.
+DistServe and Splitwise disaggregated prefill from decode and moved KV across a connector~\cite{distserve,splitwise}.
+Prefix caching discovers sharing after tokens exist, which is why a same-batch fan-out still clones the trunk.
+Disaggregation transfers every page the prefiller produced, which is why an aborted residual still occupies the connector.
+\eqref{eq:action} uses the hash as the page-aligned match $m_i$ and the connector as $\Xfer_i$: both are instances of one residual action, and the trunk alias removes $L$ from both.
+
+\paragraph{Program- and SLO-aware scheduling.}
+Autellix schedules by program-level attained service~\cite{autellix}.
+JITServe allocates just-enough bandwidth under heterogeneous SLOs~\cite{jitserve}.
+Hermes, ThunderAgent, and SAGA raise the scheduling unit to the program or workflow~\cite{hermes,thunderagent,saga}.
+These systems leave KV unshared across children of one fan-out and leave unissued children unprefilled until the program reaches them.
+\sys is complementary: the program still chooses the search, and the engine admits each named residual once, against the pages already published.
+
+\paragraph{KV retention, overlap, and cache edits.}
+InferCept, Continuum, MORI, and ConServe keep the current context alive or placed across tool gaps~\cite{infercept,continuum,mori,conserve}.
+Sutradhara overlaps tool execution with prefill of one linear tool-independent prefix~\cite{sutradhara}.
+SmoothAgent lookahead-transforms context; IdleSpec drafts plans for accuracy rather than for KV reuse~\cite{smoothagent,idlespec}.
+ForkKV copy-on-write splits LoRA residuals across agents that share a base cache~\cite{forkkv}.
+CachePrune edits KV neurons so the model does not follow instructions embedded in retrieved context~\cite{cacheprune}.
+That edit changes which attention state is visible inside one request.
+It does not decide which sibling residual is prefilled, and it does not change the connector payload of a fan-out.
+\eqref{eq:action} aliases the shared prefix, then sets $\Work_i$ and $\Xfer_i$ from the unmatched suffix.
+
+\paragraph{Speculative decoding.}
+Classical speculative decoding and multi-head drafters propose \emph{output} tokens and verify them against the target model~\cite{speculative,medusa,eagledraft}.
+The object stored by \sys is a future prompt prefix: the residual the harness will observe, not a draft of the tokens the model will emit.
+Admission stores that prefix under an admit probability and a prefix-hit rate (\S\ref{sec:speculate}).
+Speculative tokens stay outside the sampler, and \eqref{eq:lcp} binds the prompt that actually arrives.

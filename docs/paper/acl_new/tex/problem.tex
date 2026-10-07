@@ -1,0 +1,123 @@
+\section{Background}
+\label{sec:bg-full}
+
+Parallel reasoning and agent programs both expand one committed trunk into several residuals and then keep a single spine~\cite{tot,selfconsistency,react}.
+The cost of that expansion is fixed by \emph{when} a system is allowed to reject a child.
+Prefix caching can share a block only after the block has been published, disaggregation moves every page the prefiller has already computed, and decode-time pruners score a child only after its prefill and a generated prefix.
+\Cref{tab:trad} records the stage.
+The rest of this section is why that stage falls after the tokens have been paid for, and what a fan-out looks like once the trunk, the residuals, and the spine are named separately.
+
+\subsection{Parallel Reasoning as a Fan-out}
+\label{sec:bg-search}
+
+Chain-of-thought writes one trace~\cite{cot}.
+Tree-of-Thoughts, self-consistency, and Monte Carlo tree search write many, then select~\cite{tot,selfconsistency,mctsllm}.
+In the Game-of-24 trace of Tree-of-Thoughts, a propose prompt first emits candidate equations and a value prompt then marks each thought sure, maybe, or impossible; breadth-first search keeps a beam of width $b{=}5$~\cite{tot}.
+The value judgment reads a thought that has already been generated.
+The same order appears in agent programs: a coding or tool-using harness proposes several continuations of one trunk, observes one of them, and aborts the rest~\cite{react,sweagent,openhands}.
+On GSM8K and MATH the accuracy gain of that width is real~\cite{gsm8k,math,math500}, and so is the token bill.
+EquivPruner and early path pruning start from the same observation: most of the expanded steps do not change the answer that is finally kept~\cite{equivpruner,stoploss}.
+What they do not change is the serving order.
+The candidate residual is still prefilled, and under disaggregation it is still transferred, before any of those pruners runs.
+
+\subsection{Decode-Time Path Pruning}
+\label{sec:bg-prune}
+
+A second line drops a candidate after the model has generated it.
+Early-stopping self-consistency draws a window of complete samples and skips later samples only once that window agrees~\cite{esc,selfconsistency}.
+Speculative Rejection ranks partial generations at a reward horizon and halts the lower quantile~\cite{specrej}.
+Dynamic Parallel Tree Search generates a fixed mini-step on every active node, then early-stops low-confidence children~\cite{dpts}.
+STOP organizes these signals by source and learnability and instantiates a learned internal token that fires on a generated prefix~\cite{stoploss}.
+EquivPruner instead clusters semantically equivalent actions and keeps one representative of each class~\cite{equivpruner}.
+In every case the score is a function of text the model has already produced.
+
+The serving consequence is visible when the three decode-time hosts are run alone on the same GSM8K fan-out (Qwen3-8B, $k{=}16$, $D{=}512$).
+ESC, Speculative Rejection, and DPTS each prefill $5008$ tokens.
+They differ only after that prefill: ESC decodes to the window ($131072$ tokens, $17.05$\,s), Speculative Rejection cuts at its $256$-token horizon ($98304$ tokens, $13.14$\,s), and DPTS cuts after a $100$-token mini-step ($78336$ tokens, $11.86$\,s).
+Any-finished accuracy is $16/16$ on all three.
+An earlier decode cut reduces the tokens emitted after the kernel.
+It leaves the prefill, and any connector payload computed from that prefill, unchanged.
+\S\ref{sec:split} therefore uses a second threshold, read from the residual text before the kernel, and \S\ref{sec:eval-ablate} stacks that gate in front of the same three hosts.
+
+\subsection{Prefix Caching and Disaggregated Transfer}
+\label{sec:bg-pd}
+
+Automatic prefix caching and RadixAttention reuse a trunk by hashing a full block, $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$, after those tokens exist~\cite{vllm,sglang}.
+A later request hits only the blocks already in the table.
+A same-batch fan-out misses: the trunk has not been published, a partial block is a new block, and the engine materializes $k$ copies of $L$.
+The hash is the right index for a replay of the winner.
+It is not an admission test for the children that will be aborted.
+
+Prefill--decode disaggregation isolates time-to-first-token from inter-token latency by placing the two phases on separate instances and moving KV across a connector~\cite{distserve,splitwise}.
+The controller sends the request to the prefiller and then transfers the pages the prefiller computed.
+That path has no admission.
+A residual that the harness aborts after \texttt{insert} still occupies the connector, so the transfer equals the prefill (\eqref{eq:xfer-stock}).
+Program- and workflow-level schedulers raise the unit of scheduling above the request and still issue the next call as a unique continuation~\cite{autellix,thunderagent,continuum,mori}.
+Once KV retention has removed trunk recompute, the remaining time-to-first-token term is the residual suffix of children the harness can name before the observation returns.
+\sys reads that residual, aliases the trunk, and places on the connector only the miss tail of the residuals it keeps.
+
+\subsection{Prefill, Decode, and Idle}
+Autoregressive inference has two mechanically different phases~\cite{orca,distserve,splitwise}.
+\emph{Prefill} consumes the prompt in parallel and is compute-bound; \emph{decode} emits one token (or a small chunk) per step and is memory-bandwidth bound.
+PagedAttention~\cite{vllm} stores KV in non-contiguous pages; RadixAttention~\cite{sglang} indexes pages by token prefix so concurrent requests that share a system prompt hit a common trunk.
+Two consequences follow for agent workloads.
+First, next-turn \ttft{} is the prefill of tokens that miss the cache, plus queuing.
+Second, a memory-bound decode batch rarely saturates the tensor cores that a concurrent chunked prefill can use~\cite{sarathi}.
+For agents, the prompt of turn $i{+}1$ is a delta on turn $i$, applied after a tool interval of highly variable length~\cite{continuum,mori}.
+
+\subsection{Traditional Methods on a Fan-out}
+\label{sec:traditional-app}
+We group under \emph{traditional methods} the mechanisms a production stack already applies to one fan-out: prefix caching, hash-indexed prefill, prefill--decode disaggregation, and decode-time pruning.
+Each either shares the trunk or rejects a child, and the stage of that operation is fixed.
+\Cref{tab:trad} records the stage.
+\paragraph{First-expand cost.}
+APC indexes a full block by $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ after those tokens exist~\cite{vllm}; RadixAttention indexes the same prefix~\cite{sglang}.
+A same-batch expansion therefore misses and clones $k$ trunks,
+$\Work_{\mathrm{APC}}=kL+\sum_i\ell_i$,
+while a later replay of $x_\star$ is a hit ($\Work{=}0$).
+Baseline disaggregation transfers the same span, so $\Xfer_{\mathrm{PD}}=\Work_{\mathrm{APC}}$ on the first expand (\eqref{eq:xfer-stock}).
+ESC~\cite{esc}, Speculative Rejection~\cite{specrej}, and DPTS~\cite{dpts} evaluate a child only after its prefill and a generated prefix, hence after $\Work$ and, under disaggregation, after $\Xfer$.
+
+\subsection{Fan-out Model}
+\label{sec:model}
+
+\Cref{def:step} names the same objects used below.
+A parent $u$ holds a committed trunk $x_u$ with $|x_u|{=}L$.
+A fan-out is a set of residuals $\{\rho_i\}_{i=1}^{k}$, $|\rho_i|{=}\ell_i$.
+The bound winner $\star$ leaves the spine $x_\star=x_u\Vert\rho_\star$, $|x_\star|{=}L{+}\ell_\star$.
+Let $b$ be KV bytes per token and $P$ the page size.
+The three occupancies are \eqref{eq:mem}:
+$M_{\mathrm{clone}}=b(kL+\sum_i\ell_i)$ is the first-expand footprint of recompute, APC, and baseline disaggregation;
+$M_{\mathrm{CoW}}=b(L+\sum_i\ell_i)$ is one shared trunk with every residual live;
+$M_{\mathrm{spine}}=b(L+\ell_\star)$ is the footprint after abort.
+$\Work$ is the token count issued to a prefill kernel before $\star$ is known;
+$\Xfer$ is the token count inserted on the P/D connector.
+\Cref{tab:notation} lists the remaining symbols.
+
+\begin{table}[t]
+\centering
+\caption{Notation for Definition~\ref{def:step} and for \eqref{eq:action}--\eqref{eq:xfer}.}
+\label{tab:notation}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}llp{0.50\columnwidth}@{}}
+\toprule
+Symbol & Domain & Meaning \\
+\midrule
+$L$, $\ell_i$, $\ell_\star$ & $\mathbb{N}$ & trunk; residual $i$; committed residual \\
+$\rho_i$, $x_u$ & tokens & residual of child $i$; committed trunk \\
+$h_i$ & digest & $\mathrm{hash}(\mathrm{parent},\rho_i[0{:}P),\mathrm{extra})$ \\
+$m_i$ & tokens & full-page prefix of $\rho_i$ in $H$, steps of $P$ \\
+$s_i$, $s'_i$, $\tau$ & $[0,1]$ & score of $\rho_i$; score of the probe $y_i$; threshold \\
+$t_0$, $D$, $d_i$ & tokens & probe length; decode budget; length assigned to $i$ \\
+$\alpha$ & $(0,1]$ & early-abort prefix fraction ($0.20$) \\
+$p_i$, $q_i$ & $[0,1]$ & admit probability; residual-prefix hit rate \\
+$a_i\in\Act$ & $\Act$ & $\mathrm{HS},\mathrm{HP},\mathrm{DS},\mathrm{EA},\mathrm{PF}$ (\eqref{eq:action}) \\
+$\Lambda$, $F_i$ & set, $\{0,1\}$ & repeated-loop index set; early-abort predicate \\
+$\Keep$ & $\subseteq[k]$ & residuals that remain after admission \\
+$\Work_i$, $\Xfer_i$ & tokens & GPU miss tail; connector payload \\
+$b$, $P$ & bytes, tok & KV bytes per token; page size \\
+$B_t=B^c_t+B^s_t$ & tokens & committed and speculative budget on tick $t$ \\
+\bottomrule
+\end{tabular}
+\end{table}
