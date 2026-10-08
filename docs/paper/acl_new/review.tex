@@ -1,0 +1,438 @@
+% ACL-style meta-review of PD-Prune (internal drafting aid; not for submission).
+% Compile standalone: pdflatex review.tex
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{times}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xspace}
+\setlist{leftmargin=*,itemsep=0.25em,topsep=0.35em}
+\newcommand{\sys}{\textsf{PD-Prune}\xspace}
+\newcommand{\plus}{\textsf{PD-Prune+}}
+\newcommand{\Work}{W}
+\newcommand{\Xfer}{X}
+\newcommand{\Keep}{\mathcal{K}}
+\newcommand{\Pref}{T_{\mathrm{pre}}}
+\newcommand{\Idle}{T_{\mathrm{idle}}}
+
+\title{ACL-Style Review:\\
+PD-Prune: Disaggregated Prefill--Decode Pruning\\
+for Efficient Agentic LLM Serving}
+\author{Internal Meta-Review}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document is an \textbf{ACL-style review} of the current draft: strengths,
+weaknesses, writing/notation issues, factual inconsistencies, and experiments
+that need strengthening. It also records a DistServe-style core architecture
+figure proposal (\texttt{fig/fig\_core\_arch.tex}).
+\end{abstract}
+
+\section*{Overall recommendation}
+\textbf{Borderline / Major Revision} (as a systems-for-NLP paper at ACL).
+
+The core claim is clear and timely: under prefill--decode disaggregation,
+decode-time path pruning is too late because residual prefill and KV transfer
+have already been paid; admitting residuals on the prefill side of the cut
+(with a trunk alias) can cut work and connector traffic without changing the
+decode host. The formalization (trunk / residual / spine; $\Work$, $\Xfer$;
+action set $\Act$) is a genuine contribution.
+
+The draft is not yet ACL-ready. The writing is telegraphic to the point of
+opacity; naming is inconsistent (\sys / FS / \textsf{APP} / \plus); the scoring
+functions that drive every threshold are underspecified; several experiments
+use tiny slices and a synthetic ``loop + illegal'' residual mix; and the main
+text / appendix largely duplicate each other. Fixing these is necessary before
+the paper can be fairly judged on technical merit.
+
+\medskip
+\noindent\textbf{Scores (ACL form, 1--5):}
+\begin{center}
+\small
+\begin{tabular}{@{}lc@{}}
+\toprule
+Soundness & 3 \\
+Excitement / Novelty & 3.5 \\
+Reproducibility & 2 \\
+Clarity & 2 \\
+Meaningful comparison & 3 \\
+Overall assessment & 2.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%----------------------------------------------------------------------
+\section{Summary of the paper}
+%----------------------------------------------------------------------
+Agentic / tree-search serving expands one committed \emph{trunk} of length $L$
+into $k$ \emph{residuals} and keeps one \emph{spine}. Prefix caching,
+PD-disaggregation, and decode-time pruners (ESC, Speculative Rejection, DPTS)
+each pay for non-winners before rejection is possible.
+\sys places two independent gates on that fan-out:
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{Radix prune} (prefill-side): first-match action
+        $a_i\in\{\mathrm{HS},\mathrm{HP},\mathrm{DS},\mathrm{EA},\mathrm{PF}\}$
+        from page match $m_i$, loop set $\Lambda$, and early-abort bit $F_i$;
+        trunk is CoW-aliased so $L\notin\Work_i$.
+  \item \textbf{Decode prune}: probe of $t_0$ tokens; continue to $D$ iff
+        $s'_i\ge\tau_{\mathrm{dec}}$. Defaults $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})=(0.15,0.45)$.
+\end{enumerate}
+Reported wins: $-23\%$ computed prefill on GSM8K at matched any-finished;
+MATH-500 probe restores $20/32$ vs.\ blanket drop $13/32$; spine peak KV
+$\approx 0.72\times$ APC.
+
+%----------------------------------------------------------------------
+\section{Strengths}
+%----------------------------------------------------------------------
+\begin{enumerate}
+  \item \textbf{Right problem for agentic serving.} Moving the prune decision
+        before the PD connector is a clean systems insight and is well
+        motivated against DistServe / Splitwise and decode-time pruners.
+  \item \textbf{Useful abstraction.} Trunk / residual / spine and the pair
+        $(\Work,\Xfer)$ make the ``who pays when'' argument precise; Lemma~1
+        (first-fan-out dominance) is the right kind of claim.
+  \item \textbf{Host-invariance} (Prop.~2) is a strong experimental design
+        idea: one $\tau_{\mathrm{pre}}$ moves the prefill column for ESC / SR / DPTS.
+  \item \textbf{Probe vs.\ blanket drop} on MATH-500 is a good negative result
+        that justifies threshold separation.
+  \item \textbf{Figures} (\texttt{fig\_pd}, \texttt{fig\_prune}, \texttt{fig\_trad})
+        already communicate the cut better than much of the prose.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Major weaknesses}
+%----------------------------------------------------------------------
+
+\subsection{W1. Venue fit and audience}
+This is primarily an \textbf{inference-systems} paper (KV pages, connectors,
+CoW page tables, goodput). ACL readers will ask: what is the NLP contribution
+beyond plugging existing pruners into a serving stack? The draft never states
+a crisp NLP takeaway (e.g., how admission changes \emph{which} reasoning
+traces survive, or whether score design interacts with math / agent semantics).
+Either (i)~foreground the NLP/agent consequences and evaluate on real agent
+traces, or (ii)~target a systems venue (OSDI/NSDI/EuroSys/MLSys) with the
+current framing.
+
+\subsection{W2. Scoring functions are undefined (blocks reproducibility)}
+Every operating point rests on $\mathrm{Score}_{\mathrm{pre}}$,
+$\mathrm{Score}_{\mathrm{dec}}$, and $\mathrm{Loop}(\cdot)$.
+The paper only reports four draft numbers ($0.02/0.22/1.00$ and $0.04/0.16/0.92$)
+and treats Prop.~1 as if these were general separators.
+Missing:
+\begin{itemize}
+  \item Is the score a classifier, entropy, reward model, heuristic regex, or
+        STOP-style learned token?
+  \item Training / calibration data; false-positive rate of $\mathrm{Loop}$.
+  \item Latency of scoring (critical if it sits on the TTFT path).
+  \item Sensitivity: what happens when score noise moves illegal text below
+        $\tau_{\mathrm{pre}}$?
+\end{itemize}
+Without this, the thresholds $(0.15,0.45)$ look hand-tuned to one synthetic
+mix, not a transferable method.
+
+\subsection{W3. Evaluation slices are too small / too synthetic}
+\begin{itemize}
+  \item Main GSM8K gate: $n{=}16$; MATH-500: first $32$ level-$\ge 4$ problems.
+  \item Residuals are an artificial ``hopeless mix'' (contest strategies +
+        repeated loops + illegal text). This maximizes the benefit of
+        $\mathrm{DS}$ and may not match real ToT / ReAct fan-outs.
+  \item Claims cite SWE-agent / OpenHands / ReAct, but GPU results are almost
+        all math ToT; HumanEval is $k{=}2$ and barely exercises the gate.
+  \item Control-plane microbench (\Cref{tab:app} style; $12\,\mu$s/token) is
+        mixed into the narrative as if it were wall-clock evidence.
+\end{itemize}
+\textbf{Needed:} full GSM8K / MATH-500 under the gate; at least one real
+multi-tool agent workload; report mean$\pm$std over seeds; separate synthetic
+model from GPU tables.
+
+\subsection{W4. Naming and system-variant confusion}
+The draft mixes \textbf{\sys}, \textbf{FS}, \textbf{\textsf{APP}}, and
+\textbf{\plus} without a single variant table. Readers cannot tell whether a
+row is ``alias only'', ``alias + radix prune'', ``+ decode probe'', or
+``+ last-line stop'' (the latter is commented out in places but still appears
+in appendix tables). This hurts every comparison claim.
+
+\subsection{W5. Clarity / redundancy}
+\begin{itemize}
+  \item Abstract is unreadable without the body (``cutoffs are $(0.15,0.45)$''
+        with no score definition).
+  \item Main Formulation / Method largely restate Appendix Background / Design.
+  \item Intro dumps symbols, thresholds, and table pointers in one paragraph
+        (``This work'').
+  \item Prose style is telegram-dense (``Index $0$ stays in $\Keep$'') without
+        teaching the reader first---unfriendly for ACL.
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Writing: unprofessional, redundant, or unclear}
+%----------------------------------------------------------------------
+
+\subsection{Redundancy (cut or demote)}
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.42\linewidth}p{0.48\linewidth}@{}}
+\toprule
+Repeated material & Suggestion \\
+\midrule
+Intro + Formulation + Method all restate
+``APC / PD / decode prune pay before reject''
+& Keep one crisp statement in Intro; cite Appendix for history. \\
+\midrule
+Method \S\ref{sec:app} vs.\ Design \S\ref{sec:app-detail}
+(same $m_i$, $\Lambda$, $F_i$, $\Work$, $\Xfer$)
+& Main: definitions + Alg.~1; Appendix: CoW / API / pool. \\
+\midrule
+Results vs.\ Full Evaluation
+(same GSM8K / MATH numbers retold)
+& Main: one summary table + 2--3 figures;
+Appendix: ablations only. \\
+\midrule
+``Reading one cold fan-out'' paragraph
+repeats Tab.~scores + Prop.~1
+& Keep one walkthrough; delete the second. \\
+\midrule
+Related Work (main) vs.\ Extended Related Work
+& Main: 1 page; move taxonomy to Appendix. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Unprofessional / ACL-unfriendly phrasing}
+\begin{itemize}
+  \item Abstract opener: ``Agentic serving expands one trunk\ldots''---define
+        \emph{trunk} or avoid jargon in the first sentence.
+  \item ``The cutoffs are $(0.15,0.45)$.''---sounds like a lab note, not a paper.
+  \item ``FS is the alias and \plus{} is the same system with the admission
+        rule enabled.''---define once in a boxed variant table.
+  \item Overuse of imperative / elliptical sentences without subjects
+        (``Abort leaves the spine.''). Fine in systems papers; heavy for ACL.
+  \item Mixing code identifiers (\texttt{fork}, \texttt{insert}) into claims
+        without an API subsection in the main text.
+\end{itemize}
+
+\subsection{Suggested rewrite targets (priority)}
+\begin{enumerate}
+  \item Rewrite \textbf{Abstract} as: problem $\to$ method (2 sentences) $\to$
+        3 quantitative results with setting.
+  \item Rewrite \textbf{Intro} around one figure + three bullets; move
+        thresholds into Method.
+  \item Add a \textbf{``What is scored?''} subsection before Alg.~1.
+  \item Collapse main Experiments to $\le$ 2 pages; push forests / sweeps to
+        Appendix.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{Errors and inconsistencies}
+%----------------------------------------------------------------------
+
+\subsection{E1. Algorithm vs.\ equations (transfer predicate)}
+Alg.~\texttt{app} sets
+\[
+\Xfer_i \leftarrow \Work_i\,[i{=}0\lor a_i\neq\mathrm{DS}]\,[a_i\in\{\mathrm{HP},\mathrm{PF}\}],
+\]
+while \eqref{eq:xfer} uses $[i\in\Keep]$.
+With $\Keep=\{0\}\cup\{i:a_i\neq\mathrm{DS}\}$ these coincide \emph{only if}
+EA is never transferred---which \eqref{eq:xfer} already enforces via the
+$\{\mathrm{HP},\mathrm{PF}\}$ filter. Still, the algorithm should use the same
+predicate as the equation ($i\in\Keep$) to avoid reviewer nitpicks.
+Also: $\mathrm{EA}$ contributes $\Work_i=\lceil\alpha\ell_i\rceil$ but
+$\Xfer_i=0$---state explicitly that early-abort pages are dropped on the
+prefill side and never inserted.
+
+\subsection{E2. Score naming}
+Main text: $\mathrm{Score}_{\mathrm{pre}}$, $\mathrm{Score}_{\mathrm{dec}}$.
+Alg.~\texttt{probe}: $\mathrm{DraftScore}$.
+Design appendix: $s(\rho_i[0{:}\lceil\alpha\ell_i\rceil])<\tau$ (no
+$\mathrm{pre}/\mathrm{dec}$).
+\textbf{Fix:} one name pair everywhere; never bare $\tau$ when both exist.
+
+\subsection{E3. Symbol overload on $H$}
+$H$ is the published radix index \emph{and} the HBM pool size in
+$C=\lfloor H/M_{\mathrm{spine}}\rfloor$.
+\textbf{Fix:} radix $\mathcal{H}$ or $H_{\mathrm{radix}}$; pool capacity
+$H_{\mathrm{mem}}$ / $M_{\mathrm{pool}}$.
+
+\subsection{E4. Lemma naming vs.\ system name}
+Lemma uses $\Work_{\mathrm{APP}}$ while the system is \sys / FS.
+Either rename the lemma quantities to $\Work_{\sys}$ or define APP$:=$ the
+admission rule once.
+
+\subsection{E5. Accuracy regressions understated}
+\begin{itemize}
+  \item Tab.~\texttt{mt}: Qwen3-8B GSM8K APC $1.000$ $\to$ FS/FS+ $0.938$
+        (one problem lost)---intro claims ``matches''.
+  \item Tab.~\texttt{plus}: APC $0.900$ $\to$ \plus{} $0.863$ at tp$=$2.
+  \item Cross-model FS+ accuracy collapses on some families in commented /
+        appendix tables---if retained, must be discussed as a limitation.
+\end{itemize}
+Any-finished $16/16$ is not the same as committed-spine winner quality;
+the paper knows this (Tab.~\texttt{ablate}) but the abstract/intro sell only
+the former.
+
+\subsection{E6. Prop.~1 is not a proposition as stated}
+\eqref{eq:sep-pre}--\eqref{eq:sep-dec} are \emph{empirical conditions} on a
+particular score and residual mix, not theorems. Rename to
+``Operating-point condition'' or ``Empirical separator'', and report the
+score distribution (histogram / quantiles), not four point values.
+
+\subsection{E7. Indexing of residuals}
+Definition~1 (branching step) in Formulation uses $\{\rho_i\}_{i=0}^{k-1}$;
+Background model text sometimes uses $i=1..k$. Align.
+
+\subsection{E8. DistServe comparison is conceptual, not empirical}
+The PD figures compare against ``stock disaggregation'', but experiments run
+on vLLM with prefix caching---not DistServe/Splitwise. Either run a real
+disaggregated baseline or label the comparison as analytical / cost-model
+only (as Tab.~\texttt{app} already is).
+
+%----------------------------------------------------------------------
+\section{Experiments that need more detail}
+%----------------------------------------------------------------------
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.28\linewidth}p{0.62\linewidth}@{}}
+\toprule
+Gap & What to add \\
+\midrule
+Score / Loop definition
+& Spec + ablations: replace Score with random / entropy / reward-model;
+  measure FP/FN of Loop. \\
+\midrule
+Scale
+& Full GSM8K ($n{=}1319$) under $\tau_{\mathrm{pre}}$ gate, not only KV forest;
+  full MATH-500; AIME with confidence intervals. \\
+\midrule
+Real agents
+& SWE-bench / OpenHands / tool-call traces with natural residual diversity
+  (not planted loops). \\
+\midrule
+True PD stack
+& Measure $\Xfer$ bytes and TTFT on a real disaggregated deployment
+  (or vLLM PD / Mooncake / DistServe-like). \\
+\midrule
+Admission overhead
+& Microbench Score+hash path latency vs.\ saved prefill. \\
+\midrule
+Threshold robustness
+& Sweep $\tau_{\mathrm{pre}},\tau_{\mathrm{dec}},t_0,\alpha$ with Pareto
+  (accuracy vs.\ prefill vs.\ e2e); not two points. \\
+\midrule
+Baseline fairness
+& SGLang RadixAttention same hardware; decode pruners with equal
+  any-finished \emph{and} winner metrics. \\
+\midrule
+Variance
+& $\ge 3$ seeds; temperature $>0$ for search methods that need it. \\
+\midrule
+Memory vs.\ latency
+& Tab.~\texttt{gsm} shows FS fan-out \emph{slower} than APC ($140$ vs.\ $87$\,ms).
+  Main text must own this tradeoff; end-to-end wins need a clear causal
+  attribution (prefill cut vs.\ $D^{+}$ cut vs.\ stop markers). \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%----------------------------------------------------------------------
+\section{Notation suggestions}
+%----------------------------------------------------------------------
+\begin{enumerate}
+  \item \textbf{Variant table (mandatory).}
+  \begin{center}
+  \small
+  \begin{tabular}{@{}lll@{}}
+  \toprule
+  Name & Alias trunk & Admission \\
+  \midrule
+  APC / PD-base & no & none \\
+  \sys-CoW (FS) & yes & none (all residuals prefilled) \\
+  \sys (FS+) & yes & radix prune $a_i$ \\
+  \sys+probe & yes & $a_i$ + decode probe (eq.\ for $d_i$) \\
+  \bottomrule
+  \end{tabular}
+  \end{center}
+  Drop the overloaded name \textsf{APP}, or define
+  $\mathsf{APP}\equiv$ radix prune once.
+
+  \item \textbf{Objects.} Keep trunk $x_u$, residual $\rho_i$, spine $x_\star$.
+        Prefer $|\cdot|$ for lengths; avoid mixing $L$ and $|x_u|$ in the same
+        display without $L:=|x_u|$.
+
+  \item \textbf{Actions.} Write the first-match rule as a priority list in
+        text; keep Iverson form in Appendix only.
+
+  \item \textbf{Work / Transfer.}
+        $\Work_i^{\mathrm{gpu}}$, $\Xfer_i^{\mathrm{conn}}$;
+        aggregates $\Work=\sum_i\Work_i$, $\Xfer=\sum_i\Xfer_i$.
+
+  \item \textbf{Scores.}
+        $s_i^{\mathrm{pre}}=\mathrm{Score}_{\mathrm{pre}}(\rho_i)$,
+        $s_i^{\mathrm{dec}}=\mathrm{Score}_{\mathrm{dec}}(y_i)$;
+        never reuse $s_i$ for both.
+
+  \item \textbf{Pools.}
+        Radix index $\mathcal{H}$; HBM capacity $M_{\mathrm{pool}}$;
+        slots $C=\lfloor M_{\mathrm{pool}}/M_{\mathrm{spine}}\rfloor$.
+
+  \item \textbf{Macros.}
+        One macro for the system; one for the ``+admission'' variant;
+        forbid FS/APP in captions unless defined in that caption.
+\end{enumerate}
+
+%----------------------------------------------------------------------
+\section{DistServe-style core architecture figure}
+%----------------------------------------------------------------------
+DistServe's runtime figure is a \textbf{controller + prefill pool + decode
+pool + KV path}. For \sys we mirror that layout and put the novel gates on the
+cut:
+
+\begin{quote}
+\texttt{docs/paper/acl\_new/fig/fig\_core\_arch.tex}
+\end{quote}
+
+Suggested caption:
+\begin{quote}
+\textit{\sys{} runtime (DistServe-style).
+Requests enter a controller that aliases the trunk and runs radix prune
+before prefill kernels. Only the miss tail of $\Keep$ crosses the connector.
+Decode instances run a $t_0$ probe (and optional ESC/SR/DPTS) and retain the
+spine after abort.}
+\end{quote}
+Use this as the main-paper Figure~1 if \texttt{fig\_pd} stays as a
+before/after comparison.
+
+%----------------------------------------------------------------------
+\section{Line-level comments (high signal)}
+%----------------------------------------------------------------------
+\begin{itemize}
+  \item \textbf{Abstract:} rewrite entirely; lead with the systems problem in
+        one plain sentence.
+  \item \textbf{Intro, ``This work'':} too many numbers; move results to
+        Experiments.
+  \item \textbf{Prop.~host:} good; make it a numbered insight in the intro.
+  \item \textbf{Tab.~\texttt{main}:} do not win-highlight a single ESC time
+        under a ``ESC/SR/DPTS'' row---split hosts or report three times without
+        a single green cell.
+  \item \textbf{Conclusion:} currently a compressed abstract; add limitations
+        (score dependence; fan-out overhead; venue of applicability).
+\end{itemize}
+
+%----------------------------------------------------------------------
+\section{Minimal revision plan (author checklist)}
+%----------------------------------------------------------------------
+\begin{enumerate}
+  \item Define $\mathrm{Score}$ / $\mathrm{Loop}$ and release the scorer.
+  \item Add variant table; purge APP/FS ambiguity.
+  \item Fix Alg.\ / $H$ / DraftScore inconsistencies.
+  \item Scale GSM8K+MATH under the gate; add one real agent workload.
+  \item Rewrite Abstract + Intro for ACL clarity; cut 30--40\% redundancy.
+  \item Promote \texttt{fig\_core\_arch} to Figure~1; keep \texttt{fig\_pd}
+        as comparison.
+  \item Own accuracy drops and APC-faster fan-out latency in the main text.
+\end{enumerate}
+
+\end{document}

@@ -1,60 +1,92 @@
 \section{Method}
 \label{sec:design}
 
-\sys is one first-match action per residual.
-The action fixes the prefill, the connector payload, and the decode length.
-\S\ref{sec:design-full} is the copy-on-write pool, the radix picture, and the span table that realize the same quantities.
+\sys runs two independent prune methods on one fan-out (\Cref{fig:system}).
+\emph{Radix prune} acts on the residual before the kernel: it keeps prefixes that can still yield a high-quality result and that raise the page hit rate in $H$, and thereby fixes $\Work_i$ and $\Xfer_i$.
+\emph{Decode prune} acts on the tree of thoughts after transfer: it keeps high-reward continuations and sets $d_i$.
+Neither method's objective is a soft constraint on the other.
+\S\ref{sec:design-full} realizes the same quantities with a copy-on-write pool, a radix picture, and a span table.
 
-\subsection{One Action per Residual}
+\iffalse
+% Figure 2 / 3 (pd-cut, prune): omitted from main paper for now.
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_pd}}
+\caption{\textbf{\sys{} on a prefill--decode cut} (\S\ref{sec:app}).
+(a)~Stock disaggregation prefills every residual, including a copy of the trunk, and the connector carries $kL+\sum_i\ell_i$.
+Decode-time pruning runs only after those pages arrive.
+(b)~The two pools stay separate.
+The Prefill Pruner admits before the kernels: a repeated loop never enters a GPU, a full-page hit moves nothing, and the connector carries the miss tail of $\Keep$.
+The trunk is one alias, so $L$ does not cross.
+The Decoding Pruner extends a $t_0$ probe only when the prefix meets $\tau_{\mathrm{dec}}$; abort leaves the spine.}
+\label{fig:pd-cut}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_prune}}
+\caption{\textbf{Two independent prune methods.}
+(a)~\emph{Radix prune.}
+Objective: admit residuals whose prefix quality can still produce a high-quality result, and prefer page hits in the published radix $H$.
+The first match $a_i\in\Act$ sets $\Work_i$ and $\Xfer_i$; a full hit and a withheld loop never enter the connector; the trunk is one alias.
+(b)~\emph{Decode prune.}
+Objective: high reward on the retained ToT.
+A $t_0$-token probe decides whether $d_i$ continues to $D$ or stops; ESC / Speculative Rejection / DPTS rewrite $D^{+}$ and leave $\Work$ unchanged.}
+\label{fig:prune}
+\end{figure*}
+\fi
+
+\subsection{Radix Prune: Prefix Quality and Cache Hit Rate}
 \label{sec:app}
 
-Let $H$ be the published radix and $P$ the page size.
-Only full pages enter $H$~\cite{vllm}.
-The page-aligned match, the repeated-loop set, and the early-abort bit are
+Radix prune reads only the residual and the published index.
+Let $H$ be that radix and $P$ the page size; only full pages enter $H$~\cite{vllm}.
+From each residual $\rho_i$ we read three observables---the page match, the loop set, and the early-abort bit:
 \begin{align}
 m_i &= \max\{jP: jP\le\ell_i,\;\rho_i[0{:}jP)\in H\}, \label{eq:mi}\\
 \Lambda &= \{i\neq 0:\mathrm{Loop}(\rho_i)\}, \nonumber\\
 F_i &= \bigl[\mathrm{Score}_{\mathrm{pre}}\bigl(\rho_i[0{:}\lceil\alpha\ell_i\rceil]\bigr)<\tau_{\mathrm{pre}}\bigr]. \nonumber
 \end{align}
 The trunk is an alias, $\sigma_i\leftarrow(\sigma_u,|x_u|)$, so $L\notin\Work_i$.
-Index $0$ is forced into the retained set $\Keep$, and therefore $a_0\in\{\mathrm{HS},\mathrm{HP},\mathrm{PF}\}$.
+Index $0$ is forced into $\Keep$, hence $a_0\in\{\mathrm{HS},\mathrm{HP},\mathrm{PF}\}$.
 
 \begin{definition}[Residual action]
 \label{def:action}
-With $\Act=\{\mathrm{HS},\mathrm{HP},\mathrm{DS},\mathrm{EA},\mathrm{PF}\}$, the first match is
+With $\Act=\{\mathrm{HS},\mathrm{HP},\mathrm{DS},\mathrm{EA},\mathrm{PF}\}$,
 \begin{equation}
 \label{eq:action}
 a_i=
 \begin{cases}
-\mathrm{HS} & \text{if } m_i=\ell_i,\\
-\mathrm{HP} & \text{if } 0<m_i<\ell_i,\\
-\mathrm{DS} & \text{if } m_i=0 \land i\in\Lambda,\\
-\mathrm{EA} & \text{if } m_i=0 \land i\notin\Lambda \land F_i,\\
-\mathrm{PF} & \text{if } m_i=0 \land i\notin\Lambda \land \neg F_i.
+\mathrm{HS} & m_i=\ell_i,\\
+\mathrm{HP} & 0<m_i<\ell_i,\\
+\mathrm{DS} & m_i=0,\ i\in\Lambda,\\
+\mathrm{EA} & m_i=0,\ i\notin\Lambda,\ F_i,\\
+\mathrm{PF} & m_i=0,\ i\notin\Lambda,\ \neg F_i.
 \end{cases}
 \end{equation}
 \end{definition}
 
 \noindent
-$\mathrm{HS}$ is a full-page hit, $\mathrm{HP}$ a partial hit, $\mathrm{DS}$ a repeated loop withheld before the kernel, $\mathrm{EA}$ an early abort at fraction $\alpha$ of the residual, and $\mathrm{PF}$ a full prefill.
-The Iverson expansion of the same first match is \eqref{eq:action-iv}.
-The lengths are
+In order: full-page hit, partial hit, withheld loop, early abort at fraction $\alpha$, otherwise full prefill.
+$\mathrm{HS}$/$\mathrm{HP}$ raise the hit rate; $\mathrm{DS}$/$\mathrm{EA}$ drop residuals whose prefix quality cannot yield a high-quality result; $\mathrm{PF}$ admits the rest.
+The Iverson form is \eqref{eq:action-iv}.
+Each $a_i$ induces the kernel and connector lengths
 \begin{align}
 \Work_i &=
 \begin{cases}
-0 & \text{if } a_i\in\{\mathrm{HS},\mathrm{DS}\},\\
-\ell_i-m_i & \text{if } a_i=\mathrm{HP},\\
-\lceil\alpha\ell_i\rceil & \text{if } a_i=\mathrm{EA},\\
-\ell_i & \text{if } a_i=\mathrm{PF},
+0 & a_i\in\{\mathrm{HS},\mathrm{DS}\},\\
+\ell_i-m_i & a_i=\mathrm{HP},\\
+\lceil\alpha\ell_i\rceil & a_i=\mathrm{EA},\\
+\ell_i & a_i=\mathrm{PF},
 \end{cases}
 \label{eq:work}\\
-\Xfer_i &= \Work_i\,[i\in\Keep]\,[a_i\in\{\mathrm{HP},\mathrm{PF}\}].
+\Xfer_i &= \Work_i\,[i\in\Keep]\,[a_i\in\{\mathrm{HP},\mathrm{PF}\}],
 \label{eq:xfer}
 \end{align}
-Summing over the fan-out gives the kernel, the connector, and the decode budget
+and the fan-out aggregates
 \begin{align}
 \Work &=\textstyle\sum_{i=0}^{k-1}\Work_i, &
-\Xfer &=\textstyle\sum_{i=0}^{k-1}\Xfer_i, \nonumber\\
+\Xfer &=\textstyle\sum_{i=0}^{k-1}\Xfer_i, &
 D^{+} &=\textstyle\sum_{i=0}^{k-1}d_i.
 \label{eq:agg}
 \end{align}
@@ -91,10 +123,11 @@ T_{\mathrm{fan}}=\Pref(\Work)+\mu\,\Xfer+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
 where $T_{\mathrm{CoW}}$ is a pointer swap and $T_{\mathrm{abort}}$ frees residual pages only.
 \Cref{tab:span} compares the six spans.
 
-\subsection{Separate Prefill and Decode Thresholds}
+\subsection{Decode Prune: High Reward on the ToT}
 \label{sec:split}
 
-The prefill score and the decode score read different strings, so the thresholds are a pair $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$ rather than one cutoff reused at both stages.
+Decode prune is independent of radix prune: it reads a generated prefix and optimizes reward, not hit rate.
+The two scores therefore use a pair $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$ rather than one cutoff reused at both stages.
 A blanket prefill drop,
 \begin{equation}
 \label{eq:drej}

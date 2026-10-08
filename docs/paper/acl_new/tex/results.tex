@@ -57,16 +57,99 @@ Computed prefill falls from $1320/2624/5008$ tokens to $1018/2020/3848$.
 Raising the prefill threshold to $0.45$ is faster at every width ($-9\%$, $-21\%$, $-36\%$) and still $16/16$ at $k{=}16$, but it drops illegal text together with the loop and loses two problems at $k{=}4$ and $k{=}8$.
 The default is the cutoff that satisfies \eqref{eq:sep-pre} at every $k$.
 
+\paragraph{End-to-end efficiency under the default gate.}
+\Cref{tab:e2e-esc,tab:e2e-plugin} expand the same GSM8K hopeless slice into the full host comparison.
+Under ESC, $\tau_{\mathrm{pre}}{=}0.15$ cuts wall-clock by $5\%$, $6\%$, and $17\%$ as $k$ grows from $4$ to $16$, because a wider fan-out contains more repeated loops that never enter the kernel.
+Computed prefill falls from $1320/2624/5008$ to $1018/2020/3848$ tokens.
+Any-finished stays within one problem of the host baseline; the committed-spine winner is unchanged at $k{=}16$ ($11/16$).
+The same fixed bar plugs into Speculative Rejection and DPTS without retuning (\Cref{tab:e2e-plugin}): every host drops from $5008$ to $3848$ prefill tokens and keeps $16/16$ any-finished, while the relative time cut is largest on ESC ($17\%$), which would otherwise decode the loop to the end of its window.
+Raising the bar to $0.45$ at $k{=}16$ further cuts ESC to $10.92$\,s ($-36\%$) and prefill to $2768$ tokens, still at $16/16$ any-finished, but the winner falls by one problem and the same bar loses accuracy at smaller $k$ (\Cref{tab:prefill-bar}).
+
+\begin{table*}[t]
+\centering
+\caption{End-to-end efficiency on GSM8K (Qwen3-8B, hopeless mix, $n{=}16$, $D{=}512$, $\mathrm{tp}{=}1$, temperature $0$, prefix caching on).
+ESC host with $\tau_{\mathrm{pre}}{=}0.15$.
+``Winner'' is committed-spine exact match.
+Time is trunk warm plus fan-out.}
+\label{tab:e2e-esc}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ESC & base & ${+}\tau_{\mathrm{pre}}{=}0.15$ & cut & any & winner & prefill \\
+\midrule
+$k{=}4$ & $8.65$\,s & $8.22$\,s & \win{$5\%$} & $16{\to}15/16$ & $9{\to}9$ & $1320{\to}1018$ \\
+\rowcolor{tblalt}
+$k{=}8$ & $10.84$\,s & \win{$10.19$\,s} & \win{$6\%$} & $16{\to}16/16$ & $11{\to}9$ & $2624{\to}2020$ \\
+$k{=}16$ & $17.05$\,s & \win{$14.13$\,s} & \win{$17\%$} & $16{\to}16/16$ & $11{\to}11$ & $5008{\to}3848$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\caption{Same slice at $k{=}16$: one $\tau_{\mathrm{pre}}$ in front of ESC, Speculative Rejection, and DPTS.
+Prefill is host-invariant (\Cref{prop:host}).
+Bottom block uses $\tau_{\mathrm{pre}}{=}0.45$ (faster matched any-finished at this width only).}
+\label{tab:e2e-plugin}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+$k{=}16$ & base & ${+}\tau_{\mathrm{pre}}$ & cut & any & winner & prefill \\
+\midrule
+ESC, $0.15$ & $17.05$\,s & \win{$14.13$\,s} & \win{$17\%$} & $16/16$ & $11{\to}11$ & $5008{\to}3848$ \\
+\rowcolor{tblalt}
+SR, $0.15$ & $13.14$\,s & \win{$12.47$\,s} & \win{$5\%$} & $16/16$ & $12{\to}10$ & $5008{\to}3848$ \\
+DPTS, $0.15$ & $11.86$\,s & $11.49$\,s & $3\%$ & $16/16$ & $12{\to}12$ & $5008{\to}3848$ \\
+\midrule
+ESC, $0.45$ & $17.05$\,s & \win{$10.92$\,s} & \win{$36\%$} & $16/16$ & $11{\to}10$ & $5008{\to}$\win{2768} \\
+\rowcolor{tblalt}
+SR, $0.45$ & $13.14$\,s & \win{$10.80$\,s} & \win{$18\%$} & $16/16$ & $12{\to}10$ & $5008{\to}$\win{2768} \\
+DPTS, $0.45$ & $11.86$\,s & \win{$10.90$\,s} & \win{$8\%$} & $16/16$ & $12{\to}10$ & $5008{\to}$\win{2768} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_eval_admit}}
-\caption{\textbf{Prefill threshold on GSM8K} (\Cref{tab:prefill-bar,tab:plugin}).
+\caption{\textbf{Prefill threshold on GSM8K} (\Cref{tab:prefill-bar,tab:e2e-plugin,tab:plugin}).
 (a)~Wall-clock under ESC. Labels are any-finished.
 $\tau_{\mathrm{pre}}{=}0.45$ is $14/16$ at $k{=}4$ and $k{=}8$, and $16/16$ at $k{=}16$.
 (b)~Computed prefill, $-23\%$ at $0.15$ and $-45\%$ at $0.45$.
 (c)~The same $0.15$ threshold in front of each host at $k{=}16$. Every row stays $16/16$.}
 \label{fig:eval-admit}
 \end{figure*}
+
+\paragraph{Connector payload under disaggregation.}
+The same $\tau_{\mathrm{pre}}{=}0.15$ rule that cuts GPU prefill also cuts the P/D connector when the trunk is still cloned on the prefiller (\Cref{tab:connector}).
+On the control-plane model ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$), stock disaggregation ships $\Xfer{=}kL+\sum_i\ell_i{=}11520$ tokens.
+Withholding only the loop keeps three residuals per fan-out, each still carrying the trunk on a stock prefiller, so $\Xfer{=}10{\times}3{\times}288{=}8640$ ($-25\%$) and transfer time falls from $23.0$\,ms to $17.3$\,ms.
+Aliasing the trunk on top of that gate removes $L$ from both $\Work$ and $\Xfer$ (\Cref{tab:app} in \S\ref{sec:eval-app}).
+
+\begin{table}[t]
+\centering
+\caption{Control-plane connector under P/D disaggregation ($10$ sessions, $k{=}4$, $L{=}256$, $\ell{=}32$).
+Prefill $12\,\mu\mathrm{s}/\mathrm{token}$; transfer $2\,\mu\mathrm{s}/\mathrm{token}$.
+``Loop-only'' is $\tau_{\mathrm{pre}}{=}0.15$ on a stock (non-aliased) prefiller---the accuracy-preserving gate of \Cref{tab:e2e-esc}.
+Not GPU wall-clock.}
+\label{tab:connector}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & APC & P/D & P/D + loop-only \\
+\midrule
+Prefill tokens $\Work$ & $11520$ & \botn{$11520$} & \win{$8640$} \\
+\rowcolor{tblalt}
+Connector tokens $\Xfer$ & $0$ & \botn{$11520$} & \win{$8640$} \\
+Transfer time & $0$ & \botn{$23.0$\,ms} & \win{$17.3$\,ms} \\
+\rowcolor{tblalt}
+Fan-out & $139.0$\,ms & \botn{$162.1$\,ms} & \win{$121.8$\,ms} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Any-finished and the committed spine.}
 Any-finished counts a problem when some full-budget branch matches the reference.

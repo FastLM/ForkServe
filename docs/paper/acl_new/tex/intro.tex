@@ -19,24 +19,20 @@ Once KV retention has removed trunk recompute~\cite{continuum,mori}, the remaini
 
 \begin{figure*}[t]
 \centering
-\resizebox{\textwidth}{!}{\input{fig/fig_pd}}
-\caption{\textbf{\sys{} on a prefill--decode cut} (\S\ref{sec:app}).
-(a)~Stock disaggregation prefills every residual, including a copy of the trunk, and the connector carries $kL+\sum_i\ell_i$.
-Decode-time pruning runs only after those pages arrive.
-(b)~The two pools stay separate.
-Admission runs before the prefill kernels: a repeated loop never enters a GPU, a full-page hit moves nothing, and the connector carries the miss tail of $\Keep$.
-The trunk is one alias, so $L$ does not cross.
-Decode extends a $t_0$ probe only when the prefix meets $\tau_{\mathrm{dec}}$; abort leaves the spine.}
+\resizebox{\textwidth}{!}{\input{fig/fig_core_arch}}
+\caption{\textbf{\sys{} runtime architecture.}
+Requests enter a controller and then a Prefill Pruner (radix prune $a_i$) or a Decoding Pruner (probe $t_0$) before the corresponding instance.
+Only the miss tail of $\Keep$ crosses the KV connector---not the stock $kL+\sum_i\ell_i$ payload.
+Abort retains the spine $M_{\mathrm{spine}}=b(L+\ell_\star)$.}
 \label{fig:system}
 \end{figure*}
 
 \paragraph{This work.}
-\sys is one admission rule on a shared trunk (\Cref{fig:system}, \S\ref{sec:app}).
-For residual $\rho_i$, $m_i$ is the longest page-aligned prefix already in the radix index.
-That length fixes both the prefill $\Work_i$ and the transfer $\Xfer_i$: a full hit moves nothing, a partial hit moves the miss, a repeated loop ($i{\in}\Lambda$) is withheld, and every other miss is prefilled.
-A score below the decode threshold extends past $t_0$ tokens only if the probe meets the threshold.
-The two cutoffs are not the same number.
-The prefill threshold $\tau_{\mathrm{pre}}{=}0.15$ reads the residual and drops a loop ($0.02$) while still starting illegal text ($0.22$); the decode threshold $0.45$ reads the generated prefix, where text that is still illegal scores $0.16$ and a finished answer marker scores $0.92$ (\S\ref{sec:split}).
+\sys runs two independent prune methods on a shared trunk (\Cref{fig:system}).
+\emph{Radix prune} admits a residual when its prefix can still yield a high-quality result and when the page match $m_i$ in the published radix raises the hit rate: a full hit moves nothing, a partial hit moves the miss, a repeated loop ($i{\in}\Lambda$) is withheld, and every other miss is prefilled (\S\ref{sec:app}).
+\emph{Decode prune} keeps high-reward continuations on the ToT: a score below $\tau_{\mathrm{dec}}$ extends past $t_0$ tokens only if the probe meets the threshold (\S\ref{sec:split}).
+The cutoffs are not the same number, because the objectives differ.
+$\tau_{\mathrm{pre}}{=}0.15$ reads the residual and drops a loop ($0.02$) while still starting illegal text ($0.22$); $\tau_{\mathrm{dec}}{=}0.45$ reads the generated prefix, where text that is still illegal scores $0.16$ and a finished answer marker scores $0.92$.
 Index $0$ stays in $\Keep$, so the connector carries the miss tail of the retained set rather than the $k$-way trunk~\cite{distserve,splitwise}.
 The trunk is aliased at \texttt{fork} (\S\ref{sec:state}), which is why $L$ is absent from $\Work_i$ and from $\Xfer_i$; abort leaves $M_{\mathrm{spine}}=b(L+\ell_\star)$.
 Decode slots are $C=\lfloor H/M_{\mathrm{spine}}\rfloor$, and any further prefill uses the budget left after committed decode (\S\ref{sec:schedule}).
@@ -52,6 +48,6 @@ The Qwen3-14B spine matches APC accuracy at $0.72\times$ median peak KV, and six
 Our contributions are:
 \begin{itemize}
 \item We treat one fan-out as a trunk, $k$ residuals, and a spine, and show that prefix caching, prefill--decode disaggregation, and decode-time pruning each pay for non-winners before a residual can be rejected (\S\ref{sec:problem}).
-\item We introduce \sys, which aliases the trunk, assigns each residual one action that sets both the prefill and the connector payload, and uses separate prefill and decode thresholds so that only a repeated loop is dropped before the kernel (\S\ref{sec:design}).
+\item We introduce \sys, which aliases the trunk and runs two independent prune methods: radix prune for prefix quality and cache hit rate, and decode prune for reward on the ToT (\S\ref{sec:design}).
 \item On Qwen3-8B and Qwen3-14B we show that the same gate, placed in front of ESC, Speculative Rejection, and DPTS, cuts computed prefill by $23\%$ at matched any-finished accuracy, and that a short probe recovers the accuracy a blanket prefill drop loses (\S\ref{sec:eval}).
 \end{itemize}

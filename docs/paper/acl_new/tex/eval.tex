@@ -247,6 +247,7 @@ Prefill admission is identical across the three hosts: $16$ children and $5008$ 
 \Cref{tab:ablate} separates the three ways those hosts can be combined with the gate, on the same Qwen3-8B GSM8K slice at $k{=}16$.
 Any-finished accuracy is $16/16$ on every row.
 The winner column is the number of problems on which the committed spine, rather than some other full-budget branch, matches the reference.
+The complete host${\times}\tau_{\mathrm{pre}}{\times}k$ matrix, prefill-only bars, admission-policy contrast, and MATH-500 scale/grow logs are in \S\ref{sec:ablation-full}.
 
 \begin{table*}[t]
 \centering
@@ -573,6 +574,24 @@ Model & Metric & APC & FS+ \\
 \end{table}
 
 HumanEval uses $k{=}2$, so the residual is a smaller fraction of the context and $M_{\mathrm{spine}}$ remains close to $M_{\mathrm{APC}}$. Pass@1 is unchanged across recompute, APC, and \sys.
+
+\subsection{Parameter grid and wide fan-out}
+\label{sec:eval-grid}
+
+The operating point $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}},t_0,\alpha)=(0.15,0.45,128,0.20)$ is fixed by \eqref{eq:sep-pre}--\eqref{eq:sep-dec} and \Cref{tab:scores}.
+A full cartesian grid around that point was not present in earlier drafts; the driver is
+\texttt{experiments/grid\_search\_params.py} / \texttt{scripts/run\_grid\_search.sh}.
+Axes: $\tau_{\mathrm{pre}}\in\{0.05,0.15,0.30,0.45\}$,
+$\tau_{\mathrm{dec}}\in\{0.30,0.45,0.60\}$,
+$t_0\in\{64,128,256\}$,
+$\alpha\in\{0.10,0.20,0.30\}$,
+$k\in\{4,8,16,32\}$,
+on ESC (optionally SR / DPTS) with the hopeless GSM8K mix ($n{=}16$, $D{=}512$).
+For each cell we record admit count, computed prefill, e2e time, any-finished, and winner.
+The multi-model driver \texttt{scripts/run\_k\_sweep\_models.sh} runs the same $k$ set under
+\texttt{plugin} / \texttt{prefill} / \texttt{thresh} / \texttt{grow} on each weight directory.
+Connector-only accounting (no GPU) is \texttt{scripts/run\_connector\_bench.sh}
+(\Cref{tab:connector} in the main text).
 
 \subsection{Branching, pruning, and long traces}
 \label{sec:eval-sens}

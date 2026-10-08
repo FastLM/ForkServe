@@ -3,7 +3,7 @@
 
 A branching step is the object \sys admits.
 \S\ref{sec:bg-full} is the reason prefix caching, disaggregation, and decode-time pruning each pay for a non-winner before that admission can run;
-\Cref{tab:trad,tab:notation} record the stage and the symbols.
+\Cref{fig:trad} visualizes the stage, and \Cref{tab:notation} lists the symbols.
 
 \begin{definition}[Branching step]
 \label{def:step}
@@ -35,32 +35,10 @@ The admission rule below replaces both with the miss tail of the residuals it ke
 \subsection{Where the Fan-out Is Paid}
 \label{sec:traditional}
 
-Four mechanisms already sit on this step, and each one can reject a child only after a fixed stage (\Cref{tab:trad}).
+Four mechanisms sit on this step; each can reject a child only after a fixed stage (\Cref{fig:trad}).
 Recompute clones the trunk.
-APC and a radix index share a block only after that block has been published, so the first fan-out in a batch still materializes $k$ copies of $L$; a later replay of the winner is a hit.
-Prefill--decode disaggregation transfers the pages the prefiller has already computed, aborted residuals included, which is why $\Xfer_{\mathrm{PD}}=\Work_{\mathrm{APC}}$ on a cold index.
-ESC, Speculative Rejection, and DPTS score a generated prefix, so the residual prefill, and under disaggregation the transfer, precede the drop.
-\sys aliases one trunk, withholds a repeated loop before the kernel, and continues every other low score only through the probe in \eqref{eq:dec}.
+APC and a radix index publish a block only after tokens exist, so the first fan-out still materializes $k$ copies of $L$; a later replay of the winner is a hit.
+Disaggregation transfers every page the prefiller computed---aborted residuals included---hence $\Xfer_{\mathrm{PD}}=\Work_{\mathrm{APC}}$ on a cold index.
+ESC, Speculative Rejection, and DPTS score a generated prefix, so residual prefill (and under disaggregation, transfer) precede the drop.
+\sys instead runs two independent prune methods: radix prune keeps high-quality, high-hit prefixes before the kernel, and decode prune keeps high-reward continuations through the probe in \eqref{eq:dec}.
 The connector then carries the miss tail of $\Keep$, not the $k$-way clone.
-
-\begin{table*}[t]
-\centering
-\caption{Where each method pays for one fan-out of $k$ residuals on a trunk of length $L$.
-``First expand'' is the GPU prefill issued before any child has published a block.
-``Rejection'' is the earliest point at which a non-winner can leave.
-The \sys row is the action of \S\ref{sec:app}.}
-\label{tab:trad}
-\scriptsize
-\setlength{\tabcolsep}{3.5pt}
-\begin{tabular}{@{}p{0.18\textwidth}p{0.22\textwidth}p{0.30\textwidth}p{0.22\textwidth}@{}}
-\toprule
-Method & First expand & Rejection & Connector \\
-\midrule
-Recompute & $k$ clones of $L$ & end of the request & none \\
-APC, radix, hash prefill & $k$ clones of $L$ & LRU after a block is published & none; a later replay of the winner is a hit \\
-P/D disaggregation & $k$ clones of $L$ & after \texttt{insert} & $kL+\sum_i\ell_i$ \\
-ESC, Speculative Rejection, DPTS & every residual & after a generated prefix & KV of every prefilled child \\
-\sys & one alias of $L$ & loop before the kernel; other low scores after a $t_0$ probe & miss tail of $\Keep$ \\
-\bottomrule
-\end{tabular}
-\end{table*}

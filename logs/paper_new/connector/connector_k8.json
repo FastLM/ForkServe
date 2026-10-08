@@ -1,0 +1,44 @@
+{
+  "rows": [
+    {
+      "method": "APC",
+      "sessions": 10,
+      "kept": 8,
+      "work_tokens": 23040,
+      "xfer_tokens": 0,
+      "prefill_ms": 276.48,
+      "xfer_ms": 0.0,
+      "fanout_ms": 276.48
+    },
+    {
+      "method": "P/D",
+      "sessions": 10,
+      "kept": 8,
+      "work_tokens": 23040,
+      "xfer_tokens": 23040,
+      "prefill_ms": 276.48,
+      "xfer_ms": 46.08,
+      "fanout_ms": 322.56
+    },
+    {
+      "method": "P/D + loop-only",
+      "sessions": 10,
+      "kept": 7,
+      "work_tokens": 20160,
+      "xfer_tokens": 20160,
+      "prefill_ms": 241.92,
+      "xfer_ms": 40.32,
+      "fanout_ms": 282.24
+    },
+    {
+      "method": "APP (alias+gate)",
+      "sessions": 10,
+      "kept": 7,
+      "work_tokens": 2240,
+      "xfer_tokens": 2240,
+      "prefill_ms": 26.88,
+      "xfer_ms": 4.48,
+      "fanout_ms": 31.36
+    }
+  ]
+}

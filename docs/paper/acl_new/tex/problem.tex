@@ -4,7 +4,7 @@
 Parallel reasoning and agent programs both expand one committed trunk into several residuals and then keep a single spine~\cite{tot,selfconsistency,react}.
 The cost of that expansion is fixed by \emph{when} a system is allowed to reject a child.
 Prefix caching can share a block only after the block has been published, disaggregation moves every page the prefiller has already computed, and decode-time pruners score a child only after its prefill and a generated prefix.
-\Cref{tab:trad} records the stage.
+\Cref{fig:trad} records the stage.
 The rest of this section is why that stage falls after the tokens have been paid for, and what a fan-out looks like once the trunk, the residuals, and the spine are named separately.
 
 \subsection{Parallel Reasoning as a Fan-out}
@@ -69,7 +69,18 @@ For agents, the prompt of turn $i{+}1$ is a delta on turn $i$, applied after a t
 \label{sec:traditional-app}
 We group under \emph{traditional methods} the mechanisms a production stack already applies to one fan-out: prefix caching, hash-indexed prefill, prefill--decode disaggregation, and decode-time pruning.
 Each either shares the trunk or rejects a child, and the stage of that operation is fixed.
-\Cref{tab:trad} records the stage.
+\Cref{fig:trad} is that comparison as a stage timeline: red bars are first-expand cost, an orange chip is the earliest rejection, and a green bar is the connector payload.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_trad}}
+\caption{\textbf{Where each method pays for one fan-out of $k$ residuals on a trunk of length $L$.}
+``First expand'' is the GPU prefill issued before any child has published a block.
+``Rejection'' is the earliest point at which a non-winner can leave.
+The \sys{} row is the action of \S\ref{sec:app}.}
+\label{fig:trad}
+\end{figure*}
+
 \paragraph{First-expand cost.}
 APC indexes a full block by $h=\mathrm{hash}(\mathrm{parent},\;\mathrm{tokens},\;\mathrm{extra})$ after those tokens exist~\cite{vllm}; RadixAttention indexes the same prefix~\cite{sglang}.
 A same-batch expansion therefore misses and clones $k$ trunks,

@@ -1,7 +1,7 @@
 Agentic serving expands one trunk of length $L$ into $k$ residuals and keeps one spine.
 Disaggregated prefill--decode transfers every computed page, and decode-time pruning can score a child only after that transfer.
 
-\sys admits each residual on the prefill side of the same cut (\Cref{fig:system}).
+\sys places a Prefill Pruner and a Decoding Pruner under the controller (\Cref{fig:system}).
 A full-page hit moves nothing, a partial hit moves the miss, a repeated loop never enters the kernel, and every other residual is prefilled.
 A low decode score continues past a $t_0$-token probe only when the generated prefix meets the threshold.
 The cutoffs are $(0.15, 0.45)$.
