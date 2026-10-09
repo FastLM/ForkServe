@@ -19,7 +19,7 @@ Program-level schedulers and KV-retention systems for agents~\cite{autellix,cont
 
 \begin{figure*}[t]
 \centering
-\resizebox{\textwidth}{!}{\input{fig/fig_core_arch}}
+\resizebox{0.78\textwidth}{!}{\input{fig/fig_core_arch}}
 \caption{\textbf{\sys{} runtime.}
 The controller reads the residency of each residual on the prefill instance ($m_i^{\Pin}$) and the decode instance ($m_i^{\Din}$) together with a model-free score $s_i$, and assigns an action $a_i\in\{\Hit,\Admit,\Probe,\Reject\}$ before any kernel runs.
 The prefill instance computes only the non-resident suffix of admitted and probed residuals; the connector carries only the pages the decode instance lacks.

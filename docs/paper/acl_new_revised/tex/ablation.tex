@@ -259,7 +259,7 @@ extends to $D$ iff $s'_i\ge\tau_{\mathrm{dec}}{=}0.45$.
 \caption{MATH-500 level $\ge 4$, Qwen3-8B, $n{=}32$, $D{=}1024$.
 ``Blanket'' rejects every $s_i{<}0.45$.
 ``Reject-only'' rejects loops only.
-``Decode loops@$128$'' admits every residual but stops loops after $128$ tokens.}
+``Decode loops@$128$'' admits every residual but limits the decoding of loops to $128$ tokens.}
 \label{tab:ablate-scale}
 \scriptsize
 \setlength{\tabcolsep}{2.8pt}
@@ -272,21 +272,21 @@ $4$ & full & $4$ & $2844$ & $131072$ & $25.34$ & $12/32$ \\
 $4$ & blanket & $2$ & $1566$ & $65536$ & $19.11$ & \botn{$6/32$} \\
 $4$ & reject-only & $3$ & $2189$ & $98304$ & $23.05$ & $11/32$ \\
 \rowcolor{tblalt}
-$4$ & decode loops@$128$ & $4$ & $2844$ & $102400$ & $23.14$ & $10/32$ \\
+$4$ & short probe@$128$ & $4$ & $2844$ & $102400$ & $23.14$ & $10/32$ \\
 \midrule
 $8$ & full & $8$ & $5592$ & $262144$ & $52.50$ & $15/32$ \\
 \rowcolor{tblalt}
 $8$ & blanket & $4$ & $3036$ & $131072$ & $25.60$ & \botn{$11/32$} \\
 $8$ & reject-only & $6$ & $4282$ & $196608$ & $41.53$ & $17/32$ \\
 \rowcolor{tblalt}
-$8$ & decode loops@$128$ & $8$ & $5592$ & $204800$ & $42.26$ & $15/32$ \\
+$8$ & short probe@$128$ & $8$ & $5592$ & $204800$ & $42.26$ & $15/32$ \\
 \midrule
 $16$ & full & $16$ & $12320$ & $524288$ & $104.10$ & $20/32$ \\
 \rowcolor{tblalt}
 $16$ & blanket & $8$ & $6200$ & $262144$ & $52.05$ & \botn{$13/32$} \\
 $16$ & reject-only & $12$ & $9332$ & $393216$ & $71.39$ & $16/32$ \\
 \rowcolor{tblalt}
-$16$ & decode loops@$128$ & $16$ & $11856$ & $409600$ & $74.03$ & $17/32$ \\
+$16$ & short probe@$128$ & $16$ & $11856$ & $409600$ & $74.03$ & $17/32$ \\
 \bottomrule
 \end{tabular}
 \end{table*}

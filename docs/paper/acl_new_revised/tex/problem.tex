@@ -35,11 +35,7 @@ Program- and workflow-level schedulers raise the scheduling unit above the reque
 Prefill processes the prompt in parallel and is compute-bound; decode emits one token per step and is memory-bandwidth-bound~\cite{orca,distserve,splitwise}.
 PagedAttention stores KV in non-contiguous pages~\cite{vllm}, and chunked prefill co-schedules a prompt chunk with a decode batch~\cite{sarathi}.
 For agents, the prompt of step $t{+}1$ extends that of step $t$ after a tool interval of variable length~\cite{continuum,mori}, during which known suffixes can be prefilled (Appendix~\ref{sec:schedule}).
-
-\subsection{Where Existing Mechanisms Act}
-\label{sec:traditional-app}
-
-\Cref{fig:trad} places each mechanism on the stage timeline of one fan-out: the cost incurred before the earliest point at which a non-winner can be discarded.
+\Cref{fig:trad} shows where each existing mechanism can first discard a sibling, and \Cref{tab:notation} summarizes the notation.
 
 \begin{figure*}[t]
 \centering
@@ -50,9 +46,6 @@ Trunk volumes for the prefix-cache rows assume the cold concurrent regime R1; in
 The \sys{} row follows \S\ref{sec:app}.}
 \label{fig:trad}
 \end{figure*}
-
-\subsection{Notation}
-\label{sec:model}
 
 \begin{table}[t]
 \centering

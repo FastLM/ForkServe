@@ -161,6 +161,17 @@ where $T_{\mathrm{CoW}}$ and $T_{\mathrm{abort}}$ are page-table operations inde
 \subsection{Pruning-Aware KV State}
 \label{sec:kvstate}
 
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_tree}}
+\caption{\textbf{Context tree.}
+(a)~Each edge is one \texttt{fork}: the child aliases the parent and allocates only a residual ($+$r).
+Live paths share the trunk; A1b1x and A3a2x also share $+$r$_A$.
+All descendants of fork C are aborted at depth 2, so reclamation propagates up to C and stops at the root, which retains the live children A and B.
+(b)~A shared layer is one physical page set with reference count greater than one; aborting a leaf frees only its residual.}
+\label{fig:tree}
+\end{figure*}
+
 \sys keeps one copy-on-write context tree per session (Appendix~\ref{sec:state}, \Cref{fig:tree}).
 \texttt{fork} creates a child whose page table aliases the parent's pages and increments their reference counts, an $O(1)$ operation in $L$; only residual pages are allocated.
 A rejected residual allocates nothing; a probe that is not extended frees its residual and probe pages; abort frees the residual pages of every non-winner, $b\ell_i$ bytes each.

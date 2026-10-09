@@ -38,17 +38,6 @@ Eviction is node-granular: speculative leaves first, then idle committed leaves,
 
 \begin{figure*}[t]
 \centering
-\resizebox{\textwidth}{!}{\input{fig/fig_tree}}
-\caption{\textbf{Context tree.}
-(a)~Each edge is one \texttt{fork}: the child aliases the parent and allocates only a residual ($+$r).
-Live paths share the trunk; A1b1x and A3a2x also share $+$r$_A$.
-All descendants of fork C are aborted at depth 2, so reclamation propagates up to C and stops at the root, which retains the live children A and B.
-(b)~A shared layer is one physical page set with reference count greater than one; aborting a leaf frees only its residual.}
-\label{fig:tree}
-\end{figure*}
-
-\begin{figure*}[t]
-\centering
 \resizebox{\textwidth}{!}{\input{fig/fig_pool}}
 \caption{\textbf{Context-tree page pool.}
 \texttt{fork} aliases the trunk in $O(1)$ and allocates only residual pages~\textcircled{1}--\textcircled{3}.
