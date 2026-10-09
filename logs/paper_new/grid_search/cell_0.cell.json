@@ -1,0 +1,19 @@
+{
+  "cell": 0,
+  "tag": "grid",
+  "method": "esc",
+  "policy": "app",
+  "workload": "gsm8k",
+  "n": 16,
+  "k": 4,
+  "budget": 512,
+  "tau": 256,
+  "dpts_step": 100,
+  "alpha": 0.2,
+  "prefill_threshold": 0.15,
+  "decode_threshold": 0.45,
+  "probe": 128,
+  "threshold": 0.15,
+  "admit_mode": "score",
+  "mix": "hopeless"
+}

@@ -1,14 +1,14 @@
 {
-  "started": "2026-10-08T08:52:29",
-  "stages": "connector",
+  "started": "2026-10-09T13:17:02",
+  "stages": "connector,plugin,prefill,thresh,grow,grid",
   "models": "Qwen3-8B",
   "model_root": "/home/dliu/models",
   "primary_model": "/home/dliu/models/Qwen3-8B",
   "ks": "4,8,16,32",
   "tp": "1",
   "full_grid": "0",
-  "out_root": "/Users/dongliu/Documents/GitHub/ForkServe/logs/paper_new",
+  "out_root": "/home/dliu/ForkServe/logs/paper_new",
   "force": "0",
-  "finished": "2026-10-08T08:52:30",
-  "n_json": 5
+  "finished": "2026-10-09T13:51:30",
+  "n_json": 26
 }
