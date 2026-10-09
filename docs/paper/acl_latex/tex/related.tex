@@ -1,0 +1,33 @@
+\section{Extended Related Work}
+\label{sec:related-full}
+
+\paragraph{Inference-time search.}
+Chain-of-thought prompting elicits intermediate steps~\cite{cot}; Tree-of-Thoughts and Monte Carlo tree search expand, score, and backtrack over such steps~\cite{tot,mctsllm}; self-consistency samples complete traces and takes a majority~\cite{selfconsistency}.
+Accuracy and token cost both grow with the number of traces.
+EquivPruner observes that textually distinct steps can be the same mathematical action and retains one representative per equivalence class~\cite{equivpruner}.
+\sys neither changes the search procedure nor decides semantic equivalence; it decides, for the residuals a harness proposes, which are prefilled, transferred, and decoded.
+
+\paragraph{Path pruning.}
+ESC stops sampling once a window agrees~\cite{esc}; Speculative Rejection halts low-reward partial generations at a horizon~\cite{specrej}; DPTS early-stops children after a mini-step~\cite{dpts}; STOP categorizes pruning signals as internal or external and learned or not, and trains an internal futility token~\cite{stoploss}.
+These methods read generated tokens or compare written steps, so they act on the decode side of a PD deployment.
+\sys adds a pre-kernel decision and a decode-side probe around them and leaves their decode-time cut unchanged (\S\ref{sec:eval-ablate}); a learned signal such as STOP's could replace $\mathrm{Score}_{\mathrm{dec}}$.
+
+\paragraph{Request-level serving.}
+Orca introduced iteration-level scheduling~\cite{orca}; vLLM pages the KV cache and hashes full blocks for prefix caching~\cite{vllm}; SGLang shares prefixes through a radix tree~\cite{sglang}; SARATHI and Sarathi-Serve chunk prefills to co-schedule them with decode~\cite{sarathisplit,sarathi}; DistServe and Splitwise disaggregate prefill and decode~\cite{distserve,splitwise}.
+Whether these engines share a trunk across concurrent siblings depends on the cache regime (\S\ref{sec:regimes}); in all cases they serve every request they receive.
+\sys uses their residency information as an input to admission and their connector as the channel whose volume admission reduces.
+
+\paragraph{Program-, workflow-, and conversation-level scheduling.}
+Agentix schedules by program-level attained service~\cite{autellix}; JITServe allocates just enough bandwidth under heterogeneous SLOs~\cite{jitserve}; Hermes, ThunderAgent, and SAGA schedule at program or workflow granularity~\cite{hermes,thunderagent,saga}; Parrot, Ayo, and Pythia exploit application structure~\cite{parrot,ayo,pythia}.
+ConServe disaggregates prefill and decode scheduling at conversation granularity based on observed agent behavior~\cite{conserve}.
+These systems decide when and where requests run; \sys decides which sibling continuations become requests and at which stage a discarded one stops consuming resources.
+
+\paragraph{KV retention, overlap, and copy-on-write.}
+InferCept, Continuum, and MORI preserve or place context across tool calls~\cite{infercept,continuum,mori}.
+Sutradhara overlaps tool execution with the prefill of a single tool-independent prefix~\cite{sutradhara}; SmoothAgent transforms long-horizon context; IdleSpec uses idle time for speculative planning to improve accuracy rather than KV reuse~\cite{smoothagent,idlespec}.
+ForkKV shares a base KV cache copy-on-write across multi-LoRA agents~\cite{forkkv}, which is closest to our context tree; \sys applies copy-on-write to sibling continuations of one agent step and couples it with admission and spine retention.
+CachePrune edits KV neurons so that a model ignores instructions embedded in retrieved context~\cite{cacheprune}; it changes attention state within one request and does not decide which siblings are served.
+
+\paragraph{Speculative decoding.}
+Speculative decoding and multi-head drafters propose \emph{output} tokens and verify them against the target model~\cite{speculative,medusa,eagledraft}.
+The object \sys may prefill speculatively is a future \emph{prompt} prefix, such as a known tool-call suffix (Appendix~\ref{sec:speculate}); speculatively prefilled pages are never sampled from, and \eqref{eq:lcp} binds the prompt that actually arrives.

@@ -1,0 +1,146 @@
+\section{System Details}
+\label{sec:design-full}
+
+\sys sits between the agent harness and the LLM engine (\Cref{fig:system}).
+The harness exposes branch structure, the controller decides and binds, and the engine executes prefill, transfer, and decode.
+
+\subsection{Interface}
+\label{sec:overview}
+\begin{center}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lp{0.56\columnwidth}@{}}
+\toprule
+\texttt{open(session)} & Create a root; prefill the initial context. \\
+\texttt{fork(u, bid, tok?)} & Child of $u$, optionally with a known suffix. \\
+\texttt{speculate(v, pri)} & Mark $v$ eligible for idle-time prefill. \\
+\texttt{commit(u, tokens)} & Bind by LCP (\eqref{eq:lcp}); start decode. \\
+\texttt{join(children, pol)} & Merge a fan-out (\texttt{all}/\texttt{first}/\texttt{kofn}). \\
+\texttt{abort(v)} / \texttt{close} & Drop a subtree; end the session. \\
+\bottomrule
+\end{tabular}
+\end{center}
+Only \texttt{commit} lies on the critical path of user-visible tokens.
+
+\subsection{Copy-on-Write Context Tree}
+\label{sec:state}
+
+\begin{definition}[Context tree]
+A session is a rooted tree $T=(V,E)$.
+Node $u$ stores a token sequence $x_u$ with $x_{\pi(u)}\preceq x_u$, a residual $\delta_u=x_u[|x_{\pi(u)}|{:}]$, a mode in $\{\textsc{Spec},\textsc{Commit},\textsc{Idle},\textsc{Dead}\}$, a generation $g_u$, and a page table $\sigma_u=(\mathrm{parent},\mathrm{alias\_len},\mathrm{pages}_u)$.
+\end{definition}
+
+The tree maintains four invariants: (i)~prefix closure; (ii)~at most one committed child per node outside a join; (iii)~speculative nodes are never sampled from; (iv)~the reference count of a page equals the number of non-dead nodes that map it.
+\texttt{fork}$(u,\cdot)$ writes two words, $(\mathrm{parent}\leftarrow\sigma_u,\ \mathrm{alias\_len}\leftarrow|x_u|)$, and increments the reference counts of the aliased pages; a write to a shared or read-only page copies only its valid rows.
+A multi-level fan-out is a sequence of such forks (\Cref{fig:tree}); abort frees residual pages only, and a subtree without live descendants is reclaimed up to the nearest ancestor with a live child.
+Commit publishes the full pages of $x_\star$ to the prefix index so that later requests can hit them.
+Eviction is node-granular: speculative leaves first, then idle committed leaves, then the spine~\cite{continuum,mori}.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_pool}}
+\caption{\textbf{Context-tree page pool.}
+\texttt{fork} aliases the trunk in $O(1)$ and allocates only residual pages~\textcircled{1}--\textcircled{3}.
+Commit publishes $x_\star$ to the index~\textcircled{4}\textcircled{6}.
+\texttt{abort} returns residual pages only, so the live occupancy is $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
+\label{fig:pool}
+\end{figure*}
+
+\subsection{Speculative Prefill of Known Suffixes}
+\label{sec:speculate}
+A candidate of parent $u$ is a pair $(x^{\mathrm{k}},\hat{x}^{\mathrm{o}})$ of a known suffix and a predicted observation, with admission probability $p$ and expected prefix-hit rate $q$.
+Known suffixes ($p{=}q{=}1$) are scheduled before predicted observations ($q{<}1$), subject to the idle time $\Idle(u)$, the available KV capacity, and a branch cap.
+Unlike speculative decoding~\cite{speculative,medusa}, the object prefilled is a future \emph{prompt} prefix rather than draft output tokens.
+On commit, the pages covered by $\mathrm{LCP}(x,x_{v^\star})$ become committed, the unmatched tail is prefilled, every sibling is aborted, and jobs tagged with a stale generation are dropped in $O(1)$.
+
+\subsection{Admission Details}
+\label{sec:app-detail}
+
+\paragraph{Scorers.}
+$\mathrm{Score}_{\mathrm{pre}}$ assigns $0.02$ to a residual containing a substring of $8$--$40$ characters repeated at least four times, $0.22$ to a residual containing malformed mathematical tokens (e.g., runs of asterisks or \texttt{nan}), and otherwise a weighted combination of alphanumeric fraction and character diversity, which is close to $1$ for natural prose.
+$\mathrm{Score}_{\mathrm{dec}}$ applies the same repetition and malformation tests to the generated prefix ($0.04$ and $0.16$), assigns $0.92$ once a finished answer marker (\texttt{\#\#\#\#} followed by a number, or \texttt{\textbackslash boxed\{}) appears, and otherwise uses a weighted combination that also rewards digits and operators.
+Both scorers run on the CPU and do not share parameters.
+
+\paragraph{Ordering of the action.}
+\eqref{eq:action} reads decode-side residency first, because a residual already resident on $\Din$ costs neither prefill nor transfer.
+It then protects index $0$, so the top-ranked continuation is always served.
+Only then does it consult the score.
+A page resident only on $\Pin$ reduces $W_i$ but not $X_i$; the residual is admitted with $W_i{=}\ell_i-m_i^{\Pin}$ and $X_i{=}\ell_i-m_i^{\Din}$.
+\Cref{fig:radix} illustrates the four actions on one radix tree, and \Cref{fig:app} places them on the request path.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_dragon}}
+\caption{\textbf{Four admission actions on one radix tree.}
+The root is the aliased trunk $x_u$; each edge is one page of $P$ tokens.
+Green pages are resident on $\Din$, orange pages are prefilled, and gray pages are never computed.
+(a)~\Hit: $m_i^{\Din}{=}\ell_i$, so $W_i{=}X_i{=}0$.
+(b)~\Admit with a partial match: $W_i{=}\ell_i{-}m_i^{\Pin}$, $X_i{=}\ell_i{-}m_i^{\Din}$.
+(c)~\Probe: prefilled and decoded for $t_0$ tokens, then extended or freed.
+(d)~\Admit without a match: $W_i{=}X_i{=}\ell_i$.
+(e)~\Reject: $W_i{=}X_i{=}d_i{=}0$.}
+\label{fig:radix}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_pipeline}}
+\caption{\textbf{Admission on the request path.}
+(a)~The action of \eqref{eq:action} is evaluated before \texttt{insert}; only admitted and probed residuals reach the prefill kernel.
+(b)~Prefill and connector volume of a cold, concurrent fan-out (regime R1) for APC, a baseline PD deployment, the copy-on-write tree without admission (\cowonly), and \sys.
+The overlap row prefills the next residual during decode; the tool-interval row prefills a known suffix while $\Pref\le\Idle$.}
+\label{fig:app}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_arch}}
+\caption{\textbf{\sys{} design.}
+(1)~Context tree: $\sigma_u$ aliases one trunk, \texttt{fork} is $O(1)$, and \eqref{eq:lcp} commits the winner.
+(2)~Pre-kernel admission assigns one action per residual in the order of \eqref{eq:action}; only $\mathcal{A}$ (\Admit and \Probe) reaches the prefill kernel.
+(3)~Disaggregated execution: the connector carries only decoder-missing pages, $\Din$ probes and extends uncertain residuals under the host pruner, and the committed spine becomes the next trunk.
+Bottom: HBM occupancy after abort and the resulting session capacity.}
+\label{fig:arch-detail}
+\end{figure*}
+
+\paragraph{Spans.}
+\Cref{tab:span} summarizes prefill, transfer, and post-abort memory per fan-out for a cold trunk.
+
+\begin{table*}[t]
+\centering
+\caption{Per-fan-out spans with a cold trunk ($c_u^{\Pin}{=}c_u^{\Din}{=}0$) and no resident residual pages.
+Baseline rows assume concurrent admission without deduplication (R1); with serialized admission (R2) their trunk term becomes $L$.
+$\mathcal{A}$ is the set of admitted and probed residuals; $T_{\mathrm{ab}}$ is the abort cost in pages; ``replay'' is a later request for the committed spine.}
+\label{tab:span}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+ & $W$ & $X$ & $M$ after abort & $T_{\mathrm{ab}}$ & trunk copies & replay $W$ \\
+\midrule
+Recompute & $kL+\sum_i\ell_i$ & $0$ & $kL+\sum_i\ell_i$ & $\Theta(kL/P)$ & $k$ & $L+\ell_\star$ \\
+\rowcolor{tblalt}
+APC (R1) & $\le kL+\sum_i\ell_i$ & $0$ & $\le kL+\sum_i\ell_i$ & LRU & $1$--$k$ & $0$ \\
+PD baseline (R1) & $\le kL+\sum_i\ell_i$ & $\ge L+\sum_i\ell_i$ & $\le kL+\sum_i\ell_i$ & LRU & $1$--$k$ & $0$ \\
+\rowcolor{tblalt}
+\cowonly & $L+\sum_i\ell_i$ & $L+\sum_i\ell_i$ & \win{$L+\ell_\star$} & $\Theta(\ell_i/P)$ & $1$ & $0$ \\
+\sys & \win{$L+\sum_{i\in\mathcal{A}}\ell_i+\Delta_{\mathrm{ext}}$} & \win{$L+\sum_{i\in\mathcal{A}}\ell_i$} & \win{$L+\ell_\star$} & $\Theta(\ell_i/P)$ & $1$ & $0$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Critical-Path Placement}
+\label{sec:schedule}
+After abort the live occupancy is $M_{\mathrm{spine}}$, so a pool of $M_{\mathrm{pool}}$ bytes holds
+\begin{equation}
+\label{eq:slots}
+C=\bigl\lfloor M_{\mathrm{pool}}/M\bigr\rfloor
+\end{equation}
+sessions, with $M{=}M_{\mathrm{spine}}$ for \sys and $M{=}M_{\mathrm{APC}}$ while a prefix cache retains aborted residuals.
+On tick $t$ the chunk budget~\cite{sarathi} is split by the committed rate $\underline{s}_r$~\cite{jitserve},
+\begin{align}
+B^{\mathrm{c}}_t &= \min\Bigl(B_t,\; \sum_{r\in R^{\mathrm{c}}_t}\max(\underline{s}_r\Delta,\;1)\Bigr), \label{eq:bc}\\
+B^{\mathrm{s}}_t &= B_t-B^{\mathrm{c}}_t. \label{eq:bs}
+\end{align}
+$B^{\mathrm{c}}_t$ decodes committed spines; $B^{\mathrm{s}}_t$ prefills admitted residuals or known suffixes ($p{=}1$) when $\Pref(|w|)\le\Idle(u)$.
+Speculatively prefilled tokens are never sampled from.

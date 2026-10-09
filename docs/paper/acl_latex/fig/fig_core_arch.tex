@@ -1,0 +1,103 @@
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  line cap=round, line join=round,
+]
+\definecolor{dsctrl}{RGB}{233,150,170}
+\definecolor{dsmodel}{RGB}{245,215,95}
+\definecolor{dsrun}{RGB}{170,220,230}
+\definecolor{dsgpu}{RGB}{95,185,115}
+\definecolor{dsinst}{RGB}{235,235,235}
+\definecolor{dsedge}{RGB}{55,55,55}
+\definecolor{dspre}{RGB}{255,200,140}
+\definecolor{dsdec}{RGB}{180,210,255}
+
+\path (0,0.75) rectangle (16.2,9.0);
+
+\foreach \x in {1.35, 2.15, 2.95, 3.75, 4.55} {
+  \draw[-{Latex[length=2.4mm,width=1.9mm]}, line width=1.0pt, draw=dsedge]
+    (\x,8.75) -- (\x,8.15);
+}
+\node[font=\footnotesize\sffamily] at (2.95,8.92) {Requests};
+
+\draw[draw=dsedge, fill=dsctrl, line width=0.8pt]
+  (0.70,7.35) rectangle (15.50,8.05);
+\node[font=\large\sffamily\bfseries] at (8.10,7.82) {Controller};
+\node[font=\scriptsize\sffamily] at (8.10,7.50) {decide before any kernel: residency $m_i^{\Pin},m_i^{\Din}$ and score $s_i$ $\rightarrow$ $a_i\in\{\Hit,\Admit,\Probe,\Reject\}$};
+
+\draw[-{Latex[length=2.4mm,width=1.9mm]}, line width=1.05pt, draw=dsedge]
+  (3.15,7.35) -- (3.15,6.85);
+\draw[-{Latex[length=2.4mm,width=1.9mm]}, line width=1.05pt, draw=dsedge]
+  (13.05,7.35) -- (13.05,6.85);
+
+\draw[draw=dsedge, fill=dspre, line width=0.75pt]
+  (1.15,6.05) rectangle (5.15,6.75);
+\node[font=\small\sffamily\bfseries] at (3.15,6.40) {Prefill Pruner};
+
+\draw[draw=dsedge, fill=dsdec, line width=0.75pt]
+  (11.05,6.05) rectangle (15.05,6.75);
+\node[font=\small\sffamily\bfseries] at (13.05,6.40) {Decoding Pruner};
+
+\draw[-{Latex[length=2.4mm,width=1.9mm]}, line width=1.05pt, draw=dsedge]
+  (3.15,6.05) -- (3.15,5.55);
+\draw[-{Latex[length=2.4mm,width=1.9mm]}, line width=1.05pt, draw=dsedge]
+  (13.05,6.05) -- (13.05,5.55);
+
+\draw[draw=dsedge, fill=dsinst, line width=0.7pt]
+  (1.15,0.85) rectangle (6.15,5.05);
+\draw[draw=dsedge, fill=dsinst, line width=0.7pt]
+  (0.90,1.10) rectangle (5.90,5.30);
+\draw[draw=dsedge, fill=dsinst, line width=0.85pt]
+  (0.65,1.35) rectangle (5.65,5.55);
+
+\node[font=\normalsize\sffamily\bfseries] at (3.15,5.25) {Prefill Instance};
+
+\draw[draw=dsedge, fill=dsmodel, line width=0.7pt]
+  (1.05,4.35) rectangle (5.25,4.95);
+\node[font=\small\sffamily] at (3.15,4.65) {LLM Model};
+
+\draw[draw=dsedge, fill=dsrun, line width=0.7pt]
+  (1.05,1.65) rectangle (5.25,4.15);
+\node[font=\small\sffamily] at (3.15,3.85) {Parallel Runtime};
+
+\foreach \gx/\gy in {1.35/2.85, 3.25/2.85, 1.35/1.90, 3.25/1.90} {
+  \draw[draw=dsedge, fill=dsgpu, line width=0.6pt]
+    (\gx,\gy) rectangle ({\gx+1.50},{\gy+0.72});
+  \node[font=\small\sffamily] at ({\gx+0.75},{\gy+0.36}) {GPU};
+}
+
+\draw[draw=dsedge, fill=dsinst, line width=0.7pt]
+  (11.05,0.85) rectangle (16.05,5.05);
+\draw[draw=dsedge, fill=dsinst, line width=0.7pt]
+  (10.80,1.10) rectangle (15.80,5.30);
+\draw[draw=dsedge, fill=dsinst, line width=0.85pt]
+  (10.55,1.35) rectangle (15.55,5.55);
+
+\node[font=\normalsize\sffamily\bfseries] at (13.05,5.25) {Decoding Instance};
+
+\draw[draw=dsedge, fill=dsmodel, line width=0.7pt]
+  (10.95,4.35) rectangle (15.15,4.95);
+\node[font=\small\sffamily] at (13.05,4.65) {LLM Model};
+
+\draw[draw=dsedge, fill=dsrun, line width=0.7pt]
+  (10.95,1.65) rectangle (15.15,4.15);
+\node[font=\small\sffamily] at (13.05,3.85) {Parallel Runtime};
+
+\foreach \gx/\gy in {11.25/2.85, 13.15/2.85, 11.25/1.90, 13.15/1.90} {
+  \draw[draw=dsedge, fill=dsgpu, line width=0.6pt]
+    (\gx,\gy) rectangle ({\gx+1.50},{\gy+0.72});
+  \node[font=\small\sffamily] at ({\gx+0.75},{\gy+0.36}) {GPU};
+}
+
+\fill[white]
+  (5.95,2.85) -- (8.35,2.85) -- (8.35,2.45) -- (9.85,3.20) --
+  (8.35,3.95) -- (8.35,3.55) -- (5.95,3.55) -- cycle;
+\draw[draw=dsedge, line width=1.25pt]
+  (5.95,2.85) -- (8.35,2.85) -- (8.35,2.45) -- (9.85,3.20) --
+  (8.35,3.95) -- (8.35,3.55) -- (5.95,3.55) -- cycle;
+
+\node[font=\footnotesize\sffamily\bfseries] at (7.40,4.20) {KV Cache Transfer};
+\node[font=\scriptsize\sffamily, align=center] at (7.40,2.05)
+  {decoder-missing pages\\[-1pt]of admitted residuals only};
+
+\end{tikzpicture}

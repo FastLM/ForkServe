@@ -1,0 +1,92 @@
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  note/.style={font=\tiny\sffamily, align=center},
+  chip/.style={draw, rounded corners=1pt, inner sep=1.4pt, font=\tiny\sffamily,
+              align=center, line width=0.4pt},
+  rowlab/.style={font=\tiny\sffamily\bfseries, anchor=east, align=right},
+  stage/.style={font=\tiny\sffamily, text=fsgray},
+]
+\path (0,0) rectangle (16.45,7.35);
+
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.06,7.15)
+  {Where the fan-out is paid};
+\node[note, text=fsgray, anchor=east] at (16.38,7.15)
+  {one fan-out of $k$ residuals on trunk $L$};
+
+\draw[fsgray!40, line width=0.5pt] (3.20,6.55) -- (15.90,6.55);
+\foreach \x/\lab in {
+  4.10/clone $L$,
+  6.40/prefill $\rho$,
+  8.70/\texttt{insert},
+  11.00/generate,
+  13.50/reject} {
+  \fill[fsgray!55] (\x,6.55) circle (0.07);
+  \node[stage] at (\x,6.85) {\lab};
+}
+\node[note, text=fsgray, anchor=west] at (0.10,6.55) {stage $\rightarrow$};
+
+\node[chip, draw=fsmiss!80!black, fill=fsmiss] at (4.55,6.15) {paid};
+\node[chip, draw=fsorange!70, fill=fsspec] at (6.35,6.15) {reject here};
+\node[chip, draw=fsgreen!55!black, fill=fscommit] at (8.55,6.15) {connector};
+\node[chip, draw=fsblue!50, fill=fslight] at (11.05,6.15) {\sys};
+
+\node[rowlab, text=fsgray] at (3.05,5.45) {Recompute};
+\draw[fsgray!25, rounded corners=1.5pt, fill=black!2] (3.20,5.10) rectangle (15.90,5.80);
+\fill[fsmiss] (3.40,5.28) rectangle (5.00,5.62);
+\node[font=\tiny\sffamily, text=fsred] at (4.20,5.45) {$k{\times}L$};
+\fill[fsmiss] (5.20,5.28) rectangle (7.60,5.62);
+\node[font=\tiny\sffamily, text=fsred] at (6.40,5.45) {$k$ residuals};
+\node[chip, draw=fsorange!70, fill=fsspec] at (13.50,5.45) {end of request};
+\node[note, text=fsgray, anchor=west] at (14.55,5.45) {no connector};
+
+\node[rowlab, text=fsblue] at (3.05,4.45) {APC / radix};
+\draw[fsblue!15, rounded corners=1.5pt, fill=fslight] (3.20,4.10) rectangle (15.90,4.80);
+\fill[fsmiss] (3.40,4.28) rectangle (5.00,4.62);
+\node[font=\tiny\sffamily, text=fsred] at (4.20,4.45) {$k{\times}L$};
+\fill[fsmiss] (5.20,4.28) rectangle (7.60,4.62);
+\node[font=\tiny\sffamily, text=fsred] at (6.40,4.45) {first expand};
+\node[chip, draw=fsorange!70, fill=fsspec] at (11.00,4.45) {LRU after publish};
+\node[note, text=fsblue, anchor=west] at (12.55,4.45) {replay of $\star$ hits};
+
+\node[rowlab, text=fspurple] at (3.05,3.45) {P/D disagg.};
+\draw[fspurple!12, rounded corners=1.5pt, fill=white] (3.20,3.10) rectangle (15.90,3.80);
+\fill[fsmiss] (3.40,3.28) rectangle (5.00,3.62);
+\node[font=\tiny\sffamily, text=fsred] at (4.20,3.45) {$k{\times}L$};
+\fill[fsmiss] (5.20,3.28) rectangle (7.60,3.62);
+\node[font=\tiny\sffamily, text=fsred] at (6.40,3.45) {prefill all};
+\fill[fsgreen!45] (7.80,3.28) rectangle (9.60,3.62);
+\node[font=\tiny\sffamily, text=fsgreen!25!black] at (8.70,3.45) {$kL{+}\sum\ell_i$};
+\node[chip, draw=fsorange!70, fill=fsspec] at (11.00,3.45) {after insert};
+\node[note, text=fspurple, anchor=west] at (12.55,3.45) {aborts still paid};
+
+\node[rowlab, text=fsorange!85!black] at (3.05,2.45) {ESC / SR / DPTS};
+\draw[fsorange!12, rounded corners=1.5pt, fill=fsspec!40] (3.20,2.10) rectangle (15.90,2.80);
+\fill[fsmiss] (5.20,2.28) rectangle (7.60,2.62);
+\node[font=\tiny\sffamily, text=fsred] at (6.40,2.45) {every $\rho_i$};
+\fill[fsgreen!45] (7.80,2.28) rectangle (9.60,2.62);
+\node[font=\tiny\sffamily, text=fsgreen!25!black] at (8.70,2.45) {KV of all};
+\fill[fsorange!35] (9.80,2.28) rectangle (12.20,2.62);
+\node[font=\tiny\sffamily, text=fsorange!85!black] at (11.00,2.45) {prefix};
+\node[chip, draw=fsorange!70, fill=fsspec] at (13.50,2.45) {after generate};
+
+\node[rowlab, text=fsgreen!35!black] at (3.05,1.30) {\sys};
+\draw[fsgreen!25, rounded corners=1.5pt, fill=fscommit, line width=0.55pt] (3.20,0.70) rectangle (15.90,1.90);
+\fill[fsblue!55] (3.40,1.30) rectangle (5.00,1.70);
+\node[font=\tiny\sffamily, text=white] at (4.20,1.50) {alias $L$};
+\fill[fsgreen!55] (5.20,1.30) rectangle (7.20,1.70);
+\node[font=\tiny\sffamily, text=white] at (6.20,1.50) {miss of $\Keep$};
+\fill[fsgreen!40] (7.40,1.30) rectangle (9.40,1.70);
+\node[font=\tiny\sffamily, text=fsgreen!20!black] at (8.40,1.50) {$\Xfer$ of $\Keep$};
+\node[chip, draw=fsgray, fill=black!4, text=fsgray] at (6.40,0.95) {$\Lambda$ before kernel};
+\node[chip, draw=fsorange!70, fill=fsspec] at (11.80,1.50) {$t_0$ probe};
+\node[note, text=fsgreen!30!black, anchor=west] at (13.00,1.50) {radix + decode prune};
+
+\node[note, text=fsgray, anchor=west] at (0.10,0.30)
+  {Red = first-expand cost.\quad
+   Orange chip = earliest rejection.\quad
+   Green bar = connector payload.\quad
+   \sys row: \S\ref{sec:app}.};
+\end{tikzpicture}

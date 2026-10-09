@@ -1,0 +1,86 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  bar/.style={draw=black!55, line width=0.2pt},
+  ax/.style={black!55, line width=0.35pt},
+  grid/.style={black!15, line width=0.25pt},
+  tick/.style={font=\tiny, text=black!60, inner sep=0pt},
+  val/.style={font=\tiny, inner sep=0.2pt},
+  wl/.style={font=\tiny, text=black!55, inner sep=0pt},
+]
+\definecolor{APC}{HTML}{E8B86D}
+\definecolor{FS}{HTML}{D97B2F}
+\definecolor{FSp}{HTML}{4A2878}
+
+\begin{scope}[shift={(0,2.95)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0.62,2.72) {(a) End-to-end time per problem};
+  \draw[grid] (0.62,0.38) -- (5.85,0.38);
+  \draw[grid] (0.62,1.00) -- (5.85,1.00);
+  \draw[grid] (0.62,1.62) -- (5.85,1.62);
+  \draw[grid] (0.62,2.24) -- (5.85,2.24);
+  \draw[ax] (0.62,0.38) -- (5.85,0.38);
+  \draw[ax] (0.62,0.38) -- (0.62,2.30);
+  \node[tick, anchor=east] at (0.54,0.38) {0};
+  \node[tick, anchor=east] at (0.54,1.00) {1};
+  \node[tick, anchor=east] at (0.54,1.62) {2};
+  \node[tick, anchor=east] at (0.54,2.24) {3};
+  \node[tick, rotate=90, anchor=south] at (0.02,1.34) {seconds};
+  \node[font=\tiny\bfseries] at (1.89,2.46) {Qwen3-4B};
+  \node[font=\tiny\bfseries] at (4.43,2.46) {Qwen3-8B};
+  \draw[black!20] (3.16,0.38) -- (3.16,2.24);
+  \fill[bar, APC] (0.78,0.38) rectangle (1.06,1.407);
+  \fill[bar, FS]  (1.12,0.38) rectangle (1.40,1.474);
+  \fill[bar, FSp] (1.46,0.38) rectangle (1.74,1.389);
+  \node[wl] at (1.26,0.16) {GSM8K};
+  \fill[bar, APC] (2.05,0.38) rectangle (2.33,1.379);
+  \fill[bar, FS]  (2.39,0.38) rectangle (2.67,1.396);
+  \fill[bar, FSp] (2.73,0.38) rectangle (3.01,1.079);
+  \node[wl] at (2.53,0.16) {Game24};
+  \fill[bar, APC] (3.32,0.38) rectangle (3.60,1.916);
+  \fill[bar, FS]  (3.66,0.38) rectangle (3.94,1.968);
+  \fill[bar, FSp] (4.00,0.38) rectangle (4.28,1.563);
+  \node[wl] at (3.80,0.16) {GSM8K};
+  \fill[bar, APC] (4.59,0.38) rectangle (4.87,1.713);
+  \fill[bar, FS]  (4.93,0.38) rectangle (5.21,1.716);
+  \fill[bar, FSp] (5.27,0.38) rectangle (5.55,1.324);
+  \node[wl] at (5.07,0.16) {Game24};
+\end{scope}
+
+\begin{scope}[shift={(0,0)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0.62,2.72) {(b) Peak KV};
+  \draw[grid] (0.62,0.38) -- (5.85,0.38);
+  \draw[grid] (0.62,1.31) -- (5.85,1.31);
+  \draw[grid] (0.62,2.24) -- (5.85,2.24);
+  \draw[ax] (0.62,0.38) -- (5.85,0.38);
+  \draw[ax] (0.62,0.38) -- (0.62,2.30);
+  \node[tick, anchor=east] at (0.54,0.38) {0};
+  \node[tick, anchor=east] at (0.54,1.31) {200};
+  \node[tick, anchor=east] at (0.54,2.24) {400};
+  \node[tick, rotate=90, anchor=south] at (0.02,1.34) {tokens};
+  \node[font=\tiny\bfseries] at (1.89,2.46) {Qwen3-4B};
+  \node[font=\tiny\bfseries] at (4.43,2.46) {Qwen3-8B};
+  \draw[black!20] (3.16,0.38) -- (3.16,2.24);
+  \fill[bar, APC] (0.78,0.38) rectangle (1.06,1.859);
+  \fill[bar, FS]  (1.12,0.38) rectangle (1.40,1.659);
+  \fill[bar, FSp] (1.46,0.38) rectangle (1.74,1.659);
+  \node[wl] at (1.26,0.16) {GSM8K};
+  \fill[bar, APC] (2.05,0.38) rectangle (2.33,1.612);
+  \fill[bar, FS]  (2.39,0.38) rectangle (2.67,1.384);
+  \fill[bar, FSp] (2.73,0.38) rectangle (3.01,1.384);
+  \node[wl] at (2.53,0.16) {Game24};
+  \fill[bar, APC] (3.32,0.38) rectangle (3.60,1.859);
+  \fill[bar, FS]  (3.66,0.38) rectangle (3.94,1.659);
+  \fill[bar, FSp] (4.00,0.38) rectangle (4.28,1.659);
+  \node[wl] at (3.80,0.16) {GSM8K};
+  \fill[bar, APC] (4.59,0.38) rectangle (4.87,1.612);
+  \fill[bar, FS]  (4.93,0.38) rectangle (5.21,1.384);
+  \fill[bar, FSp] (5.27,0.38) rectangle (5.55,1.384);
+  \node[wl] at (5.07,0.16) {Game24};
+\end{scope}
+
+\fill[APC] (0.70,-0.72) rectangle (0.92,-0.56);
+\node[font=\tiny, anchor=west] at (0.98,-0.64) {APC};
+\fill[FS] (1.85,-0.72) rectangle (2.07,-0.56);
+\node[font=\tiny, anchor=west] at (2.13,-0.64) {\cowonly};
+\fill[FSp] (3.55,-0.72) rectangle (3.77,-0.56);
+\node[font=\tiny, anchor=west] at (3.83,-0.64) {\sys};
+\end{tikzpicture}

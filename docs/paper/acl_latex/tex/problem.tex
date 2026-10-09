@@ -1,0 +1,77 @@
+\section{Background}
+\label{sec:bg-full}
+
+\subsection{Branching in Agentic and Reasoning Workloads}
+\label{sec:bg-search}
+
+Chain-of-thought produces one trace~\cite{cot}; Tree-of-Thoughts, self-consistency, and Monte Carlo tree search produce many and then select~\cite{tot,selfconsistency,mctsllm}.
+In the Game-of-24 setting of Tree-of-Thoughts, a proposal prompt emits candidate equations, a value prompt labels each candidate, and breadth-first search retains a beam~\cite{tot}.
+Agent harnesses follow the same pattern: a coding or tool-using agent proposes several continuations of one context, executes or observes one, and discards the rest~\cite{react,sweagent,openhands}.
+On GSM8K and MATH the accuracy gain of such width is well documented~\cite{gsm8k,math,math500}, and so is its token cost~\cite{equivpruner,stoploss}.
+
+\subsection{Decode-Time Path Pruning}
+\label{sec:bg-prune}
+
+Early-stopping self-consistency draws a window of samples and stops once the window agrees~\cite{esc,selfconsistency}.
+Speculative Rejection ranks partial generations at a reward horizon and halts the lower quantile~\cite{specrej}.
+DPTS generates a mini-step on every active node and early-stops low-confidence children~\cite{dpts}.
+STOP organizes these signals by source and learnability and trains an internal token that predicts futility from a short prefix~\cite{stoploss}; EquivPruner merges semantically equivalent actions~\cite{equivpruner}.
+Each signal is a function of generated text.
+On our GSM8K mix at $k{=}16$, ESC, Speculative Rejection, and DPTS therefore prefill the same $5008$ tokens and differ only in decode volume ($131072$, $98304$, and $78336$ tokens).
+
+\subsection{Prefix Caching and Disaggregated Transfer}
+\label{sec:bg-pd}
+
+APC and RadixAttention index full blocks by chained keys, $h_j=\mathrm{hash}(h_{j-1},\text{block}_j,\text{extra})$~\cite{vllm,sglang}.
+A request reuses a block only if the block and its entire parent chain are resident.
+Whether $k$ siblings issued together share the trunk depends on the cache regime of \S\ref{sec:regimes}: a resident trunk (R3) is shared by all siblings; a cold trunk is computed once if siblings are serialized behind it (R2), and between one and $k$ times if they are admitted concurrently, depending on how the scheduler treats blocks that are still being computed (R1).
+Prefix caching thus addresses trunk reuse, but it neither rejects a residual nor decides which pages cross a connector.
+
+PD disaggregation places prefill and decode on separate instances and transfers KV between them~\cite{distserve,splitwise}.
+Every admitted request is prefilled on $\Pin$, and the pages that $\Din$ lacks are transferred; a residual that the harness later discards has already consumed both.
+Program- and workflow-level schedulers raise the scheduling unit above the request~\cite{autellix,thunderagent,continuum,mori}, and KV retention removes trunk recomputation across tool gaps; the remaining per-step cost is the residual suffixes of siblings that the harness can enumerate before the observation returns.
+
+\subsection{Prefill, Decode, and Idle Time}
+Prefill processes the prompt in parallel and is compute-bound; decode emits one token per step and is memory-bandwidth-bound~\cite{orca,distserve,splitwise}.
+PagedAttention stores KV in non-contiguous pages~\cite{vllm}, and chunked prefill co-schedules a prompt chunk with a decode batch~\cite{sarathi}.
+For agents, the prompt of step $t{+}1$ extends that of step $t$ after a tool interval of variable length~\cite{continuum,mori}, during which known suffixes can be prefilled (Appendix~\ref{sec:schedule}).
+\Cref{fig:trad} shows where each existing mechanism can first discard a sibling, and \Cref{tab:notation} summarizes the notation.
+
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_trad}}
+\caption{\textbf{Where each mechanism acts on one fan-out of $k$ residuals over a trunk of length $L$.}
+Red bars denote prefill issued before any sibling is discarded, orange chips the earliest rejection point, and green bars connector volume.
+Trunk volumes for the prefix-cache rows assume the cold concurrent regime R1; in regimes R2--R4 the trunk is computed at most once (\S\ref{sec:regimes}).
+The \sys{} row follows \S\ref{sec:app}.}
+\label{fig:trad}
+\end{figure*}
+
+\begin{table}[t]
+\centering
+\caption{Notation.}
+\label{tab:notation}
+\scriptsize
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{@{}llp{0.52\columnwidth}@{}}
+\toprule
+Symbol & Domain & Meaning \\
+\midrule
+$L$, $\ell_i$, $\ell_\star$ & $\mathbb{N}$ & trunk; residual $i$; committed residual \\
+$x_u$, $\rho_i$, $x_\star$ & tokens & trunk; residual; spine \\
+$\Pin$, $\Din$ & --- & prefill and decode instances \\
+$c_u^{\mathcal{X}}$, $m_i^{\mathcal{X}}$ & tokens & resident prefix of trunk and residual on $\mathcal{X}$ \\
+$s_i$, $s'_i$ & $[0,1]$ & residual score; probe score \\
+$\tau_{\mathrm{pre}}$, $\tau_{\mathrm{dec}}$ & $[0,1]$ & rejection and extension thresholds \\
+$a_i$ & $\Act$ & \Hit, \Admit, \Probe, \Reject (\Cref{def:action}) \\
+$e_i$ & $\{0,1\}$ & probe of $i$ is extended \\
+$t_0$, $D$, $d_i$ & tokens & probe length; budget; decode tokens of $i$ \\
+$W_i$, $X_i$ & tokens & computed prefill; connector tokens \\
+$W_i^{\mathrm{ext}}$ & tokens & recomputation on probe extension \\
+$\Rej$, $\mathcal{H}$, $\mathcal{E}$ & $\subseteq[k]$ & rejected, hit, and extended residuals \\
+$b$, $P$ & bytes, tokens & KV bytes per token; page size \\
+$M_{\mathrm{pool}}$ & bytes & KV pool capacity \\
+$B_t=B^c_t+B^s_t$ & tokens & committed and speculative chunk budget \\
+\bottomrule
+\end{tabular}
+\end{table}
