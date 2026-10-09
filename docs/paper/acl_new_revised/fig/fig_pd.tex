@@ -1,0 +1,141 @@
+% DistServe-style prefill/decode split.
+% (a) stock disaggregation: both pools, every page crosses, pruning is on the decode side.
+% (b) PD-Prune: the same two pools; admission is on the prefill side of the cut.
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  pool/.style={draw=#1!48, line width=0.7pt, rounded corners=2.4pt, fill=white},
+  head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
+  note/.style={font=\tiny\sffamily, align=center},
+  chip/.style={draw, rounded corners=1pt, inner sep=1.5pt, font=\tiny\sffamily,
+              align=center, line width=0.4pt},
+  act/.style={draw, rounded corners=1pt, inner sep=1pt, font=\tiny\sffamily\bfseries,
+              minimum width=0.72cm, minimum height=0.38cm, line width=0.35pt},
+  arr/.style={-{Latex[length=2.4mm,width=2mm]}, line width=1.15pt},
+  inst/.style={draw=#1!35, rounded corners=1.4pt, line width=0.4pt, fill=#1!4},
+]
+\path (0,0) rectangle (16.45,7.85);
+
+% ===================== (a) stock PD =====================
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.06,7.62)
+  {(a) Disaggregated prefill--decode};
+\node[note, text=fsgray, anchor=east] at (16.38,7.62)
+  {pruning runs after the pages arrive};
+
+\draw[pool=fsgray] (0.06,4.72) rectangle (6.05,7.32);
+\fill[fsgray!85] (0.06,6.96) rectangle (6.05,7.32);
+\node[head] at (0.18,7.14) {Prefill instances};
+
+\draw[inst=fsgray] (0.22,4.90) rectangle (2.98,6.78);
+\draw[inst=fsgray] (3.12,4.90) rectangle (5.88,6.78);
+\node[note, text=fsgray] at (1.60,6.52) {instance};
+\node[note, text=fsgray] at (4.50,6.52) {instance};
+
+\foreach \x in {0.95,2.25,3.85,5.15} {
+  \draw[draw=fsgray!70, fill=black!6, rounded corners=1pt, line width=0.4pt]
+    (\x-0.52,5.55) rectangle (\x+0.52,6.28);
+  \node[font=\tiny\sffamily\bfseries, text=fsgray] at (\x,6.05) {GPU};
+  \fill[fsgray!75] (\x-0.38,5.68) rectangle (\x+0.38,5.86);
+}
+\node[note, text=fsgray] at (0.95,5.22) {$L{+}\rho_0$};
+\node[note, text=fsgray] at (2.25,5.22) {$L{+}\rho_\Lambda$};
+\node[note, text=fsgray] at (3.85,5.22) {$L{+}\rho_j$};
+\node[note, text=fsgray] at (5.15,5.22) {$L{+}\rho_k$};
+
+\draw[arr, draw=fsgray!80] (6.22,6.05) -- (10.05,6.05);
+\node[chip, draw=fsgray!70, fill=white, text=fsgray] at (8.14,6.62) {KV cache};
+\foreach \j in {0,...,6} {
+  \fill[fsgray!70] ({7.15+\j*0.28},5.28) rectangle ({7.37+\j*0.28},5.72);
+}
+\node[note, text=fsgray] at (8.14,4.98) {$kL+\sum_i\ell_i$};
+
+\draw[pool=fsgray] (10.22,4.72) rectangle (16.38,7.32);
+\fill[fsgray!85] (10.22,6.96) rectangle (16.38,7.32);
+\node[head] at (10.34,7.14) {Decode instances};
+
+\draw[inst=fsgray] (10.40,5.28) rectangle (13.16,6.78);
+\draw[inst=fsgray] (13.30,5.28) rectangle (16.20,6.78);
+\node[note, text=fsgray] at (11.78,6.52) {instance};
+\node[note, text=fsgray] at (14.75,6.52) {instance};
+\foreach \x in {11.15,12.42,13.95,15.35} {
+  \draw[draw=fsgray!70, fill=black!6, rounded corners=1pt, line width=0.4pt]
+    (\x-0.50,5.55) rectangle (\x+0.50,6.28);
+  \node[font=\tiny\sffamily\bfseries, text=fsgray] at (\x,6.05) {GPU};
+  \foreach \k in {0,1,2} {
+    \fill[fsgray!70] ({\x-0.36+\k*0.26},5.68) rectangle ({\x-0.16+\k*0.26},5.86);
+  }
+}
+\node[note, text=fsgray] at (13.30,4.98) {then ESC / SR / DPTS};
+
+% ===================== (b) PD-Prune =====================
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.06,4.38)
+  {(b) \sys};
+\node[note, text=fsblue!80!black, anchor=east] at (16.38,4.38)
+  {same pools; the gate is on the prefill side of the cut};
+
+\draw[pool=fsblue] (0.06,0.18) rectangle (6.05,4.08);
+\fill[fsblue] (0.06,3.72) rectangle (6.05,4.08);
+\node[head] at (0.18,3.90) {Prefill instances};
+
+\node[act, draw=fsblue!50, fill=fslight, text=fsblue] at (0.52,3.38) {HS};
+\node[act, draw=fsblue!50, fill=fslight, text=fsblue] at (1.34,3.38) {HP};
+\node[act, draw=fsgray, fill=black!5, text=fsgray] at (2.16,3.38) {DS};
+\node[act, draw=fsorange!70, fill=fsspec, text=fsorange!85!black] at (2.98,3.38) {EA};
+\node[act, draw=fsgreen!55!black, fill=fscommit, text=fsgreen!40!black] at (3.60,3.38) {PF};
+\node[note, text=fsgray, anchor=west] at (4.08,3.38) {before kernel};
+
+\foreach \x/\lab/\stroke/\bar/\tc in {
+  1.15/$\rho_0$ miss/fsblue/fsblue!75/fsblue!80!black,
+  3.05/$\rho_j$ miss/fsorange!80!black/fsorange!65/fsorange!85!black} {
+  \draw[draw=\stroke, fill=white, rounded corners=1pt, line width=0.45pt]
+    (\x-0.72,1.72) rectangle (\x+0.72,2.62);
+  \node[font=\tiny\sffamily\bfseries, text=\stroke] at (\x,2.32) {GPU};
+  \fill[\bar] (\x-0.50,1.88) rectangle (\x+0.50,2.08);
+  \node[note, text=\tc] at (\x,1.42) {\lab};
+}
+\draw[draw=fsgray, fill=black!3, rounded corners=1pt, densely dashed, line width=0.45pt]
+  (4.95-0.72,1.72) rectangle (4.95+0.72,2.62);
+\node[font=\tiny\sffamily\bfseries, text=fsgray] at (4.95,2.32) {GPU};
+\draw[fsgray, densely dashed] (4.45,1.88) rectangle (5.45,2.08);
+\node[note, text=fsgray] at (4.95,1.42) {$\rho_\Lambda$ off};
+\node[note, text=fsblue!80!black, anchor=west] at (0.20,0.52)
+  {alias of $L$\quad $\Work=\sum_{i\notin\Lambda}(\ell_i-m_i)$};
+
+\draw[arr, draw=fsgreen!45!black] (6.22,2.20) -- (10.05,2.20);
+\node[chip, draw=fsgreen!55!black, fill=white] at (8.14,2.78) {\texttt{insert}};
+\fill[fsgreen!60!black] (7.35,1.48) rectangle (7.60,1.98);
+\fill[fsorange!60] (7.70,1.48) rectangle (7.95,1.98);
+\fill[fsblue!55] (8.05,1.48) rectangle (8.30,1.98);
+\draw[fsgray, densely dashed] (8.40,1.48) rectangle (8.65,1.98);
+\draw[fsred, line width=0.7pt] (8.36,1.52) -- (8.70,1.94);
+\node[note, text=fsgreen!35!black] at (8.14,1.05)
+  {miss tail of $\Keep$\\[-1pt] $L$ does not cross};
+
+\draw[pool=fsgreen] (10.22,0.18) rectangle (16.38,4.08);
+\fill[fsgreen!70!black] (10.22,3.72) rectangle (16.38,4.08);
+\node[head] at (10.34,3.90) {Decode instances};
+
+\foreach \x/\lab/\stroke/\fillc in {
+  11.35/spine/fsgreen!45!black/fscommit,
+  13.30/probe $t_0$/fsorange!80!black/fsspec} {
+  \draw[draw=\stroke, fill=\fillc, rounded corners=1pt, line width=0.45pt]
+    (\x-0.78,2.55) rectangle (\x+0.78,3.48);
+  \node[font=\tiny\sffamily\bfseries, text=\stroke] at (\x,3.18) {GPU};
+  \node[note, text=\stroke] at (\x,2.22) {\lab};
+}
+\draw[draw=fsgray, fill=black!3, densely dashed, rounded corners=1pt, line width=0.45pt]
+  (15.20-0.72,2.55) rectangle (15.20+0.72,3.48);
+\node[font=\tiny\sffamily\bfseries, text=fsgray] at (15.20,3.18) {GPU};
+\node[note, text=fsgray] at (15.20,2.22) {idle};
+
+\node[chip, draw=fsorange!70, fill=fsspec] at (11.70,1.45)
+  {$s'{<}0.45$: stop};
+\node[chip, draw=fsgreen!55!black, fill=fscommit] at (14.55,1.45)
+  {$s'{\ge}0.45$: continue to $D$};
+\node[note, text=fsgreen!30!black, anchor=west] at (10.38,0.72)
+  {abort $\rightarrow$ spine $b(L{+}\ell_\star)$};
+\node[note, text=fsgray, anchor=west] at (10.38,0.40)
+  {ESC / SR / DPTS change $D^{+}$ only};
+\end{tikzpicture}

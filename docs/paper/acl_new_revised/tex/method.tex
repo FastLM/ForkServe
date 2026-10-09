@@ -1,0 +1,180 @@
+\section{\sys: PD Pruning Disaggregation}
+\label{sec:design}
+
+\sys separates three concerns that a stage-local pruner conflates.
+The \emph{decision} is taken on the controller before any kernel runs (\S\ref{sec:app}); residuals that cannot be resolved at that point are deferred to a decode-side \emph{probe} (\S\ref{sec:split}); and the \emph{state} of admitted, probed, and rejected residuals is managed by a copy-on-write context tree (\S\ref{sec:kvstate}).
+\S\ref{sec:accounting} shows how the three combine in prefill and transfer volume.
+
+\subsection{Pre-Kernel Admission}
+\label{sec:app}
+
+For each residual the controller observes $o_i=(m_i^{\Pin},m_i^{\Din},s_i)$, where $m_i^{\mathcal{X}}$ is the parent-aware resident prefix of \eqref{eq:mi} and $s_i=\mathrm{Score}_{\mathrm{pre}}(\rho_i)\in[0,1]$ is a model-free score computed from the residual text in $O(\ell_i)$ CPU time.
+Our scorer combines repetition detection and syntactic checks (Appendix~\ref{sec:app-detail}); a learned scorer can replace it without changing the policy.
+
+\begin{definition}[Admission action]
+\label{def:action}
+Given thresholds $\tau_{\mathrm{pre}}\le\tau_{\mathrm{dec}}$, residual $i$ receives the first matching action in
+\begin{equation}
+\label{eq:action}
+a_i=
+\begin{cases}
+\Hit & m_i^{\Din}=\ell_i,\\
+\Admit & i=0\ \text{or}\ s_i\ge\tau_{\mathrm{dec}},\\
+\Reject & s_i<\tau_{\mathrm{pre}},\\
+\Probe & \text{otherwise}.
+\end{cases}
+\end{equation}
+\end{definition}
+
+\noindent
+\Hit requires residency on the \emph{decode} instance, since a page resident only on $\Pin$ must still be transferred.
+Because $i{=}0$ is caught by the first two cases, $a_0\in\{\Hit,\Admit\}$: the top-ranked residual can be neither rejected nor probed away.
+Residuals in the uncertainty band $[\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$ are probed.
+Setting $\tau_{\mathrm{pre}}{=}\tau_{\mathrm{dec}}$ empties the band and yields \emph{blanket rejection}; replacing \Probe by \Admit yields \emph{reject-only admission}.
+Let $e_i{=}[\mathrm{Score}_{\mathrm{dec}}(y_i)\ge\tau_{\mathrm{dec}}]$ indicate that the probe $y_i$ of a probed residual is extended (\S\ref{sec:split}).
+The action determines the per-residual costs
+\begin{align}
+W_i &=
+\begin{cases}
+0 & \Hit,\ \Reject,\\
+\ell_i-m_i^{\Pin} & \Admit,\\
+\ell_i-m_i^{\Pin}+e_iW_i^{\mathrm{ext}} & \Probe,
+\end{cases}
+\label{eq:work}\\
+X_i &= (\ell_i-m_i^{\Din})\,[a_i\in\{\Admit,\Probe\}],
+\label{eq:xfer}\\
+d_i &=
+\begin{cases}
+0 & \Reject,\\
+D & \Hit,\ \Admit,\\
+t_0+e_i(D-t_0) & \Probe,
+\end{cases}
+\label{eq:dec}
+\end{align}
+where $D$ is the decode budget, $t_0$ the probe length, and $W_i^{\mathrm{ext}}$ the tokens recomputed when a probe is extended (\S\ref{sec:split}).
+The trunk is aliased (\S\ref{sec:kvstate}) and contributes $W^{\mathrm{trunk}}{=}L-c_u^{\Pin}$ and $X^{\mathrm{trunk}}{=}L-c_u^{\Din}$ once per fan-out.
+A decode-time host (ESC, Speculative Rejection, DPTS) may further shorten $d_i$ for any admitted or extended residual.
+
+\subsection{Decode-Side Probe}
+\label{sec:split}
+
+A probed residual is prefilled, transferred, and decoded for $t_0$ tokens; the decode-side pruner then scores the generated prefix, $s'_i=\mathrm{Score}_{\mathrm{dec}}(y_i)$, and extends the residual to $D$ only if $s'_i\ge\tau_{\mathrm{dec}}$.
+The two thresholds read different text: $\tau_{\mathrm{pre}}$ reads the residual before generation, and $\tau_{\mathrm{dec}}$ reads model output.
+They are therefore calibrated separately.
+A useful pair satisfies the design condition
+\begin{gather}
+\sup_{\rho\in\mathcal{C}_{\mathrm{rej}}}s(\rho)<\tau_{\mathrm{pre}}\le\inf_{\rho\notin\mathcal{C}_{\mathrm{rej}}}s(\rho), \label{eq:sep-pre}\\
+\sup_{y\in\mathcal{C}_{\mathrm{stop}}}s'(y)<\tau_{\mathrm{dec}}, \nonumber
+\end{gather}
+where $\mathcal{C}_{\mathrm{rej}}$ is the class of residuals that should never be prefilled (here, repetition loops) and $\mathcal{C}_{\mathrm{stop}}$ the class of probes that should not be extended.
+\Cref{tab:scores} lists the scores of our heuristic scorers on the three residual classes of our workload; with $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})=(0.15,0.45)$ both conditions hold.
+Because the heuristics assign near-constant scores per class, this separation is specific to our workload; a learned scorer can replace them on natural agent traces (\S\ref{sec:limitations}).
+
+\begin{table}[t]
+\centering
+\caption{Scores of the model-free heuristic scorers on the three residual classes of the evaluation mix.
+$\mathrm{Score}_{\mathrm{pre}}$ reads the residual; $\mathrm{Score}_{\mathrm{dec}}$ reads a probe that has not yet produced (``illegal'') or has produced (``live'') a finished answer marker.}
+\label{tab:scores}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & loop & illegal & live \\
+\midrule
+$\mathrm{Score}_{\mathrm{pre}}(\rho_i)$ & $0.02$ & $0.22$ & $1.00$ \\
+$\mathrm{Score}_{\mathrm{dec}}(y_i)$ & $0.04$ & $0.16$ & $0.92$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Extension cost.}
+If the probe's pages remain resident, extension continues decoding without recomputation and $W_i^{\mathrm{ext}}{=}0$.
+Our prototype issues the extension as a continuation request; when the probe's pages have been evicted in the meantime, the engine recomputes them, so $0\le W_i^{\mathrm{ext}}\le\ell_i+t_0$.
+This term is negligible at $k\le 8$ but substantial at $k{=}16$ in our runs (Appendix~\ref{sec:ablate-math}), and pinning probe pages until the extension decision is an engineering fix we leave to future work.
+
+\begin{algorithm}[t]
+\caption{\sys for one fan-out. Phase~1 runs on the controller without any kernel; phases~2--4 execute on $\Pin$, the connector, and $\Din$.}
+\label{alg:app}
+\small
+\begin{algorithmic}[1]
+\REQUIRE trunk $x_u$; residuals $\{\rho_i\}_{i=0}^{k-1}$; residency $c_u^{\Pin},c_u^{\Din},\{m_i^{\Pin},m_i^{\Din}\}$; $\tau_{\mathrm{pre}}\le\tau_{\mathrm{dec}}$; $t_0$; $D$
+\ENSURE actions $\{a_i\}$; spine $x_\star$
+\STATE \COMMENT{Phase 1: decide (controller)}
+\FOR{$i=0$ \TO $k-1$}
+  \STATE $s_i\leftarrow\mathrm{Score}_{\mathrm{pre}}(\rho_i)$; \ $a_i\leftarrow$ \eqref{eq:action}
+\ENDFOR
+\STATE $\mathcal{A}\leftarrow\{i:a_i\in\{\Admit,\Probe\}\}$
+\STATE \COMMENT{Phase 2: prefill on $\Pin$ (trunk aliased)}
+\STATE prefill $x_u[c_u^{\Pin}{:}L)$; for $i\in\mathcal{A}$ prefill $\rho_i[m_i^{\Pin}{:}\ell_i)$
+\STATE \COMMENT{Phase 3: transfer decoder-missing pages}
+\STATE send $x_u[c_u^{\Din}{:}L)$ and, for $i\in\mathcal{A}$, $\rho_i[m_i^{\Din}{:}\ell_i)$
+\STATE \COMMENT{Phase 4: decode on $\Din$}
+\FOR{$i$ with $a_i=\Probe$}
+  \STATE $y_i\leftarrow\mathrm{Dec}(x_u\Vert\rho_i,\,t_0)$; \ $s'_i\leftarrow\mathrm{Score}_{\mathrm{dec}}(y_i)$
+  \IF{$s'_i<\tau_{\mathrm{dec}}$} \STATE free the pages of $\rho_i\Vert y_i$ \ENDIF
+\ENDFOR
+\STATE decode \Hit, \Admit, and extended residuals to $D$ under the host pruner
+\STATE $\star\leftarrow$ commit by \eqref{eq:lcp}; free all non-spine residual pages
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Work and Transfer Accounting}
+\label{sec:accounting}
+
+We compare \sys with a baseline that serves the same fan-out without admission.
+
+\begin{assumption}[Baseline]
+\label{ass:baseline}
+The baseline admits every residual, computes $W_{\mathrm{B}}^{\mathrm{trunk}}$ trunk tokens according to its cache regime (\S\ref{sec:regimes}), computes $\ell_i-m_i^{\Pin}$ tokens for residual $i$, and transfers at least the pages each request lacks on $\Din$, i.e., $X_{\mathrm{B}}\ge(L-c_u^{\Din})+\sum_i(\ell_i-m_i^{\Din})$.
+\end{assumption}
+
+\begin{proposition}[Accounting]
+\label{prop:acct}
+Fix a fan-out and a cache state, and let $\Rej{=}\{i:a_i{=}\Reject\}$, $\mathcal{H}{=}\{i:a_i{=}\Hit\}$, and $\mathcal{E}{=}\{i:a_i{=}\Probe,e_i{=}1\}$.
+Under Assumption~\ref{ass:baseline},
+\begin{align}
+W_{\mathrm{B}}-W &= \Delta_{\mathrm{trunk}}+\Delta_{\mathrm{adm}}-\Delta_{\mathrm{ext}}, \label{eq:acct}\\
+X_{\mathrm{B}}-X &\ge \textstyle\sum_{i\in\Rej}(\ell_i-m_i^{\Din}), \nonumber
+\end{align}
+with trunk-sharing term $\Delta_{\mathrm{trunk}}{=}W_{\mathrm{B}}^{\mathrm{trunk}}-(L-c_u^{\Pin})$, admission term $\Delta_{\mathrm{adm}}{=}\sum_{i\in\Rej\cup\mathcal{H}}(\ell_i-m_i^{\Pin})$, and probe overhead $\Delta_{\mathrm{ext}}{=}\sum_{i\in\mathcal{E}}W_i^{\mathrm{ext}}$.
+\end{proposition}
+
+\begin{proof}
+Sum \eqref{eq:work} and \eqref{eq:xfer} over $i$ and add the trunk terms.
+The baseline charges $\ell_i-m_i^{\Pin}$ for every $i$, while \sys charges it only for $i\in\mathcal{A}$ and adds $W_i^{\mathrm{ext}}$ for $i\in\mathcal{E}$; the residuals not in $\mathcal{A}$ are exactly $\Rej\cup\mathcal{H}$.
+For transfer, \Hit residuals satisfy $\ell_i-m_i^{\Din}{=}0$, so the baseline lower bound exceeds \sys's transfer by the rejected residuals' decoder-missing pages.
+\end{proof}
+
+The decomposition makes explicit which savings depend on the cache regime.
+$\Delta_{\mathrm{trunk}}$ is zero in regimes R2--R4 and positive only when concurrent siblings recompute the trunk (R1); $\Delta_{\mathrm{adm}}$ does not depend on the regime; $\Delta_{\mathrm{ext}}$ is a cost.
+Decode-time hosts change only $D^{+}$: since they act on generated tokens of residuals that have already been prefilled, $W$ and $X$ do not depend on the host.
+The wall-clock of a fan-out is then
+\begin{equation}
+\label{eq:tfan}
+\begin{aligned}
+T_{\mathrm{fan}}={}&\Pref(W)+\mu X+T_{\mathrm{dec}}(D^{+})\\
+&+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
+\end{aligned}
+\end{equation}
+where $T_{\mathrm{CoW}}$ and $T_{\mathrm{abort}}$ are page-table operations independent of $L$.
+
+\subsection{Pruning-Aware KV State}
+\label{sec:kvstate}
+
+\sys keeps one copy-on-write context tree per session (Appendix~\ref{sec:state}, \Cref{fig:tree}).
+\texttt{fork} creates a child whose page table aliases the parent's pages and increments their reference counts, an $O(1)$ operation in $L$; only residual pages are allocated.
+A rejected residual allocates nothing; a probe that is not extended frees its residual and probe pages; abort frees the residual pages of every non-winner, $b\ell_i$ bytes each.
+On the next observation $x$, commit binds the child with the longest common prefix,
+\begin{equation}
+\label{eq:lcp}
+v^\star=\arg\max_{v}\mathrm{LCP}(x,x_v),\qquad g_u\leftarrow g_u+1,
+\end{equation}
+publishes the full pages of $x_\star$ to the prefix index, and invalidates in-flight work tagged with an older generation $g_u$.
+Speculatively prefilled pages are never sampled from, so the emitted tokens equal those of a baseline that prefills committed tokens only.
+After commit the live occupancy is $M_{\mathrm{spine}}$, and a pool of $M_{\mathrm{pool}}$ bytes holds $\lfloor M_{\mathrm{pool}}/M_{\mathrm{spine}}\rfloor$ sessions instead of $\lfloor M_{\mathrm{pool}}/M_{\mathrm{APC}}\rfloor$ while a prefix cache still retains aborted residuals.
+
+\paragraph{Cross-step coordination.}
+The spine of step $t$ is the trunk of step $t{+}1$.
+Because it was decoded on $\Din$ and published on $\Pin$, the next fan-out starts in regime R3 or R4 with $c_u^{\Din}{=}L$, so the trunk crosses the connector at most once per session rather than once per fan-out; a residual repeated across steps (e.g., a re-issued tool call) becomes a \Hit.
+Admission is re-evaluated at every step, so rejected branches never accumulate state across turns.
+

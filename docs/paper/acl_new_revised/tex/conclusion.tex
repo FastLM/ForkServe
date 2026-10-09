@@ -1,0 +1,14 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+In disaggregated agentic serving, the cost of a discarded continuation is incurred at the prefill instance and the connector, whereas existing pruning signals are evaluated at the decode instance.
+\sys disaggregates pruning accordingly: it decides before any kernel from residency and model-free scores, defers uncertain candidates to a decode-side probe with a separately calibrated threshold, and manages the resulting KV state with a copy-on-write context tree that retains only the committed spine.
+The accounting in \Cref{prop:acct} separates the savings that depend on the cache regime from those due to admission.
+Empirically, admission reduces computed prefill by $23\%$ in front of three decode-time pruners within the run-to-run variation of committed accuracy, the probe recovers the coverage lost by blanket rejection, and spine retention lowers peak KV to $0.72\times$ that of prefix caching.
+
+\section*{Limitations}
+\label{sec:limitations}
+
+Our scorers are lightweight heuristics evaluated on a controlled branching mix; natural agent residuals may be less separable, and learned scorers such as STOP~\cite{stoploss} can be substituted without changing the admission policy.
+The admission experiments use moderate sample sizes ($n{=}16$ and $n{=}32$), so small differences in committed accuracy fall within run-to-run variation.
+Extending the evaluation from reasoning and Tree-of-Thoughts sessions to tool-using agents with real environments is a natural next step.

@@ -36,7 +36,7 @@ Disaggregation transfers every page the prefiller produced, which is why an abor
 \eqref{eq:action} uses the hash as the page-aligned match $m_i$ and the connector as $\Xfer_i$: both are instances of one residual action, and the trunk alias removes $L$ from both.
 
 \paragraph{Program- and SLO-aware scheduling.}
-Autellix schedules by program-level attained service~\cite{autellix}.
+Agentix schedules by program-level attained service~\cite{autellix}.
 JITServe allocates just-enough bandwidth under heterogeneous SLOs~\cite{jitserve}.
 Hermes, ThunderAgent, and SAGA raise the scheduling unit to the program or workflow~\cite{hermes,thunderagent,saga}.
 These systems leave KV unshared across children of one fan-out and leave unissued children unprefilled until the program reaches them.

@@ -1,0 +1,19 @@
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Inference-time search and path pruning.}
+Tree-of-Thoughts, self-consistency, and Monte Carlo tree search trade tokens for accuracy by expanding many partial solutions~\cite{tot,selfconsistency,mctsllm,cot}.
+ESC, Speculative Rejection, and DPTS stop branches after an agreeing window, a reward horizon, or a mini-step~\cite{esc,specrej,dpts}; STOP organizes such signals by source and learnability and trains an internal futility token~\cite{stoploss}; EquivPruner merges semantically equivalent steps~\cite{equivpruner}.
+All of these decide from generated text and are agnostic to where the KV cache was computed.
+\sys is complementary: it adds a pre-kernel decision point and a probe that hosts these pruners unchanged, and a learned scorer such as STOP's could serve as $\mathrm{Score}_{\mathrm{dec}}$.
+
+\paragraph{Prefix sharing and disaggregation.}
+vLLM and SGLang share prefixes through block hashing and radix trees~\cite{vllm,sglang}, Orca and Sarathi schedule at iteration and chunk granularity~\cite{orca,sarathi}, and DistServe and Splitwise separate prefill from decode~\cite{distserve,splitwise}.
+These mechanisms determine whether a trunk is shared and how KV moves, but they serve every request they receive; \sys decides which residuals become requests and which pages need to move, using residency on both instances.
+
+\paragraph{Agentic serving.}
+Agentix and Hermes schedule at program granularity~\cite{autellix,hermes}; ThunderAgent and SAGA optimize workflows~\cite{thunderagent,saga}; InferCept, Continuum, and MORI retain KV across tool calls~\cite{infercept,continuum,mori}; ConServe schedules disaggregated prefill and decode at conversation granularity from observed agent behavior~\cite{conserve}; Sutradhara overlaps tool execution with the prefill of a single tool-independent prefix~\cite{sutradhara}.
+ForkKV is closest in mechanism: it shares a base KV cache copy-on-write across LoRA agents~\cite{forkkv}.
+These systems place, schedule, or retain contexts that will be served; ConServe in particular disaggregates scheduling but not pruning.
+\sys targets the complementary decision of which sibling continuations should be served at all, and at which PD stage that decision is made.
+Appendix~\ref{sec:related-full} extends this discussion.

@@ -1,0 +1,71 @@
+\section{Problem Formulation}
+\label{sec:problem}
+
+We model one agent step as a branching step served by a prefill instance $\Pin$ and a decode instance $\Din$ connected by a KV connector.
+\Cref{tab:notation} (Appendix~\ref{sec:model}) summarizes the notation.
+
+\begin{definition}[Branching step]
+\label{def:step}
+A parent $u$ holds a committed trunk $x_u$ with $|x_u|{=}L$.
+A fan-out is a set of residuals $\{\rho_i\}_{i=0}^{k-1}$ with $|\rho_i|{=}\ell_i$; request $i$ is the sequence $x_u\Vert\rho_i$.
+Index $0$ denotes the residual the harness ranks first (e.g., the greedy continuation).
+Commit selects a winner $\star$ and leaves the spine $x_\star=x_u\Vert\rho_\star$, which becomes the trunk of the next step.
+\end{definition}
+
+With $b$ bytes of KV per token, three occupancies characterize one step:
+\begin{align}
+M_{\mathrm{clone}} &= b\bigl(kL+\textstyle\sum_i\ell_i\bigr), \label{eq:mem}\\
+M_{\mathrm{CoW}} &= b\bigl(L+\textstyle\sum_i\ell_i\bigr), \nonumber\\
+M_{\mathrm{spine}} &= b\bigl(L+\ell_\star\bigr). \nonumber
+\end{align}
+$M_{\mathrm{clone}}$ arises only when every request materializes its own trunk; $M_{\mathrm{CoW}}$ holds one shared trunk and all residuals; $M_{\mathrm{spine}}$ is the occupancy after the non-winners are freed.
+
+\subsection{Residency on Two Instances}
+\label{sec:residency}
+
+Paged engines index full blocks of $P$ tokens by a chained key $h_j=\mathrm{hash}(h_{j-1},\,\text{block}_j,\,\text{extra})$~\cite{vllm,sglang}, so a block is matched only together with its entire parent prefix.
+For an instance $\mathcal{X}\in\{\Pin,\Din\}$ we define the resident prefix of the trunk and of residual $i$ as
+\begin{align}
+c_u^{\mathcal{X}} &= \max\{jP\le L:\ x_u[0{:}jP)\sqsubseteq\mathcal{X}\}, \label{eq:mi}\\
+m_i^{\mathcal{X}} &= \max\{jP\le \ell_i:\ x_u\Vert\rho_i[0{:}jP)\sqsubseteq\mathcal{X}\}, \nonumber
+\end{align}
+where $z\sqsubseteq\mathcal{X}$ means that every page of $z$ is physically resident on $\mathcal{X}$,
+and $m_i^{\mathcal{X}}{=}0$ whenever $c_u^{\mathcal{X}}{<}L$, because chained keys make a residual page unreachable without its full trunk.
+For exposition we take $L$ to be a multiple of $P$; otherwise the partial trunk page is charged to each residual.
+Three distinctions matter.
+(i)~\emph{Parent-aware match:} $m_i^{\mathcal{X}}$ is defined on $x_u\Vert\rho_i$, not on $\rho_i$ alone.
+(ii)~\emph{Index presence versus residency:} an index entry whose block has been evicted does not count; $m_i^{\mathcal{X}}$ counts physically resident pages only.
+(iii)~\emph{Instance locality:} pages resident on $\Pin$ are not visible on $\Din$, so $m_i^{\Pin}$ and $m_i^{\Din}$ generally differ.
+
+\subsection{Cache Regimes}
+\label{sec:regimes}
+
+Whether the trunk is shared across the $k$ siblings depends on the cache state and on the engine, not on prefix caching per se.
+Let $W^{\mathrm{trunk}}$ be the trunk tokens computed on $\Pin$ for one fan-out.
+\begin{itemize}[leftmargin=*,itemsep=1pt,topsep=2pt]
+\item[\textbf{R1}] \emph{Cold, concurrent.} The trunk is not resident and the siblings are admitted before any of them publishes trunk blocks; depending on how the scheduler handles in-flight blocks, $L\le W^{\mathrm{trunk}}\le kL$.
+\item[\textbf{R2}] \emph{Cold, serialized.} The trunk is prefilled once (by a warm-up request or by deferring siblings until it is published); $W^{\mathrm{trunk}}{=}L$ at the cost of one serialization step.
+\item[\textbf{R3}] \emph{Warm.} The trunk is resident on $\Pin$, e.g., because it is the previous spine; $W^{\mathrm{trunk}}{=}0$.
+\item[\textbf{R4}] \emph{Explicit fork.} The harness declares the fan-out and the trunk is aliased copy-on-write; $W^{\mathrm{trunk}}{=}L-c_u^{\Pin}$ without serialization.
+\end{itemize}
+APC attains R2 or R3 in many agentic deployments, so trunk sharing alone is not the source of the savings we report.
+All GPU measurements in \S\ref{sec:eval} warm the trunk before the fan-out (R3); measured prefill reductions are therefore attributable to residual admission.
+On the connector, the trunk needs to cross at most once, $X^{\mathrm{trunk}}{=}L-c_u^{\Din}$, and in a multi-step agent it is typically already resident on $\Din$ because it was decoded there.
+
+\subsection{Objective}
+\label{sec:objective}
+
+Each residual receives an action $a_i$ from a set $\Act$, inducing computed prefill $W_i$, connector tokens $X_i$, and decode tokens $d_i$; we write $W{=}\sum_iW_i$, $X{=}\sum_iX_i$, and $D^{+}{=}\sum_id_i$.
+A pruning policy $\pi$ solves
+\begin{equation}
+\label{eq:objective}
+\begin{aligned}
+\min_{\pi}\;\; & \E\bigl[\Pref(W)+\mu X+T_{\mathrm{dec}}(D^{+})\bigr]\\
+\text{s.t.}\;\; & \Prob[\text{committed answer correct}]\ge Q_{\min},\\
+& M_{\mathrm{peak}}\le M_{\mathrm{pool}},\qquad a_0\neq\Reject,
+\end{aligned}
+\end{equation}
+where $\mu$ is the per-token transfer time.
+The defining constraint is informational: a decision taken before prefill may depend only on $(c_u^{\Pin},c_u^{\Din},m_i^{\Pin},m_i^{\Din})$ and the residual text, whereas a decision taken on $\Din$ may additionally read generated tokens.
+Decode-time pruners act only at the second point; \sys adds the first and coordinates the two.
+\sys is a threshold heuristic for \eqref{eq:objective}, not an optimal solver.

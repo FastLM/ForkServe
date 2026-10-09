@@ -1,0 +1,79 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  >=Latex,
+  tick/.style={font=\tiny, text=black!55, inner sep=0pt},
+  grid/.style={black!12, line width=0.25pt},
+  ax/.style={black!55, line width=0.35pt},
+  mk/.style={circle, inner sep=0pt, minimum size=2.6pt},
+]
+\definecolor{fullc}{HTML}{3D3D3D}
+\definecolor{dropc}{HTML}{B00020}
+\definecolor{skipc}{HTML}{5D6D7E}
+\definecolor{g64c}{HTML}{D97B2F}
+\definecolor{g128}{HTML}{0B6E4F}
+
+% Table tab:grow. y = 0.40 + count * 0.115 (0--20 of 32).
+% Time y = 0.40 + seconds * 0.02091 (0--110).
+% k at x = 1.6, 3.4, 5.2.
+
+\node[font=\tiny, anchor=west] at (0.15,3.55) {MATH-500, Qwen3-8B, $n{=}32$, $D{=}1024$, $\tau{=}0.45$};
+
+\begin{scope}[shift={(0.85,0.15)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0,3.05) {(a) Any-finished};
+  \foreach \y/\lab in {0.40/0, 1.55/10, 2.70/20} {
+    \draw[grid] (0.4,\y) -- (6.15,\y);
+    \node[tick, anchor=east] at (0.32,\y) {\lab};
+  }
+  \draw[ax] (0.4,0.40) -- (6.15,0.40);
+  \draw[ax] (0.4,0.40) -- (0.4,2.85);
+  \draw[fullc, line width=0.8pt] (1.6,1.780) -- (3.4,2.125) -- (5.2,2.700);
+  \draw[dropc, dashed, line width=0.7pt] (1.6,1.090) -- (3.4,1.665) -- (5.2,1.895);
+  \draw[skipc, densely dotted, line width=0.8pt] (1.6,1.665) -- (3.4,2.355) -- (5.2,2.240);
+  \draw[g64c, line width=0.8pt] (1.6,1.320) -- (3.4,2.240) -- (5.2,2.470);
+  \draw[g128, line width=0.95pt] (1.6,1.435) -- (3.4,1.895) -- (5.2,2.700);
+  \foreach \x/\y in {1.6/1.780, 3.4/2.125, 5.2/2.700} {\fill[fullc] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/1.090, 3.4/1.665, 5.2/1.895} {\fill[dropc] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/1.665, 3.4/2.355, 5.2/2.240} {\fill[skipc] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/1.320, 3.4/2.240, 5.2/2.470} {\fill[g64c] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/1.435, 3.4/1.895, 5.2/2.700} {\draw[g128, line width=0.6pt, fill=white] (\x,\y) circle (1.7pt);}
+  \node[font=\tiny, text=g128, anchor=south west] at (5.28,2.62) {$20$};
+  \node[font=\tiny, text=dropc, anchor=north west] at (5.28,1.82) {$13$};
+  \foreach \x/\lab in {1.6/4, 3.4/8, 5.2/16} {\node[tick] at (\x,0.18) {$k{=}\lab$};}
+  \node[tick, rotate=90, anchor=south] at (-0.05,1.62) {of $32$};
+\end{scope}
+
+\begin{scope}[shift={(7.55,0.15)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0,3.05) {(b) End-to-end time};
+  \foreach \y/\lab in {0.40/0, 1.446/50, 2.491/100} {
+    \draw[grid] (0.4,\y) -- (6.15,\y);
+    \node[tick, anchor=east] at (0.32,\y) {\lab};
+  }
+  \draw[ax] (0.4,0.40) -- (6.15,0.40);
+  \draw[ax] (0.4,0.40) -- (0.4,2.85);
+  \draw[fullc, line width=0.8pt] (1.6,0.929) -- (3.4,1.498) -- (5.2,2.577);
+  \draw[dropc, dashed, line width=0.7pt] (1.6,0.799) -- (3.4,0.935) -- (5.2,1.489);
+  \draw[skipc, densely dotted, line width=0.8pt] (1.6,0.881) -- (3.4,1.268) -- (5.2,1.893);
+  \draw[g64c, line width=0.8pt] (1.6,0.902) -- (3.4,1.278) -- (5.2,1.916);
+  \draw[g128, line width=0.95pt] (1.6,0.916) -- (3.4,1.305) -- (5.2,1.910);
+  \foreach \x/\y in {1.6/0.929, 3.4/1.498, 5.2/2.577} {\fill[fullc] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/0.799, 3.4/0.935, 5.2/1.489} {\fill[dropc] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/0.881, 3.4/1.268, 5.2/1.893} {\fill[skipc] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/0.902, 3.4/1.278, 5.2/1.916} {\fill[g64c] (\x,\y) circle (1.15pt);}
+  \foreach \x/\y in {1.6/0.916, 3.4/1.305, 5.2/1.910} {\draw[g128, line width=0.6pt, fill=white] (\x,\y) circle (1.7pt);}
+  \node[font=\tiny, text=fullc, anchor=south] at (5.2,2.62) {$104.1$};
+  \node[font=\tiny, text=g128, anchor=north] at (5.2,1.82) {$72.2$};
+  \foreach \x/\lab in {1.6/4, 3.4/8, 5.2/16} {\node[tick] at (\x,0.18) {$k{=}\lab$};}
+  \node[tick, rotate=90, anchor=south] at (-0.18,1.62) {seconds};
+\end{scope}
+
+\fill[fullc] (0.85,-0.42) rectangle (1.08,-0.26);
+\node[font=\tiny, anchor=west] at (1.12,-0.34) {Full};
+\draw[dropc, dashed, line width=0.7pt] (2.05,-0.34) -- (2.45,-0.34);
+\node[font=\tiny, anchor=west] at (2.50,-0.34) {Drop $s{<}\tau$};
+\draw[skipc, densely dotted, line width=0.8pt] (4.55,-0.34) -- (4.95,-0.34);
+\node[font=\tiny, anchor=west] at (5.00,-0.34) {Skip loops};
+\fill[g64c] (6.85,-0.42) rectangle (7.08,-0.26);
+\node[font=\tiny, anchor=west] at (7.12,-0.34) {Grow $t_0{=}64$};
+\draw[g128, line width=0.7pt, fill=white] (9.35,-0.34) circle (1.8pt);
+\node[font=\tiny, anchor=west] at (9.55,-0.34) {Grow $t_0{=}128$};
+\end{tikzpicture}

@@ -1,0 +1,88 @@
+\begin{tikzpicture}[
+  font=\scriptsize\sffamily,
+  >=Latex,
+  tick/.style={font=\tiny, text=black!55, inner sep=0pt},
+  grid/.style={black!12, line width=0.25pt},
+  ax/.style={black!55, line width=0.35pt},
+]
+\definecolor{APC}{HTML}{C48A3A}
+\definecolor{FSln}{HTML}{D97B2F}
+
+% Measured peaks: APC 761 tok, spine 561 tok.
+% 8 GiB / 147456 B/tok -> 76 and 103 slots.
+% One slot is 640 tok/s (256 decode tokens / 0.4 s).
+% tok/s = min(round(qps*0.4), C) * 640.
+% qps:  8, 32, 64, 128, 192, 256, 320, 384, 448, 512
+% APC:  1.92, 8.32, 16.64, 32.64, 48.64, then 48.64
+% FS:   1.92, 8.32, 16.64, 32.64, 49.28, 65.28, then 65.92
+% P99 APC: 0.020 to 128, then 0.031, 0.294, 0.567, 0.841, 1.104, 1.378
+% P99 FS:  0.020 to 256, then 0.214, 0.416, 0.610, 0.812
+% x = qps * 0.0122.  y = (tok/s / 1000) * 0.038125, so 80 -> 3.05.
+
+\begin{scope}[shift={(0.95,0.45)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0,3.22) {(a) Saturated decode};
+  \foreach \y/\lab in {0/0, 0.762/20, 1.525/40, 2.287/60, 3.05/80} {
+    \draw[grid] (0,\y) -- (6.35,\y);
+    \node[tick, anchor=east] at (-0.08,\y) {\lab};
+  }
+  \draw[ax] (0,0) -- (6.35,0);
+  \draw[ax] (0,0) -- (0,3.05);
+  \draw[APC, densely dashed, line width=0.3pt] (0,1.854) -- (6.35,1.854);
+  \draw[FSln, densely dashed, line width=0.3pt] (0,2.513) -- (6.35,2.513);
+  \draw[APC, line width=0.9pt]
+    (0.098,0.073) -- (0.390,0.317) -- (0.781,0.634) -- (1.562,1.244)
+    -- (2.342,1.854) -- (6.246,1.854);
+  \draw[FSln, line width=0.9pt]
+    (0.098,0.073) -- (0.390,0.317) -- (0.781,0.634) -- (1.562,1.244)
+    -- (2.342,1.879) -- (3.123,2.489) -- (3.904,2.513) -- (6.246,2.513);
+  \foreach \x/\y in {0.098/0.073, 1.562/1.244, 2.342/1.854, 6.246/1.854} {
+    \fill[APC] (\x,\y) circle (1.35pt);
+  }
+  \foreach \x/\y in {0.098/0.073, 1.562/1.244, 2.342/1.879, 3.123/2.489, 3.904/2.513, 6.246/2.513} {
+    \fill[FSln] (\x,\y) circle (1.35pt);
+  }
+  \node[font=\tiny, text=APC, anchor=west] at (2.50,1.70) {$48.6$k};
+  \node[font=\tiny, text=FSln, anchor=west] at (4.05,2.66) {$65.9$k};
+  \draw[fsgain, line width=0.45pt] (6.15,1.854) -- (6.15,2.513);
+  \node[font=\tiny, text=fsgain, anchor=east] at (6.05,2.18) {$+35.5\%$};
+  \foreach \x/\lab in {0.098/8, 1.562/128, 3.123/256, 4.685/384, 6.246/512} {
+    \node[tick] at (\x,-0.16) {\lab};
+  }
+  \node[tick, rotate=90, anchor=south] at (-0.42,1.52) {tok/s ($\times 10^{3}$)};
+  \node[tick] at (3.15,-0.42) {offered QPS};
+  \node[font=\tiny, text=black!55, anchor=west] at (0.12,2.92) {$C{=}76$ vs.\ $103$};
+\end{scope}
+
+\begin{scope}[shift={(8.55,0.45)}]
+  \node[font=\tiny\bfseries, anchor=west] at (0,3.22) {(b) P99 TTFT};
+  \foreach \y/\lab in {0/0, 0.953/0.5, 1.906/1.0, 2.859/1.5} {
+    \draw[grid] (0,\y) -- (6.35,\y);
+    \node[tick, anchor=east] at (-0.08,\y) {\lab};
+  }
+  \draw[ax] (0,0) -- (6.35,0);
+  \draw[ax] (0,0) -- (0,3.05);
+  \draw[black!45, densely dashed] (0,1.906) -- (6.35,1.906);
+  \node[tick, anchor=west, text=black!50] at (0.10,2.02) {SLO $1$\,s};
+  \draw[APC, line width=0.9pt]
+    (0.098,0.038) -- (1.562,0.038) -- (2.342,0.059) -- (3.123,0.560)
+    -- (3.904,1.081) -- (4.685,1.603) -- (5.466,2.104) -- (6.246,2.627);
+  \draw[FSln, line width=0.9pt]
+    (0.098,0.038) -- (3.123,0.038) -- (3.904,0.408) -- (4.685,0.793)
+    -- (5.466,1.163) -- (6.246,1.548);
+  \fill[APC] (4.685,1.603) circle (1.35pt);
+  \fill[APC] (5.466,2.104) circle (1.35pt);
+  \fill[FSln] (6.246,1.548) circle (1.35pt);
+  \node[font=\tiny, text=APC, anchor=south west] at (5.15,2.16) {$448$};
+  \node[font=\tiny, text=FSln, anchor=south east] at (6.10,1.60) {$0.81$\,s};
+  \foreach \x/\lab in {0.098/8, 1.562/128, 3.123/256, 4.685/384, 6.246/512} {
+    \node[tick] at (\x,-0.16) {\lab};
+  }
+  \node[tick, rotate=90, anchor=south] at (-0.42,1.52) {seconds};
+  \node[tick] at (3.15,-0.42) {offered QPS};
+\end{scope}
+
+\fill[APC] (6.15,-0.28) rectangle (6.42,-0.10);
+\node[font=\tiny, anchor=west] at (6.48,-0.19) {APC ($761$ tok)};
+\fill[FSln] (8.55,-0.28) rectangle (8.82,-0.10);
+\node[font=\tiny, anchor=west] at (8.88,-0.19) {\sys{} ($561$ tok)};
+\end{tikzpicture}
