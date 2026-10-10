@@ -23,19 +23,19 @@ $M_{\mathrm{clone}}$ arises only when every request materializes its own trunk; 
 \subsection{Residency on Two Instances}
 \label{sec:residency}
 
-Paged engines index full blocks of $P$ tokens by a chained key $h_j=\mathrm{hash}(h_{j-1},\,\text{block}_j,\,\text{extra})$~\cite{vllm,sglang}, so a block is matched only together with its entire parent prefix.
-For an instance $\mathcal{X}\in\{\Pin,\Din\}$ we define the resident prefix of the trunk and of residual $i$ as
+Paged KV caches index blocks of $P$ tokens by a chained key $h_j=\mathrm{hash}(h_{j-1},\,\text{block}_j,\,\text{extra})$~\cite{vllm,sglang}, so a match requires the full parent prefix.
+On instance $\mathcal{X}\in\{\Pin,\Din\}$, the resident prefixes of the trunk and of residual $i$ are
 \begin{align}
 c_u^{\mathcal{X}} &= \max\{jP\le L:\ x_u[0{:}jP)\sqsubseteq\mathcal{X}\}, \label{eq:mi}\\
 m_i^{\mathcal{X}} &= \max\{jP\le \ell_i:\ x_u\Vert\rho_i[0{:}jP)\sqsubseteq\mathcal{X}\}, \nonumber
 \end{align}
-where $z\sqsubseteq\mathcal{X}$ means that every page of $z$ is physically resident on $\mathcal{X}$,
-and $m_i^{\mathcal{X}}{=}0$ whenever $c_u^{\mathcal{X}}{<}L$, because chained keys make a residual page unreachable without its full trunk.
-For exposition we take $L$ to be a multiple of $P$; otherwise the partial trunk page is charged to each residual.
-Three distinctions matter.
-(i)~\emph{Parent-aware match:} $m_i^{\mathcal{X}}$ is defined on $x_u\Vert\rho_i$, not on $\rho_i$ alone.
-(ii)~\emph{Index presence versus residency:} an index entry whose block has been evicted does not count; $m_i^{\mathcal{X}}$ counts physically resident pages only.
-(iii)~\emph{Instance locality:} pages resident on $\Pin$ are not visible on $\Din$, so $m_i^{\Pin}$ and $m_i^{\Din}$ generally differ.
+where $z\sqsubseteq\mathcal{X}$ denotes physical residency on $\mathcal{X}$.
+Chained keys imply $m_i^{\mathcal{X}}{=}0$ whenever $c_u^{\mathcal{X}}{<}L$.
+We assume $L$ is a multiple of $P$ (else the partial trunk page is charged per residual).
+Three facts follow:
+(i)~\emph{Parent-aware matching}---$m_i^{\mathcal{X}}$ is defined on $x_u\Vert\rho_i$, not on $\rho_i$ alone;
+(ii)~\emph{Residency over index presence}---an indexed but evicted block does not contribute to $m_i^{\mathcal{X}}$;
+(iii)~\emph{Disaggregation}---$m_i^{\Pin}$ and $m_i^{\Din}$ are independent, so computed work and connector volume need not coincide.
 
 \subsection{Cache Regimes}
 \label{sec:regimes}

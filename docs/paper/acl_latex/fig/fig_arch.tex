@@ -13,8 +13,10 @@
                font=\tiny\sffamily, line width=0.45pt, minimum width=1.22cm, minimum height=0.64cm},
   forkline/.style={line width=0.85pt, draw=fsblue!80},
 ]
+% ---------- canvas ----------
 \path (0,0) rectangle (16.45,8.20);
 
+% ---------- harness ----------
 \draw[panel, fill=black!3] (0,7.52) rectangle (16.45,8.20);
 \node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.18,7.86) {\sys{} Design};
 \node[font=\tiny\sffamily, anchor=west, text=fsgray] at (2.55,7.86)
@@ -23,6 +25,7 @@
   \node[chip, draw=fsblue!50, fill=white] at (\x,7.86) {\texttt{\t}};
 }
 
+% ---------- panel frames ----------
 \draw[panel] (0,1.55) rectangle (5.15,7.28);
 \draw[panel] (5.62,1.55) rectangle (10.82,7.28);
 \draw[panel] (11.28,1.55) rectangle (16.45,7.28);
@@ -33,6 +36,7 @@
 \node[head] at (5.76,7.10) {2\quad Pre-kernel admission};
 \node[head] at (11.42,7.10) {3\quad Disaggregated P/D};
 
+% ---------- 1. physical frames; k aliases point up; private ρ ----------
 \draw[fsblue!45, line width=0.5pt, rounded corners=1.2pt, fill=fslight]
   (0.14,6.00) rectangle (5.01,6.86);
 \node[font=\tiny\sffamily\bfseries, text=fsblue, anchor=west] at (0.22,6.74)
@@ -55,6 +59,7 @@
 \node[chip, draw=fsblue!55, fill=white, inner sep=1.0pt, anchor=west] at (3.48,6.40)
   {$\mathrm{ref}{=}k$};
 
+% fork(): children gather into the call, then it fans out onto each trunk page.
 \node[chip, draw=fsblue!70, fill=white, inner sep=1.6pt] (forkfn) at (2.52,5.48)
   {\texttt{fork()}};
 \foreach \i in {0,...,4} {
@@ -62,6 +67,7 @@
 }
 \draw[fsblue!70, line width=0.4pt] (forkfn.north) -- (3.09,6.18);
 
+% children: ↑ slots are PTEs (not copies); ρ is private
 \node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (bs) at (0.96,3.70) {};
 \node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (b1) at (2.52,3.70) {};
 \node[inner sep=0, minimum width=1.44cm, minimum height=1.08cm] (b2) at (4.08,3.70) {};
@@ -100,6 +106,7 @@
   {LCP $v^\star{=}\arg\max_v\mathrm{LCP}(x,x_v)$};
 \draw[arr] (bs.south) -- ++(0,-0.14) -- (lcp.north);
 
+% ---------- 2. admission ----------
 \node[chip, draw=fsblue!45, fill=fslight, minimum width=2.35cm] (inr) at (7.05,6.58) {$k$ residuals $\rho_i$};
 \node[chip, draw=fsblue!55, fill=white, minimum width=2.35cm, align=center] (gc) at (7.05,5.92)
   {residency $m_i^{\Pin},m_i^{\Din}$\\[-1pt]{\tiny parent-aware chained hash}};
@@ -128,8 +135,10 @@
 \node[font=\tiny\sffamily, text=fsblue, anchor=west] at (5.82,1.93)
   {$W{=}\sum_i W_i$ \quad $X{=}\sum_{a_i\in\{\Admit,\Probe\}}(\ell_i{-}m_i^{\Din})$};
 
+% ---------- 3. disaggregated prefill / decode, gated transfer ----------
 \draw[panel, rounded corners=1.4pt, fill=fslight] (11.42,4.55) rectangle (13.42,6.78);
 \node[font=\scriptsize\bfseries\sffamily, text=fsblue, anchor=west] at (11.56,6.52) {Prefill $\Pin$};
+% kept and pruned are interleaved; the last cell stays, so this is not a suffix cut
 \foreach \c/\r in {0/1, 2/1, 0/0, 2/0, 3/0} {
   \fill[fsblue!40] ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
   \draw[fsblue, line width=0.35pt] ({11.62+\c*0.42},{5.52+\r*0.48}) rectangle ({11.94+\c*0.42},{5.84+\r*0.48});
@@ -150,6 +159,7 @@
 \node[chip, draw=fsgreen!55!black, fill=white, inner sep=1.1pt] at (13.90,6.28) {KV conn.};
 \node[font=\tiny\sffamily, text=fsgreen!30!black] at (13.90,5.42) {$\ell_i{-}m_i^{\Din}$};
 
+% decode side: probe, host pruner, commit
 \node[font=\tiny\sffamily\bfseries, anchor=west] at (11.46,4.22) {on $\Din$};
 \node[chip, draw=fsorange!70, fill=fsspec, align=center] at (13.87,3.72)
   {\Probe: $t_0$ tokens, extend iff $s'_i{\ge}\tau_{\mathrm{dec}}$};
@@ -162,11 +172,13 @@
 \node[font=\tiny\sffamily, text=fsblue] at (13.87,1.90)
   {spine $=$ next trunk, resident on $\Din$};
 
+% residuals into admission; kept miss tail stops at the prefill card edge
 \draw[arr] (b2.east) -- ++(0.22,0) |- (5.38,6.58) -- (inr.west);
 \node[font=\tiny\sffamily, text=fsblue, anchor=south] at (4.92,3.80) {$\rho$};
 \draw[arr] (mt.east) -- (11.05,2.58) -- (11.05,5.85) -- (11.42,5.85);
 \node[font=\tiny\sffamily, text=fsgreen!40!black, anchor=south] at (9.70,2.66) {$\mathcal{A}$};
 
+% ---------- HBM (occupancy vs slots) ----------
 \draw[panel] (0,0) rectangle (16.45,1.50);
 \fill[fsblue] (0,1.16) rectangle (0.08,1.50);
 \node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.18,1.33) {HBM after abort};
@@ -176,6 +188,7 @@
 \node[chip, draw=fsblue!40, fill=white] at (12.55,1.33) {$C{=}\lfloor M_{\mathrm{pool}}/M_{\mathrm{spine}}\rfloor$};
 \node[chip, draw=fsblue!40, fill=white] at (15.10,1.33) {analytical capacity};
 
+% occupancy: pool 1.70--7.55 (5.85cm). APC full; FS 0.74 of that.
 \node[font=\tiny\sffamily\bfseries, text=fsblue, anchor=south west] at (0.16,0.90) {per-session $M$};
 \node[font=\tiny\sffamily, anchor=east] at (1.58,0.68) {APC};
 \fill[fsblue!50] (1.70,0.52) rectangle (7.55,0.84);
@@ -192,6 +205,7 @@
 \node[font=\tiny\sffamily, text=fsgreen!30!black, anchor=west] at (7.65,0.26) {$561$ tok};
 \draw[fsgray!40, line width=0.4pt] (9.02,0.08) -- (9.02,1.05);
 
+% slots: max bar 116 → width 5.20cm, origin 10.15
 \node[font=\tiny\sffamily\bfseries, text=fsgreen!30!black, anchor=south west] at (9.20,0.90) {sessions $C$};
 \node[font=\tiny\sffamily, anchor=east] at (10.05,0.68) {86};
 \fill[fsblue!50] (10.15,0.52) rectangle ({10.15+86/116*5.20},0.84);
@@ -208,3 +222,105 @@
 \draw[arr] (2.4,7.52) -- (2.4,7.28);
 \node[font=\tiny\sffamily, text=fsgray, anchor=east] at (2.28,7.40) {\texttt{fork}};
 \end{tikzpicture}
+\iffalse
+% Alternate symbolic drawing. Kept for reuse; not compiled.
+% Symbolic architecture. The previous drawing is kept below and is not rendered.
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\scriptsize\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  panel/.style={draw=fsblue!28, line width=0.5pt, rounded corners=1.2pt, fill=white},
+  head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
+  eq/.style={font=\scriptsize\sffamily, anchor=west, inner sep=0.5pt},
+  act/.style={font=\scriptsize\sffamily\bfseries, anchor=west, inner sep=0.4pt},
+  alias/.style={densely dashed, line width=0.4pt, draw=fsblue!65},
+]
+\path (0,0) rectangle (16.45,6.05);
+
+\draw[panel] (0.00,0.58) rectangle (5.30,5.62);
+\draw[panel] (5.48,0.58) rectangle (10.82,5.62);
+\draw[panel] (11.00,0.58) rectangle (16.45,5.62);
+\fill[fsblue] (0.00,5.24) rectangle (5.30,5.62);
+\fill[fsorange!85!black] (5.48,5.24) rectangle (10.82,5.62);
+\fill[fsgreen!72!black] (11.00,5.24) rectangle (16.45,5.62);
+\node[head] at (0.12,5.43) {(1)\quad $\sigma_u$};
+\node[head] at (5.60,5.43) {(2)\quad $a_i\in\Act$};
+\node[head] at (11.12,5.43) {(3)\quad $B_t=B^c_t+B^s_t$};
+
+% ----- (1) trunk, aliases, private residual -----
+\node[eq] at (0.14,4.96)
+  {$\sigma_u=(\mathrm{parent},\,\mathrm{alias\_len},\,\rho^{\mathrm{pages}})$};
+\fill[fsblue!78] (0.22,4.28) rectangle (4.05,4.60);
+\node[font=\tiny\sffamily, text=white, anchor=west] at (0.34,4.44) {$x_u$};
+\node[font=\tiny\sffamily, text=white] at (2.05,4.44) {$|x_u|{=}L$};
+\node[font=\tiny\sffamily, text=white, anchor=east] at (3.92,4.44) {$\mathrm{ref}{=}k$};
+
+\node[draw=fsgreen!60!black, fill=fscommit, rounded corners=1pt,
+      font=\tiny\sffamily, inner sep=1.3pt, minimum width=1.05cm] (s0) at (0.85,3.42) {$\sigma_\star$};
+\node[draw=fsgray, fill=black!4, densely dashed, rounded corners=1pt,
+      font=\tiny\sffamily, inner sep=1.3pt, minimum width=1.05cm] (si) at (2.55,3.42) {$\sigma_i$};
+\node[draw=fsorange!75!black, fill=fsspec, rounded corners=1pt,
+      font=\tiny\sffamily, inner sep=1.3pt, minimum width=1.05cm] (sk) at (4.25,3.42) {$\sigma_k$};
+\draw[alias] (s0.north) -- (1.15,4.28);
+\draw[alias] (si.north) -- (2.05,4.28);
+\draw[alias] (sk.north) -- (3.15,4.28);
+\node[font=\tiny\sffamily, text=fsgreen!35!black] at (0.85,2.96) {$\rho_\star$};
+\node[font=\tiny\sffamily, text=fsgray] at (2.55,2.96) {$\rho_i$};
+\node[font=\tiny\sffamily, text=fsorange!80!black] at (4.25,2.96) {$\rho_k$};
+
+\node[eq] at (0.14,2.42) {$\texttt{fork}:\ \sigma_i\leftarrow(\sigma_u,|x_u|),\ O(1)$};
+\node[eq] at (0.14,1.88) {$v^\star=\arg\max_v\mathrm{LCP}(x,x_v)$};
+\node[eq] at (0.14,1.34) {$\texttt{abort}\Rightarrow M_{\mathrm{spine}}=b(L+\ell_\star)$};
+\node[eq, text=fsgray] at (0.14,0.82) {$\Delta M=-b\ell_i$};
+
+% ----- (2) one action per residual -----
+\node[act, text=fsorange!85!black] at (5.64,4.92) {$\mathrm{HS}$};
+\node[eq] at (6.55,4.92) {$H$ covers $\rho_i$};
+\node[eq, anchor=east] at (10.64,4.92) {$\Work{=}0$};
+
+\node[act, text=fsorange!85!black] at (5.64,4.38) {$\mathrm{HP}$};
+\node[eq] at (6.55,4.38) {proper prefix, $m_i$};
+\node[eq, anchor=east] at (10.64,4.38) {$\Work{=}\ell_i{-}m_i$};
+
+\node[act, text=fsorange!85!black] at (5.64,3.84) {$\mathrm{DS}$};
+\node[eq] at (6.55,3.84) {$s_i{<}\tau$, clean};
+\node[eq, anchor=east] at (10.64,3.84) {$\Work{=}0$};
+
+\node[act, text=fsorange!85!black] at (5.64,3.30) {$\mathrm{EA}$};
+\node[eq] at (6.55,3.30) {first $\alpha\ell_i$ fails};
+\node[eq, anchor=east] at (10.64,3.30) {$\Work{=}\lceil\alpha\ell_i\rceil$};
+
+\node[act, text=fsorange!85!black] at (5.64,2.76) {$\mathrm{PF}$};
+\node[eq] at (6.55,2.76) {otherwise};
+\node[eq, anchor=east] at (10.64,2.76) {$\Work{=}\ell_i$};
+
+\node[eq] at (5.64,2.05) {$i{=}0\in\Keep$};
+\node[eq] at (5.64,1.48)
+  {$\Xfer_i=\Work_i\cdot[i\in\Keep\wedge a_i\in\{\mathrm{HP},\mathrm{PF}\}]$};
+\node[eq, text=fsgray] at (5.64,0.92) {$\mathrm{Spec}\notin\mathrm{sampler}$};
+
+% ----- (3) spine on the critical path -----
+\node[eq] at (11.16,4.92) {$C=\lfloor H/M_{\mathrm{spine}}\rfloor$};
+\node[eq] at (11.16,4.38) {$M_{\mathrm{spine}}=b(L+\ell_\star)$};
+\node[eq] at (11.16,3.72) {$B^c_t=\mathrm{decode}(x_\star)$};
+\node[eq] at (11.16,3.18) {$B^s_t=\Pref(\rho^{+}_{\star})$};
+\node[font=\scriptsize\sffamily, text=fsgreen!45!black] at (14.85,3.45) {$\parallel$};
+\node[eq] at (11.16,2.48) {$p(w){=}1\ \wedge\ \Pref(|w|)\le\Idle(u)$};
+\node[eq] at (11.16,1.94) {$\Rightarrow\ \Pref(w)\ \parallel\ \Idle(u)$};
+\node[eq] at (11.16,1.34) {$\mathrm{LCP}\Rightarrow$ unmatched tail};
+\node[eq, text=fsgray] at (11.16,0.82) {$B^s_t{=}0\Rightarrow$ no speculative chunk};
+
+% ----- occupancy chain -----
+\draw[panel] (0,0) rectangle (16.45,0.46);
+\node[font=\scriptsize\sffamily] at (8.22,0.23)
+  {$M_{\mathrm{clone}}=b\bigl(kL{+}\textstyle\sum_i\ell_i\bigr)
+   \;\ge\;
+   M_{\mathrm{CoW}}=b\bigl(L{+}\textstyle\sum_i\ell_i\bigr)
+   \;\ge\;
+   M_{\mathrm{spine}}
+   \quad
+   C(M_{\mathrm{APC}}){=}76,\; C(M_{\mathrm{spine}}){=}103$};
+\end{tikzpicture}
+
+\fi

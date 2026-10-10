@@ -15,8 +15,8 @@ committed accuracy (comm.), and any-finished coverage (any).
 \toprule
 Symbol & Domain & Meaning \\
 \midrule
-$k$ & $\{4,8,16\}$ & fan-out width \\
-$\tau_{\mathrm{pre}}$ & $\{0,0.10,0.15,0.30,0.45\}$ & rejection threshold on $\mathrm{Score}_{\mathrm{pre}}(\rho_i)$ \\
+$k$ & $\{4,8,16,32\}$ & fan-out width \\
+$\tau_{\mathrm{pre}}$ & $\{0,0.15,0.45\}$ & rejection threshold on $\mathrm{Score}_{\mathrm{pre}}(\rho_i)$ \\
 $\tau_{\mathrm{dec}}$ & $0.45$ & extension threshold on $\mathrm{Score}_{\mathrm{dec}}(y_i)$ \\
 $t_0$ & $\{64,128\}$ & probe length (MATH-500) \\
 admit & $\mathbb{N}$ & residuals that are admitted or probed \\
@@ -33,9 +33,9 @@ host & $\{\mathrm{ESC},\mathrm{SR},\mathrm{DPTS}\}$ & decode-time pruner \\
 \label{sec:ablate-thresh}
 
 \Cref{tab:ablate-thresh} is the complete host $\times$ threshold $\times$ width matrix.
-All base hosts at fixed $k$ share the same $W$, since hosts act after prefill (\S\ref{sec:accounting}).
+At $k\le16$ the three base hosts report identical $W$, since hosts act after prefill (\S\ref{sec:accounting}); at $k{=}32$ measured $W$ diverges slightly across hosts ($10528$/$10176$/$9856$).
 Rejecting loops ($\tau_{\mathrm{pre}}{=}0.15$) removes a quarter of the residuals
-and keeps coverage at or above the host baseline except ESC at $k{=}4$ ($-1$).
+and keeps coverage within one problem of the host baseline.
 Blanket rejection at $0.45$ removes half of the residuals and is faster, but
 lowers coverage at $k{=}4$ and $k{=}8$ for ESC.
 
@@ -46,109 +46,120 @@ Each cell: any / comm. / $T_{\mathrm{e2e}}$\,s / $W$ / admit.
 Base rows have no admission; other rows reject $s_i{<}\tau_{\mathrm{pre}}$ and admit the rest.}
 \label{tab:ablate-thresh}
 \scriptsize
-\setlength{\tabcolsep}{2.4pt}
-\begin{tabular}{@{}llccc@{}}
+\setlength{\tabcolsep}{1.8pt}
+\begin{tabular}{@{}llcccc@{}}
 \toprule
-Host & Gate & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+Host & Gate & $k{=}4$ & $k{=}8$ & $k{=}16$ & $k{=}32$ \\
 \midrule
 ESC
  & base
- & $16/16$,\,$9/16$,\,$8.65$,\,$1320$,\,$4$
- & $16/16$,\,$11/16$,\,$10.84$,\,$2624$,\,$8$
- & $16/16$,\,$11/16$,\,$17.05$,\,$5008$,\,$16$ \\
+ & $16/16$,\,$8/16$,\,$8.63$,\,$1320$,\,$4$
+ & $16/16$,\,$8/16$,\,$10.91$,\,$2624$,\,$8$
+ & $16/16$,\,$9/16$,\,$16.49$,\,$5008$,\,$16$
+ & $16/16$,\,$9/16$,\,$32.80$,\,$10528$,\,$32$ \\
 \rowcolor{tblalt}
 ESC
  & $\tau_{\mathrm{pre}}{=}0.15$
- & $15/16$,\,$9/16$,\,$8.22$,\,$1018$,\,$3$
- & $16/16$,\,$9/16$,\,$10.19$,\,$2020$,\,$6$
- & $16/16$,\,$11/16$,\,$14.13$,\,$3848$,\,$12$ \\
+ & $15/16$,\,$9/16$,\,$8.23$,\,$1018$,\,$3$
+ & $16/16$,\,$10/16$,\,$10.26$,\,$2020$,\,$6$
+ & $16/16$,\,$9/16$,\,$14.45$,\,$3848$,\,$12$
+ & $16/16$,\,$9/16$,\,$27.15$,\,$7968$,\,$24$ \\
 ESC
  & $\tau_{\mathrm{pre}}{=}0.45$
- & $14/16$,\,$11/16$,\,$7.89$,\,$732$,\,$2$
- & $14/16$,\,$9/16$,\,$8.60$,\,$1448$,\,$4$
- & $16/16$,\,$10/16$,\,$10.92$,\,$2768$,\,$8$ \\
+ & $14/16$,\,$9/16$,\,$7.91$,\,$732$,\,$2$
+ & $15/16$,\,$8/16$,\,$8.67$,\,$1448$,\,$4$
+ & $16/16$,\,$9/16$,\,$10.95$,\,$2768$,\,$8$
+ & $16/16$,\,$9/16$,\,$16.60$,\,$5408$,\,$16$ \\
 \midrule
 SR
  & base
- & $13/16$,\,$8/16$,\,$8.19$,\,$1320$,\,$4$
- & $15/16$,\,$9/16$,\,$9.61$,\,$2624$,\,$8$
- & $16/16$,\,$12/16$,\,$13.14$,\,$5008$,\,$16$ \\
+ & $13/16$,\,$9/16$,\,$8.21$,\,$1320$,\,$4$
+ & $15/16$,\,$9/16$,\,$9.64$,\,$2624$,\,$8$
+ & $16/16$,\,$9/16$,\,$13.29$,\,$5008$,\,$16$
+ & $16/16$,\,$10/16$,\,$26.89$,\,$10176$,\,$32$ \\
 \rowcolor{tblalt}
 SR
  & $\tau_{\mathrm{pre}}{=}0.15$
- & $13/16$,\,$9/16$,\,$8.03$,\,$1018$,\,$3$
- & $16/16$,\,$9/16$,\,$9.37$,\,$2020$,\,$6$
- & $16/16$,\,$10/16$,\,$12.47$,\,$3848$,\,$12$ \\
+ & $12/16$,\,$9/16$,\,$8.05$,\,$1018$,\,$3$
+ & $15/16$,\,$9/16$,\,$9.39$,\,$2020$,\,$6$
+ & $16/16$,\,$9/16$,\,$12.53$,\,$3848$,\,$12$
+ & $16/16$,\,$9/16$,\,$24.81$,\,$7744$,\,$24$ \\
 SR
  & $\tau_{\mathrm{pre}}{=}0.45$
- & $12/16$,\,$9/16$,\,$7.89$,\,$732$,\,$2$
- & $15/16$,\,$9/16$,\,$8.64$,\,$1448$,\,$4$
- & $16/16$,\,$10/16$,\,$10.80$,\,$2768$,\,$8$ \\
+ & $14/16$,\,$9/16$,\,$7.91$,\,$732$,\,$2$
+ & $15/16$,\,$8/16$,\,$8.69$,\,$1448$,\,$4$
+ & $16/16$,\,$9/16$,\,$10.95$,\,$2768$,\,$8$
+ & $16/16$,\,$9/16$,\,$16.59$,\,$5408$,\,$16$ \\
 \midrule
 DPTS
  & base
- & $13/16$,\,$8/16$,\,$8.00$,\,$1320$,\,$4$
- & $15/16$,\,$9/16$,\,$8.97$,\,$2624$,\,$8$
- & $16/16$,\,$12/16$,\,$11.86$,\,$5008$,\,$16$ \\
+ & $13/16$,\,$10/16$,\,$8.03$,\,$1320$,\,$4$
+ & $15/16$,\,$10/16$,\,$9.06$,\,$2624$,\,$8$
+ & $16/16$,\,$10/16$,\,$11.87$,\,$5008$,\,$16$
+ & $16/16$,\,$9/16$,\,$23.20$,\,$9856$,\,$32$ \\
 \rowcolor{tblalt}
 DPTS
  & $\tau_{\mathrm{pre}}{=}0.15$
- & $13/16$,\,$9/16$,\,$7.93$,\,$1018$,\,$3$
- & $16/16$,\,$8/16$,\,$8.95$,\,$2020$,\,$6$
- & $16/16$,\,$12/16$,\,$11.49$,\,$3848$,\,$12$ \\
+ & $13/16$,\,$7/16$,\,$7.98$,\,$1018$,\,$3$
+ & $15/16$,\,$10/16$,\,$8.96$,\,$2020$,\,$6$
+ & $16/16$,\,$10/16$,\,$11.57$,\,$3848$,\,$12$
+ & $16/16$,\,$10/16$,\,$21.01$,\,$7568$,\,$24$ \\
 DPTS
  & $\tau_{\mathrm{pre}}{=}0.45$
- & $13/16$,\,$9/16$,\,$7.88$,\,$732$,\,$2$
- & $15/16$,\,$9/16$,\,$8.67$,\,$1448$,\,$4$
- & $16/16$,\,$10/16$,\,$10.90$,\,$2768$,\,$8$ \\
+ & $14/16$,\,$9/16$,\,$7.92$,\,$732$,\,$2$
+ & $15/16$,\,$8/16$,\,$8.67$,\,$1448$,\,$4$
+ & $16/16$,\,$9/16$,\,$10.96$,\,$2768$,\,$8$
+ & $16/16$,\,$9/16$,\,$16.61$,\,$5408$,\,$16$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \paragraph{Analysis.}
-At every $k$, the three base hosts report identical $W$ and admit counts.
+At $k\le16$, the three base hosts report identical $W$ and admit counts.
 Admission changes only that column: $3k/4$ residuals are admitted at $\tau_{\mathrm{pre}}{=}0.15$
 (live and illegal; loops rejected) and $k/2$ at $0.45$ (live only).
 Relative $T_{\mathrm{e2e}}$ cuts under ESC${+}0.15$ grow with $k$:
-$(8.65{-}8.22)/8.65{=}5\%$,
-$(10.84{-}10.19)/10.84{=}6\%$,
-$(17.05{-}14.13)/17.05{=}17\%$.
+$5\%$, $6\%$, $12\%$, and $17\%$ at $k{=}4,8,16,32$.
 Because SR and DPTS already terminate loops during decoding, the same threshold yields smaller relative reductions
-($5\%$ and $3\%$ at $k{=}16$).
+($6\%$ and $3\%$ at $k{=}16$).
 
 %----------------------------------------------------------------------
 \subsection{Prefill-only ESC bars}
 \label{sec:ablate-prefill}
 
 \Cref{tab:ablate-prefill} isolates the prefill-side score: no host criterion is applied, and every admitted residual is decoded to $D$.
-Since $\mathrm{Score}_{\mathrm{pre}}$ takes three values on the mix (loop $0.02$, illegal $0.22$, live $\approx1$), the thresholds $0.00$, $0.10$, and $0.30$ yield the three distinct admission sets; $0.10$ is equivalent to $0.15$, and $0.30$ to $0.45$.
-At $k{=}16$, the $\tau_{\mathrm{pre}}{=}0$ row coincides in configuration with the ESC baseline of \Cref{tab:ablate-thresh}, because the ESC stopping criterion is not triggered on this mix.
-The two runs nevertheless commit $8/16$ and $11/16$ correct answers, which we take as an estimate of the run-to-run variance of committed accuracy at $n{=}16$.
+Since $\mathrm{Score}_{\mathrm{pre}}$ takes three values on the mix (loop $0.02$, illegal $0.22$, live $\approx1$), any $\tau_{\mathrm{pre}}\in(0.02,0.22]$ matches $0.15$ and any $\tau_{\mathrm{pre}}\in(0.22,1)$ matches $0.45$.
+At $k{=}16$, the $\tau_{\mathrm{pre}}{=}0$ row coincides in configuration with the ESC baseline of \Cref{tab:ablate-thresh}; committed accuracy across such runs ranges from $8/16$ to $11/16$.
 
 \begin{table}[t]
 \centering
 \caption{Prefill-only admission (no host cut; every admitted residual decodes to $D$).}
 \label{tab:ablate-prefill}
 \scriptsize
-\setlength{\tabcolsep}{3.0pt}
+\setlength{\tabcolsep}{2.6pt}
 \begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
 $k$ & $\tau_{\mathrm{pre}}$ & admit & $\Work$ & $D^{+}$ & $T_{\mathrm{e2e}}$ & any & comm. \\
 \midrule
-$4$ & $0.00$ & $4$ & $1320$ & $32768$ & $8.65$ & $16/16$ & $9/16$ \\
+$4$ & $0.00$ & $4$ & $1320$ & $32768$ & $8.62$ & $16/16$ & $9/16$ \\
 \rowcolor{tblalt}
-$4$ & $0.10$ & $3$ & $1018$ & $24576$ & $8.20$ & $15/16$ & $9/16$ \\
-$4$ & $0.30$ & $2$ & $732$ & $16384$ & $7.89$ & $14/16$ & $11/16$ \\
+$4$ & $0.15$ & $3$ & $1018$ & $24576$ & $8.22$ & $16/16$ & $8/16$ \\
+$4$ & $0.45$ & $2$ & $732$ & $16384$ & $7.90$ & $14/16$ & $9/16$ \\
 \midrule
-$8$ & $0.00$ & $8$ & $2624$ & $65536$ & $10.79$ & $16/16$ & $9/16$ \\
+$8$ & $0.00$ & $8$ & $2624$ & $65536$ & $10.90$ & $16/16$ & $8/16$ \\
 \rowcolor{tblalt}
-$8$ & $0.10$ & $6$ & $2020$ & $49152$ & $10.21$ & $16/16$ & $10/16$ \\
-$8$ & $0.30$ & $4$ & $1448$ & $32768$ & $8.64$ & $15/16$ & $9/16$ \\
+$8$ & $0.15$ & $6$ & $2020$ & $49152$ & $10.25$ & $16/16$ & $10/16$ \\
+$8$ & $0.45$ & $4$ & $1448$ & $32768$ & $8.66$ & $15/16$ & $8/16$ \\
 \midrule
-$16$ & $0.00$ & $16$ & $5008$ & $131072$ & $16.99$ & $16/16$ & $8/16$ \\
+$16$ & $0.00$ & $16$ & $5008$ & $131072$ & $16.48$ & $16/16$ & $9/16$ \\
 \rowcolor{tblalt}
-$16$ & $0.10$ & $12$ & $3848$ & $98304$ & $14.14$ & $16/16$ & $9/16$ \\
-$16$ & $0.30$ & $8$ & $2768$ & $65536$ & $10.91$ & $16/16$ & $10/16$ \\
+$16$ & $0.15$ & $12$ & $3848$ & $98304$ & $14.45$ & $16/16$ & $10/16$ \\
+$16$ & $0.45$ & $8$ & $2768$ & $65536$ & $10.95$ & $16/16$ & $8/16$ \\
+\midrule
+$32$ & $0.00$ & $32$ & $10528$ & $262144$ & $32.78$ & $16/16$ & $9/16$ \\
+\rowcolor{tblalt}
+$32$ & $0.15$ & $24$ & $7968$ & $196608$ & $27.14$ & $16/16$ & $9/16$ \\
+$32$ & $0.45$ & $16$ & $5408$ & $131072$ & $16.61$ & $16/16$ & $9/16$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -177,26 +188,26 @@ Prefill-only and combined rows come from separate runs.}
 Factor & Setting & admit & stopped & $\Work$ & $D^{+}$ & $T_{\mathrm{e2e}}$ & comm. \\
 \midrule
 \multicolumn{8}{@{}l}{\emph{Decode-only}} \\
- & ESC ($D{=}512$) & $16$ & $0$ & $5008$ & $131072$ & $17.05$ & $11/16$ \\
+ & ESC ($D{=}512$) & $16$ & $0$ & $5008$ & $131072$ & $16.49$ & $9/16$ \\
 \rowcolor{tblalt}
- & SR ($\tau{=}256$) & $16$ & $8$ & $5008$ & $98304$ & $13.14$ & $12/16$ \\
- & DPTS ($d{=}100$) & $16$ & $8$ & $5008$ & $78336$ & $11.86$ & $12/16$ \\
+ & SR ($\tau{=}256$) & $16$ & $8$ & $5008$ & $98304$ & $13.29$ & $9/16$ \\
+ & DPTS ($d{=}100$) & $16$ & $8$ & $5008$ & $78336$ & $11.87$ & $10/16$ \\
 \midrule
 \multicolumn{8}{@{}l}{\emph{Prefill-only}} \\
- & $\tau_{\mathrm{pre}}{=}0.15$ & $12$ & $0$ & \win{$3848$} & $98304$ & $14.14$ & $11/16$ \\
+ & $\tau_{\mathrm{pre}}{=}0.15$ & $12$ & $0$ & \win{$3848$} & $98304$ & $14.45$ & $10/16$ \\
 \rowcolor{tblalt}
- & $\tau_{\mathrm{pre}}{=}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.91$} & $10/16$ \\
+ & $\tau_{\mathrm{pre}}{=}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.95$} & $8/16$ \\
 \midrule
 \multicolumn{8}{@{}l}{\emph{Combined}} \\
- & ESC${+}0.15$ & $12$ & $0$ & \win{$3848$} & $98304$ & $14.13$ & $11/16$ \\
+ & ESC${+}0.15$ & $12$ & $0$ & \win{$3848$} & $98304$ & $14.45$ & $9/16$ \\
 \rowcolor{tblalt}
- & SR${+}0.15$ & $12$ & $4$ & \win{$3848$} & $81920$ & $12.47$ & $10/16$ \\
- & DPTS${+}0.15$ & $12$ & $4$ & \win{$3848$} & $71936$ & $11.49$ & $12/16$ \\
+ & SR${+}0.15$ & $12$ & $4$ & \win{$3848$} & $81920$ & $12.53$ & $9/16$ \\
+ & DPTS${+}0.15$ & $12$ & $4$ & \win{$3848$} & $71936$ & $11.57$ & $10/16$ \\
 \rowcolor{tblalt}
- & ESC${+}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.92$} & $10/16$ \\
- & SR${+}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.80$} & $10/16$ \\
+ & ESC${+}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.95$} & $9/16$ \\
+ & SR${+}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.95$} & $9/16$ \\
 \rowcolor{tblalt}
- & DPTS${+}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.90$} & $10/16$ \\
+ & DPTS${+}0.45$ & $8$ & $0$ & \win{$2768$} & $65536$ & \win{$10.96$} & $9/16$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -304,20 +315,20 @@ At $k{=}16$, $W$ includes the recomputation $\Delta_{\mathrm{ext}}$ of evicted p
 \toprule
 $k$ & Setting & admit & $\Work$ & $D^{+}$ & $T_{\mathrm{e2e}}$ & any \\
 \midrule
-$4$ & probe@$64$ & $3$ & $2460$ & $98304$ & $23.96$ & $8/32$ \\
+$4$ & probe@$64$ & $3$ & $2460$ & $98304$ & $23.99$ & $12/32$ \\
 \rowcolor{tblalt}
-$4$ & probe@$128$ & $3$ & $2460$ & $98304$ & $24.70$ & $9/32$ \\
-$4$ & probe-loops@$128$ & $4$ & $3115$ & $102400$ & $24.89$ & $10/32$ \\
+$4$ & probe@$128$ & $3$ & $2460$ & $98304$ & $24.78$ & $9/32$ \\
+$4$ & probe-loops@$128$ & $4$ & $3115$ & $102400$ & $24.95$ & $11/32$ \\
 \midrule
-$8$ & probe@$64$ & $6$ & $4824$ & $196608$ & \win{$42.01$} & \win{$16/32$} \\
+$8$ & probe@$64$ & $6$ & $4824$ & $196608$ & \win{$42.78$} & \win{$15/32$} \\
 \rowcolor{tblalt}
-$8$ & probe@$128$ & $6$ & $4824$ & $196608$ & $43.30$ & $13/32$ \\
-$8$ & probe-loops@$128$ & $8$ & $6134$ & $204800$ & $43.32$ & $15/32$ \\
+$8$ & probe@$128$ & $6$ & $4824$ & $196608$ & $43.33$ & $14/32$ \\
+$8$ & probe-loops@$128$ & $8$ & $6134$ & $204800$ & $43.82$ & $14/32$ \\
 \midrule
-$16$ & probe@$64$ & $12$ & $20544$ & $393216$ & $72.50$ & $18/32$ \\
+$16$ & probe@$64$ & $12$ & $20544$ & $393216$ & $72.65$ & $18/32$ \\
 \rowcolor{tblalt}
-$16$ & probe@$128$ & $12$ & $28736$ & $393216$ & \win{$72.21$} & \win{$20/32$} \\
-$16$ & probe-loops@$128$ & $16$ & $31260$ & $409600$ & $74.44$ & $20/32$ \\
+$16$ & probe@$128$ & $12$ & $28736$ & $393216$ & \win{$73.21$} & \win{$20/32$} \\
+$16$ & probe-loops@$128$ & $16$ & $31260$ & $409600$ & $74.43$ & $20/32$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -325,9 +336,9 @@ $16$ & probe-loops@$128$ & $16$ & $31260$ & $409600$ & $74.44$ & $20/32$ \\
 \paragraph{Summary.}
 (i)~Blanket rejection of every $s_i{<}\tau_{\mathrm{dec}}$ loses coverage: $20/32$ falls to $13/32$ at $k{=}16$.
 (ii)~Rejecting only loops costs at most one problem at $k\le8$ but recovers only $16/32$ at $k{=}16$.
-(iii)~A $t_0{=}128$ probe restores $20/32$ at $k{=}16$ and cuts $104.10$\,s to $72.21$\,s ($-31\%$);
-at $k{=}8$ the shorter probe $t_0{=}64$ is the accuracy-preserving point ($16/32$ in $42.01$\,s).
-(iv)~Probing loop residuals as well extends none of them and increases wall-clock time ($74.44$\,s at $k{=}16$).
+(iii)~A $t_0{=}128$ probe restores $20/32$ at $k{=}16$ and cuts $104.10$\,s to $73.21$\,s ($-30\%$);
+at $k{=}8$ the shorter probe $t_0{=}64$ is the accuracy-preserving point ($15/32$ in $42.78$\,s, matching the full fan-out).
+(iv)~Probing loop residuals as well extends none of them and increases wall-clock time ($74.43$\,s at $k{=}16$).
 (v)~At $k{=}16$, probe extension recomputes evicted pages, so $W$ exceeds that of the full fan-out although $D^{+}$ and wall-clock time decrease; retaining probe pages until the extension decision would eliminate this term.
 
 %----------------------------------------------------------------------
@@ -335,17 +346,18 @@ at $k{=}8$ the shorter probe $t_0{=}64$ is the accuracy-preserving point ($16/32
 \label{sec:ablate-idents}
 
 Across \Cref{tab:ablate-thresh,tab:ablate-prefill}, the measured prefill satisfies the predictions of \Cref{prop:acct} for a warm trunk:
-the three hosts report identical $W$ at every $k$, and admission removes exactly the computed tokens of the rejected residuals.
+at $k\le16$ the three hosts report identical $W$, and admission removes exactly the computed tokens of the rejected residuals.
+The control-plane connector table of \Cref{tab:connector} extends to wider fan-outs with the same $25\%$ loop-only cut on a stock prefiller and the same alias$+$gate reduction to the miss of $\Keep$ ($2240$/$4800$/$9920$ tokens at $k{=}8/16/32$).
 Because residual lengths differ across classes, the reductions are not fixed fractions of $W$:
 \begin{center}
 \scriptsize
-\begin{tabular}{@{}lrrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
- & $k{=}4$ & $k{=}8$ & $k{=}16$ \\
+ & $k{=}4$ & $k{=}8$ & $k{=}16$ & $k{=}32$ \\
 \midrule
-$W$, no admission & $1320$ & $2624$ & $5008$ \\
-$W$, $\tau_{\mathrm{pre}}{=}0.15$ & $1018$ ($0.77$) & $2020$ ($0.77$) & $3848$ ($0.77$) \\
-$W$, $\tau_{\mathrm{pre}}{=}0.45$ & $732$ ($0.55$) & $1448$ ($0.55$) & $2768$ ($0.55$) \\
+$W$, no admission & $1320$ & $2624$ & $5008$ & $10528$ \\
+$W$, $\tau_{\mathrm{pre}}{=}0.15$ & $1018$ ($0.77$) & $2020$ ($0.77$) & $3848$ ($0.77$) & $7968$ ($0.76$) \\
+$W$, $\tau_{\mathrm{pre}}{=}0.45$ & $732$ ($0.55$) & $1448$ ($0.55$) & $2768$ ($0.55$) & $5408$ ($0.51$) \\
 \bottomrule
 \end{tabular}
 \end{center}

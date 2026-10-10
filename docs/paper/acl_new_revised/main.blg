@@ -1,0 +1,95 @@
+This is BibTeX, Version 0.99e (TeX Live 2026)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: main.aux
+The style file: acl_natbib.bst
+I found no \bibdata command---while reading file main.aux
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=200001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Warning--I didn't find a database entry for "react"
+Warning--I didn't find a database entry for "sweagent"
+Warning--I didn't find a database entry for "openhands"
+Warning--I didn't find a database entry for "tot"
+Warning--I didn't find a database entry for "selfconsistency"
+Warning--I didn't find a database entry for "cot"
+Warning--I didn't find a database entry for "gsm8k"
+Warning--I didn't find a database entry for "math"
+Warning--I didn't find a database entry for "esc"
+Warning--I didn't find a database entry for "distserve"
+Warning--I didn't find a database entry for "splitwise"
+Warning--I didn't find a database entry for "specrej"
+Warning--I didn't find a database entry for "dpts"
+Warning--I didn't find a database entry for "stoploss"
+Warning--I didn't find a database entry for "vllm"
+Warning--I didn't find a database entry for "sglang"
+Warning--I didn't find a database entry for "autellix"
+Warning--I didn't find a database entry for "continuum"
+Warning--I didn't find a database entry for "mori"
+Warning--I didn't find a database entry for "conserve"
+Warning--I didn't find a database entry for "forkkv"
+Warning--I didn't find a database entry for "mctsllm"
+Warning--I didn't find a database entry for "equivpruner"
+Warning--I didn't find a database entry for "orca"
+Warning--I didn't find a database entry for "sarathi"
+Warning--I didn't find a database entry for "hermes"
+Warning--I didn't find a database entry for "thunderagent"
+Warning--I didn't find a database entry for "saga"
+Warning--I didn't find a database entry for "infercept"
+Warning--I didn't find a database entry for "sutradhara"
+Warning--I didn't find a database entry for "math500"
+Warning--I didn't find a database entry for "speculative"
+Warning--I didn't find a database entry for "medusa"
+Warning--I didn't find a database entry for "jitserve"
+Warning--I didn't find a database entry for "sarathisplit"
+Warning--I didn't find a database entry for "parrot"
+Warning--I didn't find a database entry for "ayo"
+Warning--I didn't find a database entry for "pythia"
+Warning--I didn't find a database entry for "smoothagent"
+Warning--I didn't find a database entry for "idlespec"
+Warning--I didn't find a database entry for "cacheprune"
+Warning--I didn't find a database entry for "eagledraft"
+You've used 0 entries,
+            3764 wiz_defined-function locations,
+            776 strings with 6024 characters,
+and the built_in function-call counts, 50 in all, are:
+= -- 0
+> -- 0
+< -- 0
++ -- 0
+- -- 1
+* -- 2
+:= -- 33
+add.period$ -- 0
+call.type$ -- 0
+change.case$ -- 0
+chr.to.int$ -- 1
+cite$ -- 0
+duplicate$ -- 0
+empty$ -- 1
+format.name$ -- 0
+if$ -- 1
+int.to.chr$ -- 1
+int.to.str$ -- 1
+missing$ -- 0
+newline$ -- 4
+num.names$ -- 0
+pop$ -- 0
+preamble$ -- 1
+purify$ -- 0
+quote$ -- 0
+skip$ -- 1
+stack$ -- 0
+substring$ -- 0
+swap$ -- 0
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 0
+warning$ -- 0
+while$ -- 0
+width$ -- 0
+write$ -- 3
+(There was 1 error message)

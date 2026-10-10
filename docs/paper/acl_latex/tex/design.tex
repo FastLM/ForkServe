@@ -41,8 +41,8 @@ Eviction is node-granular: speculative leaves first, then idle committed leaves,
 \resizebox{\textwidth}{!}{\input{fig/fig_pool}}
 \caption{\textbf{Context-tree page pool.}
 \texttt{fork} aliases the trunk in $O(1)$ and allocates only residual pages~\textcircled{1}--\textcircled{3}.
-Commit publishes $x_\star$ to the index~\textcircled{4}\textcircled{6}.
-\texttt{abort} returns residual pages only, so the live occupancy is $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
+LCP commit~\textcircled{6} publishes $x_\star$ to the index~\textcircled{4}.
+\texttt{abort}~\textcircled{7} returns residual pages to the free list~\textcircled{5}, so the live occupancy is $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$.}
 \label{fig:pool}
 \end{figure*}
 

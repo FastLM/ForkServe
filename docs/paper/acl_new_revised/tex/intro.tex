@@ -38,8 +38,8 @@ We argue that, in disaggregated agentic serving, pruning should itself be disagg
 \end{itemize}
 
 \paragraph{Results.}
-On Qwen3-8B GSM8K with $k{=}16$, admission in front of ESC, Speculative Rejection, or DPTS reduces computed prefill from $5008$ to $3848$ tokens ($-23\%$) for every host; committed-answer accuracy changes by $0$, $-2$, and $0$ of $16$ problems, and ESC wall-clock falls from $17.05$\,s to $14.13$\,s (\S\ref{sec:eval}).
-On MATH-500, rejecting every low-scoring residual before prefill lowers any-finished coverage from $20/32$ to $13/32$, whereas a $128$-token probe restores $20/32$ at $72.2$\,s instead of $104.1$\,s.
+On Qwen3-8B GSM8K with $k{=}16$, admission in front of ESC, Speculative Rejection, or DPTS reduces computed prefill from $5008$ to $3848$ tokens ($-23\%$) for every host; committed-answer accuracy is unchanged, and ESC wall-clock falls from $16.49$\,s to $14.45$\,s (\S\ref{sec:eval}).
+On MATH-500, rejecting every low-scoring residual before prefill lowers any-finished coverage from $20/32$ to $13/32$, whereas a $128$-token probe restores $20/32$ at $73.2$\,s instead of $104.1$\,s.
 On the full GSM8K test set with Qwen3-14B, the retained spine requires $0.72\times$ the median peak KV of APC at matched accuracy, and the ratio stays within $0.72$--$0.75\times$ across six model families.
 All measurements run on physically disaggregated vLLM prefill and decode instances connected by a KV connector.
 

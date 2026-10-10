@@ -25,16 +25,18 @@
   }
   \draw[ax] (0.35,0.42) -- (5.05,0.42);
   \draw[ax] (0.35,0.42) -- (0.35,2.80);
-  \draw[ESCc, line width=0.8pt] (1.35,1.545) -- (2.85,1.829) -- (4.35,2.637);
-  \draw[t15, line width=0.8pt] (1.35,1.489) -- (2.85,1.745) -- (4.35,2.258);
-  \draw[t45, line width=0.8pt] (1.35,1.446) -- (2.85,1.538) -- (4.35,1.841);
-  \foreach \x/\y in {1.35/1.545, 2.85/1.829, 4.35/2.637} {\fill[ESCc] (\x,\y) circle (1.2pt);}
-  \foreach \x/\y in {1.35/1.489, 2.85/1.745, 4.35/2.258} {\fill[t15] (\x,\y) circle (1.2pt);}
-  \foreach \x/\y in {1.35/1.446, 2.85/1.538, 4.35/1.841} {\fill[t45] (\x,\y) circle (1.2pt);}
-  \node[font=\tiny, text=t15, anchor=south] at (1.05,1.72) {$15/16$};
+  % times from logs/paper_new prefill: ESC 8.62/10.90/16.48; +0.15 8.22/10.25/14.45; +0.45 7.90/8.66/10.95
+  % y = 0.42 + s*0.13
+  \draw[ESCc, line width=0.8pt] (1.35,1.541) -- (2.85,1.837) -- (4.35,2.562);
+  \draw[t15, line width=0.8pt] (1.35,1.489) -- (2.85,1.752) -- (4.35,2.298);
+  \draw[t45, line width=0.8pt] (1.35,1.447) -- (2.85,1.546) -- (4.35,1.843);
+  \foreach \x/\y in {1.35/1.541, 2.85/1.837, 4.35/2.562} {\fill[ESCc] (\x,\y) circle (1.2pt);}
+  \foreach \x/\y in {1.35/1.489, 2.85/1.752, 4.35/2.298} {\fill[t15] (\x,\y) circle (1.2pt);}
+  \foreach \x/\y in {1.35/1.447, 2.85/1.546, 4.35/1.843} {\fill[t45] (\x,\y) circle (1.2pt);}
+  \node[font=\tiny, text=t15, anchor=south] at (1.05,1.72) {$16/16$};
   \node[font=\tiny, text=t45, anchor=north] at (1.05,1.22) {$14/16$};
-  \node[font=\tiny, text=t45, anchor=north] at (2.55,1.28) {$14/16$};
-  \node[font=\tiny, text=black!55, anchor=south west] at (4.05,2.68) {$16/16$};
+  \node[font=\tiny, text=t45, anchor=north] at (2.55,1.28) {$15/16$};
+  \node[font=\tiny, text=black!55, anchor=south west] at (4.05,2.60) {$16/16$};
   \foreach \x/\lab in {1.35/4, 2.85/8, 4.35/16} {\node[tick] at (\x,0.22) {$k{=}\lab$};}
   \node[tick, rotate=90, anchor=south] at (-0.12,1.60) {seconds};
 \end{scope}
@@ -68,16 +70,16 @@
   }
   \draw[ax] (0.35,0.42) -- (3.85,0.42);
   \draw[ax] (0.35,0.42) -- (0.35,2.80);
-  % ESC 17.05 / 14.14, SR 13.14 / 12.47, DPTS 11.86 / 11.49
-  \fill[bar, ESCc] (0.70,0.42) rectangle (1.02,2.637);
-  \fill[bar, t15] (1.08,0.42) rectangle (1.40,2.258);
-  \fill[bar, ESCc] (1.85,0.42) rectangle (2.17,2.102);
-  \fill[bar, t15] (2.23,0.42) rectangle (2.55,2.013);
-  \fill[bar, ESCc] (3.00,0.42) rectangle (3.32,1.931);
-  \fill[bar, t15] (3.38,0.42) rectangle (3.70,1.882);
-  \node[font=\tiny, text=fsgain] at (1.24,2.72) {$-17\%$};
-  \node[font=\tiny, text=fsgain] at (2.39,2.20) {$-5\%$};
-  \node[font=\tiny, text=fsgain] at (3.54,2.02) {$-3\%$};
+  % ESC 16.49 / 14.45, SR 13.29 / 12.53, DPTS 11.87 / 11.57  (y = 0.42 + s*0.13)
+  \fill[bar, ESCc] (0.70,0.42) rectangle (1.02,2.564);
+  \fill[bar, t15] (1.08,0.42) rectangle (1.40,2.298);
+  \fill[bar, ESCc] (1.85,0.42) rectangle (2.17,2.148);
+  \fill[bar, t15] (2.23,0.42) rectangle (2.55,2.049);
+  \fill[bar, ESCc] (3.00,0.42) rectangle (3.32,1.963);
+  \fill[bar, t15] (3.38,0.42) rectangle (3.70,1.924);
+  \node[font=\tiny, text=fsgain] at (1.24,2.72) {$-12\%$};
+  \node[font=\tiny, text=fsgain] at (2.39,2.24) {$-6\%$};
+  \node[font=\tiny, text=fsgain] at (3.54,2.06) {$-3\%$};
   \node[tick] at (1.05,0.22) {ESC};
   \node[tick] at (2.20,0.22) {SR};
   \node[tick] at (3.35,0.22) {DPTS};

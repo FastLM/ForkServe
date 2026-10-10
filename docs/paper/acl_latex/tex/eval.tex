@@ -56,15 +56,15 @@ The MATH-500 experiments use Qwen3-8B at $\mathrm{tp}{=}1$, the first $32$ probl
 Half of the $k$ residuals are contest strategies; the other half alternate repetition loops and illegal text.
 Coverage counts a problem when some branch that ran all $1024$ tokens is correct; the committed residual is index $0$.
 Blanket rejection lowers coverage from $12/32$ to $6/32$ at $k{=}4$ and from $20/32$ to $13/32$ at $k{=}16$, whereas no loop residual yields a correct answer at any $k$, so rejecting loops does not reduce coverage.
-At $k{=}16$ a $128$-token probe extends every illegal residual ($128/128$) and restores $20/32$ in $72.2$\,s instead of $104.1$\,s; probing the loops as well extends none of them and costs $74.4$\,s.
-At $k{=}8$, $t_0{=}64$ reaches $16/32$ in $42.0$\,s, above the full fan-out ($15/32$ in $52.5$\,s); at $k{=}4$ no probe recovers $12/32$, and reject-only admission ($11/32$ in $23.0$\,s) is the closest setting.
+At $k{=}16$ a $128$-token probe extends every illegal residual ($128/128$) and restores $20/32$ in $73.2$\,s instead of $104.1$\,s; probing the loops as well extends none of them and costs $74.4$\,s.
+At $k{=}8$, $t_0{=}64$ reaches $15/32$ in $42.8$\,s, matching the full fan-out ($15/32$ in $52.5$\,s); at $k{=}4$ the $t_0{=}64$ probe recovers $12/32$ in $24.0$\,s, and reject-only admission ($11/32$ in $23.0$\,s) is the closest non-probe setting.
 \Cref{fig:eval-grow} plots \Cref{tab:grow}.
 
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_eval_grow}}
 \caption{\textbf{Probe admission on MATH-500} (\Cref{tab:grow}).
-Blanket rejection is fast but loses coverage; a $t_0{=}128$ probe returns to $20/32$ at $k{=}16$ in $72.2$\,s instead of $104.1$\,s.}
+Blanket rejection is fast but loses coverage; a $t_0{=}128$ probe returns to $20/32$ at $k{=}16$ in $73.2$\,s instead of $104.1$\,s.}
 \label{fig:eval-grow}
 \end{figure*}
 

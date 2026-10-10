@@ -39,10 +39,10 @@ Eviction is node-granular: speculative leaves first, then idle committed leaves,
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_pool}}
-\caption{\textbf{Context-tree page pool.}
+\caption{\textbf{Context-tree page pool} (pruning-aware KV state).
 \texttt{fork} aliases the trunk in $O(1)$ and allocates only residual pages~\textcircled{1}--\textcircled{3}.
-Commit publishes $x_\star$ to the index~\textcircled{4}\textcircled{6}.
-\texttt{abort} returns residual pages only, so the live occupancy is $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
+LCP commit publishes full blocks of $x_\star$ into $H$ so later steps can take \Hit on $\Din$~\textcircled{4}\textcircled{6}.
+\texttt{abort} returns residual pages only; the live occupancy is $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
 \label{fig:pool}
 \end{figure*}
 
@@ -71,14 +71,11 @@ A page resident only on $\Pin$ reduces $W_i$ but not $X_i$; the residual is admi
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_dragon}}
-\caption{\textbf{Four admission actions on one radix tree.}
-The root is the aliased trunk $x_u$; each edge is one page of $P$ tokens.
-Green pages are resident on $\Din$, orange pages are prefilled, and gray pages are never computed.
-(a)~\Hit: $m_i^{\Din}{=}\ell_i$, so $W_i{=}X_i{=}0$.
-(b)~\Admit with a partial match: $W_i{=}\ell_i{-}m_i^{\Pin}$, $X_i{=}\ell_i{-}m_i^{\Din}$.
-(c)~\Probe: prefilled and decoded for $t_0$ tokens, then extended or freed.
-(d)~\Admit without a match: $W_i{=}X_i{=}\ell_i$.
-(e)~\Reject: $W_i{=}X_i{=}d_i{=}0$.}
+\caption{\textbf{Policy $\pi$ on one radix tree} (\eqref{eq:action}, Alg.~\ref{alg:app}).
+The root is the aliased trunk $x_u$; each box is one page of $P$ tokens.
+Green pages are already resident on $\Din$, orange pages are the miss prefilled on $\Pin$, and gray pages are never computed.
+The cascade on the right is the controller decision order: residency, protect $i{=}0$, then $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$.
+Only $\Act$ reaches $\Pin$ and the connector; $\mathcal{U}$ is probed on $\Din$ for $t_0$ tokens.}
 \label{fig:radix}
 \end{figure*}
 
@@ -96,10 +93,10 @@ The overlap row prefills the next residual during decode; the tool-interval row 
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_arch}}
 \caption{\textbf{\sys{} design.}
-(1)~Context tree: $\sigma_u$ aliases one trunk, \texttt{fork} is $O(1)$, and \eqref{eq:lcp} commits the winner.
-(2)~Pre-kernel admission assigns one action per residual in the order of \eqref{eq:action}; only $\mathcal{A}$ (\Admit and \Probe) reaches the prefill kernel.
-(3)~Disaggregated execution: the connector carries only decoder-missing pages, $\Din$ probes and extends uncertain residuals under the host pruner, and the committed spine becomes the next trunk.
-Bottom: HBM occupancy after abort and the resulting session capacity.}
+(1)~CoW state: $\sigma_u$ aliases one trunk, \texttt{fork} is $O(1)$ in $L$, and LCP commit publishes $x_\star$.
+(2)~Controller policy $\pi$: observation $o_i{=}(m_i^{\Pin},m_i^{\Din},s_i)$ maps to $a_i\in\{\Hit,\Admit,\Probe,\Reject\}$; only $\Act$ enters the GPU path.
+(3)~Disaggregated execution: $\Pin$ prefills the miss of $\Act$, the connector ships decoder-missing pages, and $\Din$ runs the $t_0$ probe then the host pruner before LCP commit.
+Bottom: $M_{\mathrm{spine}}$ frees HBM and raises analytical session capacity.}
 \label{fig:arch-detail}
 \end{figure*}
 

@@ -36,9 +36,7 @@
 \draw[edge] (R.east) -- (2.55,2.35);
 \draw[edge] (2.55,4.45) -- (2.55,0.35);
 
-% row helper: #1 y, #2 label, #3 formula, then three page styles and edge styles drawn by hand
-
-% (a) HS
+% (a) Hit
 \draw[edge] (2.55,4.45) -- (3.15,4.45);
 \node[inH] (a1) at (3.55,4.45) {};
 \node[inH] (a2) at (4.30,4.45) {};
@@ -47,7 +45,7 @@
 \node[lab] at (5.70,4.55) {(a)\ \Hit};
 \node[meta] at (5.70,4.22) {$m_i^{\Din}{=}\ell_i$,\ \ $W_i{=}X_i{=}0$};
 
-% (b) HP
+% (b) Admit, partial
 \draw[edge] (2.55,3.40) -- (3.15,3.40);
 \node[inH] (b1) at (3.55,3.40) {};
 \node[pref] (b2) at (4.30,3.40) {};
@@ -59,7 +57,7 @@
 \node[lab] at (5.70,3.50) {(b)\ \Admit, partial match};
 \node[meta] at (5.70,3.17) {$W_i{=}\ell_i{-}m_i^{\Pin}$,\ \ $X_i{=}\ell_i{-}m_i^{\Din}$};
 
-% (c) EA
+% (c) Probe
 \draw[edge] (2.55,2.35) -- (3.15,2.35);
 \node[pref] (c1) at (3.55,2.35) {};
 \node[pref] (c2) at (4.30,2.35) {};
@@ -71,7 +69,7 @@
 \node[lab] at (5.70,2.45) {(c)\ \Probe};
 \node[meta] at (5.70,2.12) {$\tau_{\mathrm{pre}}{\le}s_i{<}\tau_{\mathrm{dec}}$; decode $t_0$, extend iff $s'_i{\ge}\tau_{\mathrm{dec}}$};
 
-% (d) PF
+% (d) Admit, no match
 \draw[edge] (2.55,1.30) -- (3.15,1.30);
 \node[pref] (d1) at (3.55,1.30) {};
 \node[pref] (d2) at (4.30,1.30) {};
@@ -80,7 +78,7 @@
 \node[lab] at (5.70,1.40) {(d)\ \Admit, no match};
 \node[meta] at (5.70,1.07) {$i{=}0$ or $s_i{\ge}\tau_{\mathrm{dec}}$,\ \ $W_i{=}X_i{=}\ell_i$};
 
-% (e) DS
+% (e) Reject
 \draw[dashE] (2.55,0.35) -- (3.15,0.35);
 \node[hold] (e1) at (3.55,0.35) {};
 \node[hold] (e2) at (4.30,0.35) {};
@@ -89,4 +87,16 @@
 \node[font=\scriptsize\sffamily\bfseries, text=fsred, anchor=west] at (5.50,0.35) {$\times$};
 \node[lab] at (5.85,0.48) {(e)\ \Reject};
 \node[meta] at (5.85,0.15) {$i{\neq}0$, $s_i{<}\tau_{\mathrm{pre}}$,\ \ $W_i{=}X_i{=}d_i{=}0$};
+
+% right: π cascade (fills previously empty margin)
+\fill[fsblue!5, rounded corners=2pt] (10.40,0.55) rectangle (15.95,4.75);
+\draw[fsblue!25, rounded corners=2pt, line width=0.4pt] (10.40,0.55) rectangle (15.95,4.75);
+\node[font=\scriptsize\sffamily\bfseries, text=fsblue, anchor=west] at (10.60,4.45) {$\pi$ cascade (\eqref{eq:action})};
+\node[meta] at (10.60,3.95) {1.\ residency on $\Din$ $\to$ \Hit};
+\node[meta] at (10.60,3.50) {2.\ protect $i{=}0$ $\to$ \Admit};
+\node[meta] at (10.60,3.05) {3.\ $s_i{<}\tau_{\mathrm{pre}}$ $\to$ \Reject};
+\node[meta] at (10.60,2.60) {4.\ $s_i{\ge}\tau_{\mathrm{dec}}$ $\to$ \Admit};
+\node[meta] at (10.60,2.15) {5.\ else $\to$ \Probe};
+\node[meta, text=black!55] at (10.60,1.50) {only $\Act$ reaches $\Pin$ / connector};
+\node[meta, text=black!55] at (10.60,1.05) {$\mathcal{U}$ probed on $\Din$ for $t_0$};
 \end{tikzpicture}
