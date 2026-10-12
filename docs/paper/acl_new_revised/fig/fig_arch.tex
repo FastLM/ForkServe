@@ -159,18 +159,18 @@
 \node[chip, draw=fsgreen!55!black, fill=white, inner sep=1.1pt] at (13.90,6.28) {KV conn.};
 \node[font=\tiny\sffamily, text=fsgreen!30!black] at (13.90,5.42) {$\ell_i{-}m_i^{\Din}$};
 
-% decode side: probe, host pruner, commit
+% decode side: probe, decode-time pruner, commit
 \node[font=\tiny\sffamily\bfseries, anchor=west] at (11.46,4.22) {on $\Din$};
 \node[chip, draw=fsorange!70, fill=fsspec, align=center] at (13.87,3.72)
   {\Probe: $t_0$ tokens, extend iff $s'_i{\ge}\tau_{\mathrm{dec}}$};
 \node[chip, draw=fsblue!55, fill=white, align=center] at (13.87,3.12)
-  {host pruner: ESC / SR / DPTS};
+  {decode pruner: ESC / SR / DPTS};
 \node[chip, draw=fsgreen!55!black, fill=fscommit, align=center] at (13.87,2.52)
   {commit by LCP $\to$ spine $x_\star$};
 \fill[fsblue!6] (11.42,1.66) rectangle (16.32,2.14);
 \draw[fsblue!25, line width=0.3pt] (11.42,1.66) rectangle (16.32,2.14);
 \node[font=\tiny\sffamily, text=fsblue] at (13.87,1.90)
-  {spine $=$ next trunk, resident on $\Din$};
+  {spine $=$ next logical trunk};
 
 % residuals into admission; kept miss tail stops at the prefill card edge
 \draw[arr] (b2.east) -- ++(0.22,0) |- (5.38,6.58) -- (inr.west);
@@ -269,7 +269,7 @@
 \node[font=\tiny\sffamily, text=fsgray] at (2.55,2.96) {$\rho_i$};
 \node[font=\tiny\sffamily, text=fsorange!80!black] at (4.25,2.96) {$\rho_k$};
 
-\node[eq] at (0.14,2.42) {$\texttt{fork}:\ \sigma_i\leftarrow(\sigma_u,|x_u|),\ O(1)$};
+\node[eq] at (0.14,2.42) {$\texttt{fork}$: metadata alias; no trunk KV copy};
 \node[eq] at (0.14,1.88) {$v^\star=\arg\max_v\mathrm{LCP}(x,x_v)$};
 \node[eq] at (0.14,1.34) {$\texttt{abort}\Rightarrow M_{\mathrm{spine}}=b(L+\ell_\star)$};
 \node[eq, text=fsgray] at (0.14,0.82) {$\Delta M=-b\ell_i$};

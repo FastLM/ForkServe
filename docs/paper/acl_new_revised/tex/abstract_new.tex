@@ -1,0 +1,8 @@
+Agentic and inference-time search workloads often expand a committed context into multiple candidate continuations, many of which are later discarded.
+We focus on branch-select workloads in which one continuation is eventually committed as the next spine.
+Under prefill--decode (PD) disaggregation, each admitted candidate may incur residual prefill and KV-transfer cost before decode-side pruning takes effect.
+We propose \sys, a cross-stage pruning framework that moves branch filtering to the earliest stage with sufficient information.
+On the prefill side, \sys applies pre-kernel admission using KV residency and a lightweight model-free heuristic score, so rejected residuals consume neither residual prefill nor connector bandwidth.
+Candidates with uncertain prefill-side scores can be refined by a short decode-side probe, while existing decode-time pruning methods operate unchanged on the admitted set.
+A pruning-aware copy-on-write context tree manages shared trunk state, reclaims aborted residual pages, and retains the committed spine for the next step.
+On Qwen3-8B, prefill-side admission reduces computed prefill by $23\%$ at matched committed-answer accuracy; on MATH-500, at $k{=}16$ a $128$-token probe increases coverage to $20/32$ at $0.69\times$ the wall-clock of the full fan-out; on GSM8K with Qwen3-14B, retaining only the committed spine reduces median peak KV usage to $0.72\times$ that of automatic prefix caching (APC) at matched committed-answer accuracy.

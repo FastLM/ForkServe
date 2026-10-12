@@ -7,9 +7,10 @@ We model one agent step as a branching step served by a prefill instance $\Pin$ 
 \begin{definition}[Branching step]
 \label{def:step}
 A parent $u$ holds a committed trunk $x_u$ with $|x_u|{=}L$.
-A fan-out is a set of residuals $\{\rho_i\}_{i=0}^{k-1}$ with $|\rho_i|{=}\ell_i$; request $i$ is the sequence $x_u\Vert\rho_i$.
-Index $0$ denotes the residual the harness ranks first (e.g., the greedy continuation).
-Commit selects a winner $\star$ and leaves the spine $x_\star=x_u\Vert\rho_\star$, which becomes the trunk of the next step.
+A fan-out is a set of candidate continuations.
+We call the candidate-specific suffix $\rho_i$ a \emph{residual}, with $|\rho_i|{=}\ell_i$; candidate $i$ is the sequence $x_u\Vert\rho_i$.
+Index $0$ denotes the highest-ranked candidate produced by the branching controller (e.g., the greedy continuation).
+Commit selects one continuation $\star$ and leaves the spine $x_\star=x_u\Vert\rho_\star$, which becomes the trunk of the next step.
 \end{definition}
 
 With $b$ bytes of KV per token, three occupancies characterize one step:
@@ -18,7 +19,7 @@ M_{\mathrm{clone}} &= b\bigl(kL+\textstyle\sum_i\ell_i\bigr), \label{eq:mem}\\
 M_{\mathrm{CoW}} &= b\bigl(L+\textstyle\sum_i\ell_i\bigr), \nonumber\\
 M_{\mathrm{spine}} &= b\bigl(L+\ell_\star\bigr). \nonumber
 \end{align}
-$M_{\mathrm{clone}}$ arises only when every request materializes its own trunk; $M_{\mathrm{CoW}}$ holds one shared trunk and all residuals; $M_{\mathrm{spine}}$ is the occupancy after the non-winners are freed.
+$M_{\mathrm{clone}}$ arises only when every request materializes its own trunk; $M_{\mathrm{CoW}}$ holds one shared trunk and all residuals; $M_{\mathrm{spine}}$ is the occupancy after uncommitted residuals are freed.
 
 \subsection{Residency on Two Instances}
 \label{sec:residency}
@@ -40,23 +41,24 @@ Three distinctions matter.
 \subsection{Cache Regimes}
 \label{sec:regimes}
 
-Whether the trunk is shared across the $k$ siblings depends on the cache state and on the engine, not on prefix caching per se.
+Whether the trunk is shared across the $k$ siblings depends on the cache state and on the engine, not on APC alone.
 Let $W^{\mathrm{trunk}}$ be the trunk tokens computed on $\Pin$ for one fan-out.
 \begin{itemize}[leftmargin=*,itemsep=1pt,topsep=2pt]
 \item[\textbf{R1}] \emph{Cold, concurrent.} The trunk is not resident and the siblings are admitted before any of them publishes trunk blocks; depending on how the scheduler handles in-flight blocks, $L\le W^{\mathrm{trunk}}\le kL$.
 \item[\textbf{R2}] \emph{Cold, serialized.} The trunk is prefilled once (by a warm-up request or by deferring siblings until it is published); $W^{\mathrm{trunk}}{=}L$ at the cost of one serialization step.
-\item[\textbf{R3}] \emph{Warm.} The trunk is resident on $\Pin$, e.g., because it is the previous spine; $W^{\mathrm{trunk}}{=}0$.
-\item[\textbf{R4}] \emph{Explicit fork.} The harness declares the fan-out and the trunk is aliased copy-on-write; $W^{\mathrm{trunk}}{=}L-c_u^{\Pin}$ without serialization.
+\item[\textbf{R3}] \emph{Warm.} The trunk is already resident on $\Pin$; $W^{\mathrm{trunk}}{=}0$.
+\item[\textbf{R4}] \emph{Explicit fork.} The branching controller declares the fan-out and the trunk is aliased copy-on-write; $W^{\mathrm{trunk}}{=}L-c_u^{\Pin}$ without serialization.
 \end{itemize}
 APC attains R2 or R3 in many agentic deployments, so trunk sharing alone is not the source of the savings we report.
-All GPU measurements in \S\ref{sec:eval} warm the trunk before the fan-out (R3); measured prefill reductions are therefore attributable to residual admission.
-On the connector, the trunk needs to cross at most once, $X^{\mathrm{trunk}}{=}L-c_u^{\Din}$, and in a multi-step agent it is typically already resident on $\Din$ because it was decoded there.
+All GPU measurements in \S\ref{sec:eval} warm the trunk before the fan-out (R3); measured prefill reductions are therefore attributable to residual admission rather than to cross-step trunk synchronization.
+On the connector, the trunk crosses at most once, $X^{\mathrm{trunk}}{=}L-c_u^{\Din}$.
+After commit, the spine is the logical trunk of the next step; its KV residency on $\Pin$ and $\Din$ is restored according to the underlying KV synchronization policy.
 
 \subsection{Objective}
 \label{sec:objective}
 
 Each residual receives an action $a_i$ from a set $\Act$, inducing computed prefill $W_i$, connector tokens $X_i$, and decode tokens $d_i$; we write $W{=}\sum_iW_i$, $X{=}\sum_iX_i$, and $D^{+}{=}\sum_id_i$.
-A pruning policy $\pi$ solves
+We formulate the design objective as
 \begin{equation}
 \label{eq:objective}
 \begin{aligned}
@@ -68,4 +70,4 @@ A pruning policy $\pi$ solves
 where $\mu$ is the per-token transfer time.
 The defining constraint is informational: a decision taken before prefill may depend only on $(c_u^{\Pin},c_u^{\Din},m_i^{\Pin},m_i^{\Din})$ and the residual text, whereas a decision taken on $\Din$ may additionally read generated tokens.
 Decode-time pruners act only at the second point; \sys adds the first and coordinates the two.
-\sys is a threshold heuristic for \eqref{eq:objective}, not an optimal solver.
+\sys instantiates this objective with a lightweight threshold-based policy.

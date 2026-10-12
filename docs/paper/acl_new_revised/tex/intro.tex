@@ -39,7 +39,7 @@ We argue that, in disaggregated agentic serving, pruning should itself be disagg
 
 \paragraph{Results.}
 On Qwen3-8B GSM8K with $k{=}16$, admission in front of ESC, Speculative Rejection, or DPTS reduces computed prefill from $5008$ to $3848$ tokens ($-23\%$) for every host; committed-answer accuracy is unchanged, and ESC wall-clock falls from $16.49$\,s to $14.45$\,s (\S\ref{sec:eval}).
-On MATH-500, rejecting every low-scoring residual before prefill lowers any-finished coverage from $20/32$ to $13/32$, whereas a $128$-token probe restores $20/32$ at $73.2$\,s instead of $104.1$\,s.
+On MATH-500, rejecting every low-scoring residual before prefill lowers any-finished coverage from $20/32$ to $13/32$, whereas a $128$-token probe increases coverage to $20/32$ at $72.2$\,s instead of $104.1$\,s.
 On the full GSM8K test set with Qwen3-14B, the retained spine requires $0.72\times$ the median peak KV of APC at matched accuracy, and the ratio stays within $0.72$--$0.75\times$ across six model families.
 All measurements run on physically disaggregated vLLM prefill and decode instances connected by a KV connector.
 
@@ -47,5 +47,5 @@ All measurements run on physically disaggregated vLLM prefill and decode instanc
 \begin{itemize}[leftmargin=*,itemsep=1pt,topsep=2pt]
 \item We formulate pruning in disaggregated agentic serving as a per-residual, cross-stage decision problem, and make explicit the cache regimes and residency conditions under which prefix caching does or does not share the trunk (\S\ref{sec:problem}).
 \item We design \sys, which disaggregates the pruning decision (pre-kernel admission), its execution (prefill, connector, and decode-side probe), and pruned-state management (copy-on-write context tree), and we give a work and transfer accounting that separates trunk sharing, admission, and probe overhead (\S\ref{sec:design}).
-\item We show on Qwen3 models that admission composes with three decode-time pruners, that a decode-side probe recovers the coverage lost by blanket pre-kernel rejection, and that spine retention lowers peak KV, while reporting committed-answer accuracy throughout (\S\ref{sec:eval}).
+\item We show on Qwen3 models that admission composes with three decode-time pruners, that a decode-side probe mitigates the coverage loss of aggressive prefill-side rejection, and that spine retention lowers peak KV, while reporting committed-answer accuracy throughout (\S\ref{sec:eval}).
 \end{itemize}

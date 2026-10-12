@@ -78,7 +78,7 @@
   {Work $W{=}\sum_i W_i$ \quad
    Transfer $X{=}\sum_{a_i\in\{\Admit,\Probe\}}(\ell_i{-}m_i^{\Din})$ \quad
    Occupancy after abort $M_{\mathrm{spine}}=b(L+\ell_\star)$ \quad
-   Replay of $x_\star$: \Hit};
+   \Hit{}: parent-aware prefix resident on $\Din$};
 
 % ===== (b) four dataflows =====
 \node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.05,3.32)
@@ -144,5 +144,5 @@
   {$\Pref\le\Idle(u)$ \quad else defer \quad $C{=}\lfloor M_{\mathrm{pool}}/M_{\mathrm{spine}}\rfloor$};
 
 \node[lab, anchor=west] at (0.10,-1.28)
-  {Admission removes non-winner work before the kernel; the retained spine sets the session count, shares the decode step with the next prefill, and absorbs a known suffix during the tool pause.};
+  {Admission filters unselected candidates before the kernel; the retained spine sets the session count, shares the decode step with the next prefill, and absorbs a known suffix during the tool pause.};
 \end{tikzpicture}

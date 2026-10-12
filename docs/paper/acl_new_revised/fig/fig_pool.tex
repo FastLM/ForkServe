@@ -54,13 +54,13 @@
 \draw[fsblue!65,rounded corners=2.5pt,line width=0.5pt] (0.18,3.02) rectangle (5.92,4.04);
 \node[fmbadge=fsblue] at (0.42,3.88) {2};
 \node[anchor=west,font=\tiny\sffamily\bfseries] at (0.64,3.88)
-  {\texttt{fork}\((u)\): two words, \(O(1)\) in \(L\)};
+  {\texttt{fork}\((u)\): metadata alias; no trunk KV copy};
 \node[fmcard=fsblue,minimum width=1.55cm,minimum height=0.40cm] (cp) at (1.15,3.42)
   {\(\mathrm{parent}\leftarrow\sigma_u\)};
 \node[fmcard=fsblue,minimum width=1.62cm,minimum height=0.40cm] (ca) at (2.95,3.42)
   {\(\mathrm{alias\_len}\leftarrow|x_u|\)};
 \node[fmcard=fsorange,minimum width=1.35cm,minimum height=0.40cm] (ci) at (4.85,3.42)
-  {incref trunk};
+  {live child ref};
 \draw[fmdata] (cp) -- (ca);
 \draw[fmdata] (ca) -- (ci);
 \node[note] at (3.05,3.16) {no memcpy of \(L\)};
@@ -159,7 +159,7 @@
 
 \node[eq] at (0.18,4.78) {$\texttt{fork}(\sigma_u)$};
 \node[eq] at (0.36,4.32) {$\sigma_i\leftarrow(\sigma_u,|x_u|),\quad \mathrm{ref}(p){+}{=}1$};
-\node[eq] at (0.36,3.86) {allocate $\rho_i$ only,\ $O(1)$};
+\node[eq] at (0.36,3.86) {allocate $\rho_i$ only; no trunk copy};
 
 \node[eq] at (0.18,3.28) {write on $p$,\ $\mathrm{ref}(p)>1$};
 \node[eq] at (0.36,2.82) {copy the valid rows of $p$};

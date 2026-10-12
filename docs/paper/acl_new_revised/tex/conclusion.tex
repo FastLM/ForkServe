@@ -2,9 +2,9 @@
 \label{sec:conclusion}
 
 In disaggregated agentic serving, the cost of a discarded continuation is incurred at the prefill instance and the connector, whereas existing pruning signals are evaluated at the decode instance.
-\sys disaggregates pruning accordingly: it decides before any kernel from residency and model-free scores, defers uncertain candidates to a decode-side probe with a separately calibrated threshold, and manages the resulting KV state with a copy-on-write context tree that retains only the committed spine.
+\sys is a cross-stage pruning framework: it applies pre-kernel admission from residency and a prefill-side heuristic score, defers uncertain candidates to a decode-side probe with a separately calibrated threshold, and uses a pruning-aware copy-on-write context tree to manage the KV state created by these decisions, retaining only the committed spine.
 The accounting in \Cref{prop:acct} separates the savings that depend on the cache regime from those due to admission.
-Empirically, admission reduces computed prefill by $23\%$ in front of three decode-time pruners at matched committed-answer accuracy, the probe recovers the coverage lost by blanket rejection at $0.70\times$ the full-fan-out wall-clock, and spine retention lowers peak KV to $0.72\times$ that of prefix caching.
+Empirically, prefill-side admission is complementary to three decode-time pruners and reduces computed prefill by $23\%$ at matched committed-answer accuracy; at $k{=}16$, a $128$-token probe increases coverage to $20/32$ at $0.69\times$ the full-fan-out wall-clock; and retaining only the committed spine reduces median peak KV usage to $0.72\times$ that of APC.
 
 \section*{Limitations}
 \label{sec:limitations}

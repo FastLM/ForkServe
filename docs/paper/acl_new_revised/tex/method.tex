@@ -1,14 +1,16 @@
-\section{\sys: PD Pruning Disaggregation}
+\section{\sys: Cross-Stage Pruning}
 \label{sec:design}
 
-\sys separates three concerns that a stage-local pruner conflates.
-The \emph{decision} is taken on the controller before any kernel runs (\S\ref{sec:app}); residuals that cannot be resolved at that point are deferred to a decode-side \emph{probe} (\S\ref{sec:split}); and the \emph{state} of admitted, probed, and rejected residuals is managed by a copy-on-write context tree (\S\ref{sec:kvstate}).
+\sys is a cross-stage pruning framework.
+The \emph{decision} is pre-kernel admission, taken on the controller before any kernel runs (\S\ref{sec:app}); uncertain candidates are deferred to a short decode-side \emph{probe} that refines the decision (\S\ref{sec:split}); a pruning-aware copy-on-write context tree manages the KV \emph{state} created by these decisions (\S\ref{sec:kvstate}).
+\Cref{alg:app} is the per-fan-out implementation; Appendix~\ref{sec:pipeline} gives the multi-step pipeline.
 \S\ref{sec:accounting} shows how the three combine in prefill and transfer volume.
 
 \subsection{Pre-Kernel Admission}
 \label{sec:app}
 
-For each residual the controller observes $o_i=(m_i^{\Pin},m_i^{\Din},s_i)$, where $m_i^{\mathcal{X}}$ is the parent-aware resident prefix of \eqref{eq:mi} and $s_i=\mathrm{Score}_{\mathrm{pre}}(\rho_i)\in[0,1]$ is a model-free score computed from the residual text in $O(\ell_i)$ CPU time.
+For each residual the controller observes $o_i=(m_i^{\Pin},m_i^{\Din},s_i)$, where $m_i^{\mathcal{X}}$ is the parent-aware resident prefix of \eqref{eq:mi} and $s_i=\mathrm{Score}_{\mathrm{pre}}(\rho_i)\in[0,1]$ is a lightweight model-free heuristic score computed from the residual text in $O(\ell_i)$ CPU time.
+We refer to $s_i$ as the prefill-side score.
 Our scorer combines repetition detection and syntactic checks (Appendix~\ref{sec:app-detail}); a learned scorer can replace it without changing the policy.
 
 \begin{definition}[Admission action]
@@ -30,7 +32,7 @@ a_i=
 \Hit requires residency on the \emph{decode} instance, since a page resident only on $\Pin$ must still be transferred.
 Because $i{=}0$ is caught by the first two cases, $a_0\in\{\Hit,\Admit\}$: the top-ranked residual can be neither rejected nor probed away.
 Residuals in the uncertainty band $[\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$ are probed.
-Setting $\tau_{\mathrm{pre}}{=}\tau_{\mathrm{dec}}$ empties the band and yields \emph{blanket rejection}; replacing \Probe by \Admit yields \emph{reject-only admission}.
+Setting $\tau_{\mathrm{pre}}{=}\tau_{\mathrm{dec}}$ empties the band and yields aggressive prefill-side rejection (``Blanket''); replacing \Probe by \Admit yields \emph{reject-only admission}.
 Let $e_i{=}[\mathrm{Score}_{\mathrm{dec}}(y_i)\ge\tau_{\mathrm{dec}}]$ indicate that the probe $y_i$ of a probed residual is extended (\S\ref{sec:split}).
 The action determines the per-residual costs
 \begin{align}
@@ -53,7 +55,7 @@ t_0+e_i(D-t_0) & \Probe,
 \end{align}
 where $D$ is the decode budget, $t_0$ the probe length, and $W_i^{\mathrm{ext}}$ the tokens recomputed when a probe is extended (\S\ref{sec:split}).
 The trunk is aliased (\S\ref{sec:kvstate}) and contributes $W^{\mathrm{trunk}}{=}L-c_u^{\Pin}$ and $X^{\mathrm{trunk}}{=}L-c_u^{\Din}$ once per fan-out.
-A decode-time host (ESC, Speculative Rejection, DPTS) may further shorten $d_i$ for any admitted or extended residual.
+A decode-time pruner (ESC, Speculative Rejection, DPTS) may further shorten $d_i$ for any admitted or extended residual.
 
 \subsection{Decode-Side Probe}
 \label{sec:split}
@@ -66,20 +68,20 @@ A useful pair satisfies the design condition
 \sup_{\rho\in\mathcal{C}_{\mathrm{rej}}}s(\rho)<\tau_{\mathrm{pre}}\le\inf_{\rho\notin\mathcal{C}_{\mathrm{rej}}}s(\rho), \label{eq:sep-pre}\\
 \sup_{y\in\mathcal{C}_{\mathrm{stop}}}s'(y)<\tau_{\mathrm{dec}}, \nonumber
 \end{gather}
-where $\mathcal{C}_{\mathrm{rej}}$ is the class of residuals that should never be prefilled (here, repetition loops) and $\mathcal{C}_{\mathrm{stop}}$ the class of probes that should not be extended.
+where $\mathcal{C}_{\mathrm{rej}}$ is the class of residuals that should never be prefilled (here, repetitive residuals) and $\mathcal{C}_{\mathrm{stop}}$ the class of probes that should not be extended.
 \Cref{tab:scores} lists the scores of our heuristic scorers on the three residual classes of our workload; with $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})=(0.15,0.45)$ both conditions hold.
 Because the heuristics assign near-constant scores per class, this separation is specific to our workload; a learned scorer can replace them on natural agent traces (\S\ref{sec:limitations}).
 
 \begin{table}[t]
 \centering
-\caption{Scores of the model-free heuristic scorers on the three residual classes of the evaluation mix.
-$\mathrm{Score}_{\mathrm{pre}}$ reads the residual; $\mathrm{Score}_{\mathrm{dec}}$ reads a probe that has not yet produced (``illegal'') or has produced (``live'') a finished answer marker.}
+\caption{Scores of the heuristic scorers on the three residual classes of the evaluation mix.
+$\mathrm{Score}_{\mathrm{pre}}$ reads the residual; $\mathrm{Score}_{\mathrm{dec}}$ reads a probe that has not yet produced (malformed) or has produced (valid) a finished answer marker.}
 \label{tab:scores}
 \scriptsize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lccc@{}}
 \toprule
- & loop & illegal & live \\
+ & repetitive & malformed & valid \\
 \midrule
 $\mathrm{Score}_{\mathrm{pre}}(\rho_i)$ & $0.02$ & $0.22$ & $1.00$ \\
 $\mathrm{Score}_{\mathrm{dec}}(y_i)$ & $0.04$ & $0.16$ & $0.92$ \\
@@ -93,30 +95,35 @@ Our prototype issues the extension as a continuation request; when the probe's p
 This term is negligible at $k\le 8$ but substantial at $k{=}16$ in our runs (Appendix~\ref{sec:ablate-math}), and pinning probe pages until the extension decision is an engineering fix we leave to future work.
 
 \begin{algorithm}[t]
-\caption{\sys{} fan-out.
-$\pi$ is \eqref{eq:action}; $(W,X,d_i)$ follow \eqref{eq:work}--\eqref{eq:dec}.
-$\mathrm{Host}$ is any decode-time pruner.}
+\caption{\sys{} (one fan-out).
+Actions follow \eqref{eq:action}; costs follow \eqref{eq:work}--\eqref{eq:dec}.}
 \label{alg:app}
 \small
 \begin{algorithmic}[1]
-\REQUIRE trunk $x_u$; residuals $\{\rho_i\}_{i{<}k}$; residency; $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}},t_0,D)$
+\REQUIRE trunk $x_u$; residuals $\{\rho_i\}$; residency on $\Pin$/$\Din$; $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}},t_0,D)$
 \ENSURE spine $x_\star$; $(W,X,D^{+})$
+\STATE
+\STATE \textbf{Phase I: Admit} \hfill \(\triangleright\) decide before any kernel
 \STATE $a_i\leftarrow\pi(m_i^{\Pin},m_i^{\Din},\mathrm{Score}_{\mathrm{pre}}(\rho_i))$ for all $i$
 \STATE $\mathcal{A}\leftarrow\{i:a_i\in\{\Admit,\Probe\}\}$;\;
   $\mathcal{U}\leftarrow\{i:a_i{=}\Probe\}$
+\STATE $\mathrm{Fork}(x_u,\mathcal{A})$ \hfill \(\triangleright\) alias trunk; residual pages only
+\STATE
+\STATE \textbf{Phase II: Prefill \& Ship} \hfill \(\triangleright\) pay only what $\Pin$/$\Din$ miss
 \STATE $\mathrm{Prefill}_{\Pin}(x_u,\{\rho_i\}_{i\in\mathcal{A}})$ \hfill \(\triangleright\) $\Pin$-miss; trunk once
 \STATE $\mathrm{Ship}(x_u,\{\rho_i\}_{i\in\mathcal{A}})$ \hfill \(\triangleright\) $\Din$-miss
+\STATE
+\STATE \textbf{Phase III: Probe \& Commit} \hfill \(\triangleright\) refine on $\Din$, keep the spine
 \FORALL{$i\in\mathcal{U}$}
-  \STATE $y_i\leftarrow\mathrm{Dec}_{\Din}(x_u\Vert\rho_i;\,t_0)$;\;
-    $e_i\leftarrow[\mathrm{Score}_{\mathrm{dec}}(y_i)\ge\tau_{\mathrm{dec}}]$
-  \IF{$\neg e_i$}
-    \STATE $\mathrm{Free}(\rho_i\Vert y_i)$;\; $\mathcal{A}\leftarrow\mathcal{A}\setminus\{i\}$
+  \STATE $y_i\leftarrow\mathrm{Dec}(x_u\Vert\rho_i;\,t_0)$
+  \IF{$\mathrm{Score}_{\mathrm{dec}}(y_i)<\tau_{\mathrm{dec}}$}
+    \STATE $\mathrm{Abort}(\rho_i)$;\; $\mathcal{A}\leftarrow\mathcal{A}\setminus\{i\}$
   \ENDIF
 \ENDFOR
-\STATE $\mathcal{S}\leftarrow\{i:a_i{=}\Hit\}\cup\{i\in\mathcal{A}:a_i{=}\Admit\}\cup\{i\in\mathcal{U}:e_i\}$
-\STATE $D^{+}\leftarrow\mathrm{Host}(\mathcal{S};D)$;\;
-  $v^\star\leftarrow\arg\max_v\mathrm{LCP}(x,x_v)$;\;
-  $\mathrm{Publish}(x_\star)$
+\STATE $\mathcal{S}\leftarrow\{i:a_i{=}\Hit\}\cup\mathcal{A}$
+\STATE $D^{+}\leftarrow\mathrm{Prune}(\mathcal{S};D)$;\;
+  $\mathrm{Commit}(x_\star)$;\;
+  $\mathrm{Abort}(\mathcal{S}\setminus\{\star\})$
 \STATE \textbf{return} $x_\star$,\ $W$,\ $X$,\ $D^{+}$
 \end{algorithmic}
 \end{algorithm}
@@ -150,16 +157,17 @@ For transfer, \Hit residuals satisfy $\ell_i-m_i^{\Din}{=}0$, so the baseline lo
 
 The decomposition makes explicit which savings depend on the cache regime.
 $\Delta_{\mathrm{trunk}}$ is zero in regimes R2--R4 and positive only when concurrent siblings recompute the trunk (R1); $\Delta_{\mathrm{adm}}$ does not depend on the regime; $\Delta_{\mathrm{ext}}$ is a cost.
-Decode-time hosts change only $D^{+}$: since they act on generated tokens of residuals that have already been prefilled, $W$ and $X$ do not depend on the host.
-The wall-clock of a fan-out is then
+Decode-time pruners change only $D^{+}$: since they act on generated tokens of residuals that have already been prefilled, $W$ and $X$ do not depend on the pruner.
+We decompose the stage-local work of a fan-out as
 \begin{equation}
 \label{eq:tfan}
 \begin{aligned}
-T_{\mathrm{fan}}={}&\Pref(W)+\mu X+T_{\mathrm{dec}}(D^{+})\\
-&+T_{\mathrm{CoW}}+T_{\mathrm{abort}},
+C_{\mathrm{fan}}={}&C_{\mathrm{pre}}(W)+C_{\mathrm{transfer}}(X)+C_{\mathrm{dec}}(D^{+})\\
+&+C_{\mathrm{CoW}}+C_{\mathrm{abort}},
 \end{aligned}
 \end{equation}
-where $T_{\mathrm{CoW}}$ and $T_{\mathrm{abort}}$ are page-table operations independent of $L$.
+where $C_{\mathrm{CoW}}$ and $C_{\mathrm{abort}}$ are page-table operations that alias metadata and do not copy trunk KV.
+This expression is an accounting abstraction rather than a wall-clock predictor, since execution and transfer may overlap; we therefore measure end-to-end latency directly.
 
 \subsection{Pruning-Aware KV State}
 \label{sec:kvstate}
@@ -176,8 +184,9 @@ All descendants of fork C are aborted at depth 2, so reclamation propagates up t
 \end{figure*}
 
 \sys keeps one copy-on-write context tree per session (Appendix~\ref{sec:state}, \Cref{fig:tree}).
-\texttt{fork} creates a child whose page table aliases the parent's pages and increments their reference counts, an $O(1)$ operation in $L$; only residual pages are allocated.
-A rejected residual allocates nothing; a probe that is not extended frees its residual and probe pages; abort frees the residual pages of every non-winner, $b\ell_i$ bytes each.
+\texttt{fork} aliases the parent page table without copying the trunk KV; only residual pages are newly allocated.
+Shared pages are reclaimed only after their last live reference is released.
+A rejected residual allocates nothing; a probe that is not extended frees its residual and probe pages; abort frees the residual pages of every uncommitted candidate, $b\ell_i$ bytes each.
 On the next observation $x$, commit binds the child with the longest common prefix,
 \begin{equation}
 \label{eq:lcp}
@@ -188,7 +197,10 @@ Speculatively prefilled pages are never sampled from, so the emitted tokens equa
 After commit the live occupancy is $M_{\mathrm{spine}}$, and a pool of $M_{\mathrm{pool}}$ bytes holds $\lfloor M_{\mathrm{pool}}/M_{\mathrm{spine}}\rfloor$ sessions instead of $\lfloor M_{\mathrm{pool}}/M_{\mathrm{APC}}\rfloor$ while a prefix cache still retains aborted residuals.
 
 \paragraph{Cross-step coordination.}
-The spine of step $t$ is the trunk of step $t{+}1$.
-Because it was decoded on $\Din$ and published on $\Pin$, the next fan-out starts in regime R3 or R4 with $c_u^{\Din}{=}L$, so the trunk crosses the connector at most once per session rather than once per fan-out; a residual repeated across steps (e.g., a re-issued tool call) becomes a \Hit.
+The committed spine of step $t$ becomes the logical trunk of step $t{+}1$.
+Its KV residency on the prefill and decode instances is restored according to the underlying KV synchronization policy.
+In our evaluation, the trunk is warm before each fan-out, so the admission results isolate residual-side prefill and transfer savings rather than cross-step trunk synchronization.
+Once the required trunk pages are resident, subsequent fan-outs can reuse them without recomputing the shared prefix.
+A residual becomes a \Hit{} only when its parent-aware prefix is already resident on the decode instance.
 Admission is re-evaluated at every step, so rejected branches never accumulate state across turns.
 

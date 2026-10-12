@@ -1,0 +1,52 @@
+\section{Related Work}
+\label{sec:related}
+
+% ---------------------------------------------------------------------------
+% Survey (fused from related_main + related; redundancy trimmed)
+% ---------------------------------------------------------------------------
+\paragraph{Inference-time search and path pruning.}
+Chain-of-thought elicits intermediate steps~\cite{cot}; Tree-of-Thoughts, self-consistency, and Monte Carlo tree search expand many partial solutions and then select~\cite{tot,selfconsistency,mctsllm}.
+Accuracy and token cost both grow with the number of traces.
+Decode-time path pruners cut that cost after generation has started: ESC stops once a window agrees~\cite{esc}, Speculative Rejection halts low-reward prefixes at a horizon~\cite{specrej}, DPTS early-stops children after a mini-step~\cite{dpts}, and STOP organizes such signals by source and learnability and trains an internal futility token~\cite{stoploss}.
+EquivPruner merges semantically equivalent steps so that textually distinct but mathematically identical actions are not explored twice~\cite{equivpruner}.
+All of these decide from generated or written text and are agnostic to where the KV cache was computed.
+\sys is complementary: it adds a pre-kernel decision and a decode-side probe, while these decode-time pruners operate unchanged on the admitted set; a learned scorer such as STOP's could serve as $\mathrm{Score}_{\mathrm{dec}}$.
+
+\paragraph{Prefix sharing and PD disaggregation.}
+Orca schedules at iteration granularity~\cite{orca}; vLLM pages the KV cache and hashes full blocks for APC~\cite{vllm}; SGLang shares prefixes through a radix tree~\cite{sglang}; Sarathi chunks prefills to co-schedule them with decode~\cite{sarathi,sarathisplit}.
+DistServe and Splitwise place prefill and decode on separate instances and move KV across a connector~\cite{distserve,splitwise}.
+These mechanisms determine whether a trunk is shared and how pages move, but they serve every request they receive.
+Whether $k$ siblings share the trunk depends on the cache regime (\S\ref{sec:regimes}); even when the trunk is fully reused, each residual's uncached suffix is still computed and transferred.
+\sys uses residency on both instances as an admission input and treats the connector as the channel whose volume admission reduces.
+
+\paragraph{Agentic serving, retention, and copy-on-write.}
+Autellix and Hermes schedule at program granularity~\cite{autellix,hermes}; ThunderAgent and SAGA optimize workflows~\cite{thunderagent,saga}; Parrot, Ayo, and Pythia exploit application structure~\cite{parrot,ayo,pythia}; JITServe allocates bandwidth under heterogeneous SLOs~\cite{jitserve}.
+InferCept, Continuum, and MORI retain KV across tool calls~\cite{infercept,continuum,mori}; ConServe disaggregates prefill and decode scheduling at conversation granularity from observed agent behavior~\cite{conserve}; Sutradhara overlaps tool execution with the prefill of a single tool-independent prefix~\cite{sutradhara}.
+ForkKV is closest in mechanism: it shares a base KV cache copy-on-write across LoRA agents~\cite{forkkv}.
+CachePrune edits attention state inside one request~\cite{cacheprune}; speculative decoding drafts \emph{output} tokens rather than a future prompt prefix~\cite{speculative,medusa,eagledraft}.
+These systems place, schedule, or retain contexts that will be served; ConServe in particular disaggregates scheduling but not pruning.
+\sys targets the complementary decision of which sibling continuations should be served at all, and at which PD stage that decision is made.
+Its copy-on-write context tree is the state-management mechanism that supports those decisions for siblings of one agent step.
+
+% ---------------------------------------------------------------------------
+% Motivation / gap + preliminary experiment + challenges (draft; not in paper)
+% ---------------------------------------------------------------------------
+% \paragraph{Motivation: stage-local pruning under PD disaggregation.}
+% Taken together, prior work improves agentic serving along two axes---path pruning and KV-cache optimization---yet leaves a structural mismatch under PD disaggregation.
+% A pruning decision is taken on the decode instance, because every existing signal reads generated tokens, while the cost that decision is meant to avoid---residual prefill on $\Pin$ and KV transfer across the connector---has already been paid and cannot be recovered.
+% Prefix caching removes duplicate trunk work but neither rejects a residual nor controls which pages cross the connector; combined with PD disaggregation, pruning therefore remains \emph{stage-local}: each stage can discard only work that has already reached it~\cite{esc,specrej,dpts,vllm,sglang,distserve,splitwise}.
+% \Cref{fig:trad} situates where each mechanism can first discard a sibling on one fan-out.
+%
+% \paragraph{Preliminary measurement.}
+% A controlled measurement on our GSM8K branching mix makes the mismatch quantitative.
+% With $k{=}16$ and a warm trunk (regime R3), ESC, Speculative Rejection, and DPTS prefill the same $5008$ residual tokens and differ only in decode volume ($131072$, $98304$, and $78336$ tokens respectively): moving the decode-time cut never moves the prefill column (\S\ref{sec:eval}).
+% Rejecting the four repetition-loop residuals before any kernel reduces computed prefill to $3848$ tokens ($-23\%$) for every host at unchanged committed-answer accuracy, confirming that the recoverable cost sits before decode-time pruning takes effect.
+% On MATH-500, however, blanket pre-kernel rejection of low-scoring residuals lowers any-finished coverage from $20/32$ to $13/32$, so early rejection alone is not enough: uncertain candidates need a short subsequent generation before the system can prune reliably.
+%
+% \paragraph{Challenges.}
+% Closing this gap raises three challenges that existing stage-local methods do not address jointly.
+% (i)~\emph{Low-overhead pre-execution decision:} generated-token signals are unavailable before kernels run, and KV residency is split across $\Pin$ and $\Din$, so the controller must decide from dual-side residency and a cheap residual score whether each candidate should be skipped, prefilled, transferred, or decoded.
+% (ii)~\emph{Balancing pruning efficiency and reliability:} a residual that looks weak before prefill may still reach a correct answer after further generation, so candidates of different certainty need different degrees of exploration---aggressive rejection saves resources but can hurt quality, while retaining every residual erodes the gain.
+% (iii)~\emph{Pruning-aware KV state management:} siblings share the trunk's KV but own distinct residual pages with different lifetimes; aborting a branch must free private pages without dropping pages still referenced by live siblings, while the committed spine must remain resident as the trunk of the next agent step.
+% \sys responds with pre-kernel admission, a decode-side probe, and a copy-on-write context tree (\S\ref{sec:design}).
+Appendix~\ref{sec:related-full} expands the literature survey.

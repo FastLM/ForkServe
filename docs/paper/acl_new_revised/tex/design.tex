@@ -1,8 +1,8 @@
 \section{System Details}
 \label{sec:design-full}
 
-\sys sits between the agent harness and the LLM engine (\Cref{fig:system}).
-The harness exposes branch structure, the controller decides and binds, and the engine executes prefill, transfer, and decode.
+\sys sits between the branching controller and the LLM engine (\Cref{fig:system}).
+The branching controller exposes branch structure, \sys decides and binds, and the engine executes prefill, transfer, and decode.
 
 \subsection{Interface}
 \label{sec:overview}
@@ -30,18 +30,20 @@ A session is a rooted tree $T=(V,E)$.
 Node $u$ stores a token sequence $x_u$ with $x_{\pi(u)}\preceq x_u$, a residual $\delta_u=x_u[|x_{\pi(u)}|{:}]$, a mode in $\{\textsc{Spec},\textsc{Commit},\textsc{Idle},\textsc{Dead}\}$, a generation $g_u$, and a page table $\sigma_u=(\mathrm{parent},\mathrm{alias\_len},\mathrm{pages}_u)$.
 \end{definition}
 
-The tree maintains four invariants: (i)~prefix closure; (ii)~at most one committed child per node outside a join; (iii)~speculative nodes are never sampled from; (iv)~the reference count of a page equals the number of non-dead nodes that map it.
-\texttt{fork}$(u,\cdot)$ writes two words, $(\mathrm{parent}\leftarrow\sigma_u,\ \mathrm{alias\_len}\leftarrow|x_u|)$, and increments the reference counts of the aliased pages; a write to a shared or read-only page copies only its valid rows.
+The tree maintains four invariants: (i)~prefix closure; (ii)~at most one committed child per node outside a join; (iii)~speculative nodes are never sampled from; (iv)~a physical page remains live while at least one non-dead node maps it.
+\texttt{fork}$(u,\cdot)$ creates a metadata alias to the parent page table and registers the child as a live reference; no trunk KV data are copied, and only residual pages are newly allocated.
+A write to a shared or read-only page copies only its valid rows.
+Shared pages are reclaimed only after their last live reference is released.
 A multi-level fan-out is a sequence of such forks (\Cref{fig:tree}); abort frees residual pages only, and a subtree without live descendants is reclaimed up to the nearest ancestor with a live child.
-Commit publishes the full pages of $x_\star$ to the prefix index so that later requests can hit them.
+Commit publishes the full pages of $x_\star$ to the prefix index so that a later request whose parent-aware prefix is already resident on $\Din$ can take \Hit.
 Eviction is node-granular: speculative leaves first, then idle committed leaves, then the spine~\cite{continuum,mori}.
 
 \begin{figure*}[t]
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_pool}}
 \caption{\textbf{Context-tree page pool} (pruning-aware KV state).
-\texttt{fork} aliases the trunk in $O(1)$ and allocates only residual pages~\textcircled{1}--\textcircled{3}.
-LCP commit publishes full blocks of $x_\star$ into $H$ so later steps can take \Hit on $\Din$~\textcircled{4}\textcircled{6}.
+\texttt{fork} aliases the parent page table without copying the trunk KV and allocates only residual pages~\textcircled{1}--\textcircled{3}.
+LCP commit publishes full blocks of $x_\star$ into $H$ so a later request whose parent-aware prefix is already resident on $\Din$ may take \Hit~\textcircled{4}\textcircled{6}.
 \texttt{abort} returns residual pages only; the live occupancy is $M_{\mathrm{spine}}{=}b(L{+}\ell_\star)$~\textcircled{5}\textcircled{7}.}
 \label{fig:pool}
 \end{figure*}
@@ -51,7 +53,7 @@ LCP commit publishes full blocks of $x_\star$ into $H$ so later steps can take \
 A candidate of parent $u$ is a pair $(x^{\mathrm{k}},\hat{x}^{\mathrm{o}})$ of a known suffix and a predicted observation, with admission probability $p$ and expected prefix-hit rate $q$.
 Known suffixes ($p{=}q{=}1$) are scheduled before predicted observations ($q{<}1$), subject to the idle time $\Idle(u)$, the available KV capacity, and a branch cap.
 Unlike speculative decoding~\cite{speculative,medusa}, the object prefilled is a future \emph{prompt} prefix rather than draft output tokens.
-On commit, the pages covered by $\mathrm{LCP}(x,x_{v^\star})$ become committed, the unmatched tail is prefilled, every sibling is aborted, and jobs tagged with a stale generation are dropped in $O(1)$.
+On commit, the pages covered by $\mathrm{LCP}(x,x_{v^\star})$ become committed, the unmatched tail is prefilled, every sibling is aborted, and jobs tagged with a stale generation are dropped by generation tag.
 
 \subsection{Admission Details}
 \label{sec:app-detail}
@@ -93,9 +95,9 @@ The overlap row prefills the next residual during decode; the tool-interval row 
 \centering
 \resizebox{\textwidth}{!}{\input{fig/fig_arch}}
 \caption{\textbf{\sys{} design.}
-(1)~CoW state: $\sigma_u$ aliases one trunk, \texttt{fork} is $O(1)$ in $L$, and LCP commit publishes $x_\star$.
+(1)~CoW state: $\sigma_u$ aliases one trunk, \texttt{fork} copies no trunk KV, and LCP commit publishes $x_\star$.
 (2)~Controller policy $\pi$: observation $o_i{=}(m_i^{\Pin},m_i^{\Din},s_i)$ maps to $a_i\in\{\Hit,\Admit,\Probe,\Reject\}$; only $\Act$ enters the GPU path.
-(3)~Disaggregated execution: $\Pin$ prefills the miss of $\Act$, the connector ships decoder-missing pages, and $\Din$ runs the $t_0$ probe then the host pruner before LCP commit.
+(3)~Disaggregated execution: $\Pin$ prefills the miss of $\Act$, the connector ships decoder-missing pages, and $\Din$ runs the $t_0$ probe then the decode-time pruner before LCP commit.
 Bottom: $M_{\mathrm{spine}}$ frees HBM and raises analytical session capacity.}
 \label{fig:arch-detail}
 \end{figure*}
@@ -141,3 +143,30 @@ B^{\mathrm{s}}_t &= B_t-B^{\mathrm{c}}_t. \label{eq:bs}
 \end{align}
 $B^{\mathrm{c}}_t$ decodes committed spines; $B^{\mathrm{s}}_t$ prefills admitted residuals or known suffixes ($p{=}1$) when $\Pref(|w|)\le\Idle(u)$.
 Speculatively prefilled tokens are never sampled from.
+
+\subsection{Multi-Step Pipeline}
+\label{sec:pipeline}
+\Cref{alg:pipeline} shows how Alg.~\ref{alg:app} repeats across agent steps on the PD path: admit on the controller, prefill on $\Pin$, ship on the connector, then probe and decode on $\Din$.
+The committed spine of step $t$ becomes the logical trunk of step $t{+}1$.
+Its KV residency on $\Pin$ and $\Din$ is restored according to the underlying KV synchronization policy; in our evaluation the trunk is warm before each fan-out.
+
+\begin{algorithm}[t]
+\caption{\sys{} multi-step pipeline.
+Each step invokes Alg.~\ref{alg:app}.}
+\label{alg:pipeline}
+\small
+\begin{algorithmic}[1]
+\REQUIRE initial trunk $x_u$; thresholds $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}},t_0,D)$
+\ENSURE committed spines $\{x_\star^{(t)}\}$
+\STATE $\mathrm{OpenTree}(x_u)$
+\FOR{each agent step $t$}
+  \STATE $\{\rho_i\}\leftarrow\mathrm{Expand}(x_u;k)$ \hfill \(\triangleright\) branching-controller fan-out
+  \STATE \textbf{Controller:} run Alg.~\ref{alg:app} $\to$ $x_\star^{(t)}$, $(W,X,D^{+})$
+  \STATE \textbf{$\Pin$:} prefill only $\Pin$-miss pages of admitted / probed residuals
+  \STATE \textbf{Connector:} ship only $\Din$-miss pages
+  \STATE \textbf{$\Din$:} probe $\to$ decode-time prune $\to$ decode survivors
+  \STATE $x_u\leftarrow x_\star^{(t)}$ \hfill \(\triangleright\) spine becomes next logical trunk
+\ENDFOR
+\STATE \textbf{return} $\{x_\star^{(t)}\}$
+\end{algorithmic}
+\end{algorithm}

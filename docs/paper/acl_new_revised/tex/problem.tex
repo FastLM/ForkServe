@@ -6,7 +6,7 @@
 
 Chain-of-thought produces one trace~\cite{cot}; Tree-of-Thoughts, self-consistency, and Monte Carlo tree search produce many and then select~\cite{tot,selfconsistency,mctsllm}.
 In the Game-of-24 setting of Tree-of-Thoughts, a proposal prompt emits candidate equations, a value prompt labels each candidate, and breadth-first search retains a beam~\cite{tot}.
-Agent harnesses follow the same pattern: a coding or tool-using agent proposes several continuations of one context, executes or observes one, and discards the rest~\cite{react,sweagent,openhands}.
+Branching controllers follow the same pattern: a coding or tool-using agent proposes several continuations of one context, executes or observes one, and discards the rest~\cite{react,sweagent,openhands}.
 On GSM8K and MATH the accuracy gain of such width is well documented~\cite{gsm8k,math,math500}, and so is its token cost~\cite{equivpruner,stoploss}.
 
 \subsection{Decode-Time Path Pruning}
@@ -25,11 +25,11 @@ On our GSM8K mix at $k{=}16$, ESC, Speculative Rejection, and DPTS therefore pre
 APC and RadixAttention index full blocks by chained keys, $h_j=\mathrm{hash}(h_{j-1},\text{block}_j,\text{extra})$~\cite{vllm,sglang}.
 A request reuses a block only if the block and its entire parent chain are resident.
 Whether $k$ siblings issued together share the trunk depends on the cache regime of \S\ref{sec:regimes}: a resident trunk (R3) is shared by all siblings; a cold trunk is computed once if siblings are serialized behind it (R2), and between one and $k$ times if they are admitted concurrently, depending on how the scheduler treats blocks that are still being computed (R1).
-Prefix caching thus addresses trunk reuse, but it neither rejects a residual nor decides which pages cross a connector.
+APC thus addresses trunk reuse, but it neither rejects a residual nor decides which pages cross a connector.
 
 PD disaggregation places prefill and decode on separate instances and transfers KV between them~\cite{distserve,splitwise}.
-Every admitted request is prefilled on $\Pin$, and the pages that $\Din$ lacks are transferred; a residual that the harness later discards has already consumed both.
-Program- and workflow-level schedulers raise the scheduling unit above the request~\cite{autellix,thunderagent,continuum,mori}, and KV retention removes trunk recomputation across tool gaps; the remaining per-step cost is the residual suffixes of siblings that the harness can enumerate before the observation returns.
+Every admitted request is prefilled on $\Pin$, and the pages that $\Din$ lacks are transferred; a residual that the branching controller later discards has already consumed both.
+Program- and workflow-level schedulers raise the scheduling unit above the request~\cite{autellix,thunderagent,continuum,mori}, and KV retention removes trunk recomputation across tool gaps; the remaining per-step cost is the residual suffixes of siblings that the branching controller can enumerate before the observation returns.
 
 \subsection{Prefill, Decode, and Idle Time}
 Prefill processes the prompt in parallel and is compute-bound; decode emits one token per step and is memory-bandwidth-bound~\cite{orca,distserve,splitwise}.
