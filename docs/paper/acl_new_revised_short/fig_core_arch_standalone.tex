@@ -1,0 +1,17 @@
+% Standalone compile check for the DistServe-style core architecture figure.
+%   pdflatex fig_core_arch_standalone.tex
+\documentclass[11pt]{article}
+\usepackage[margin=0.6in]{geometry}
+\usepackage{times}
+\input{preamble}
+\begin{document}
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{fig/fig_core_arch}}
+\caption{\textbf{\sys{} runtime architecture} (DistServe-style).
+Requests hit the controller, then a \emph{Prefill Pruner} (radix prune $a_i$)
+or a \emph{Decoding Pruner} (probe $t_0$) before the corresponding instance.
+Only the miss tail of $\Keep$ crosses the KV connector; abort retains the spine.}
+\label{fig:core-arch}
+\end{figure*}
+\end{document}

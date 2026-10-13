@@ -68,18 +68,18 @@ Both scorers run on the CPU and do not share parameters.
 It then protects index $0$, so the top-ranked continuation is always served.
 Only then does it consult the score.
 A page resident only on $\Pin$ reduces $W_i$ but not $X_i$; the residual is admitted with $W_i{=}\ell_i-m_i^{\Pin}$ and $X_i{=}\ell_i-m_i^{\Din}$.
-\Cref{fig:radix} illustrates the four actions on one radix tree, and \Cref{fig:app} places them on the request path.
+% \Cref{fig:app} places the four actions on the request path.
 
-\begin{figure*}[t]
-\centering
-\resizebox{\textwidth}{!}{\input{fig/fig_dragon}}
-\caption{\textbf{Policy $\pi$ on one radix tree} (\eqref{eq:action}, Alg.~\ref{alg:app}).
-The root is the aliased trunk $x_u$; each box is one page of $P$ tokens.
-Green pages are already resident on $\Din$, orange pages are the miss prefilled on $\Pin$, and gray pages are never computed.
-The cascade on the right is the controller decision order: residency, protect $i{=}0$, then $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$.
-Only $\Act$ reaches $\Pin$ and the connector; $\mathcal{U}$ is probed on $\Din$ for $t_0$ tokens.}
-\label{fig:radix}
-\end{figure*}
+% \begin{figure*}[t]
+% \centering
+% \resizebox{\textwidth}{!}{\input{fig/fig_dragon}}
+% \caption{\textbf{Policy $\pi$ on one radix tree} (\eqref{eq:action}, Alg.~\ref{alg:app}).
+% The root is the aliased trunk $x_u$; each box is one page of $P$ tokens.
+% Green pages are already resident on $\Din$, orange pages are the miss prefilled on $\Pin$, and gray pages are never computed.
+% The cascade on the right is the controller decision order: residency, protect $i{=}0$, then $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}})$.
+% Only $\Act$ reaches $\Pin$ and the connector; $\mathcal{U}$ is probed on $\Din$ for $t_0$ tokens.}
+% \label{fig:radix}
+% \end{figure*}
 
 \begin{figure*}[t]
 \centering

@@ -1,0 +1,150 @@
+% Two independent prune methods on one fan-out.
+% (a) Radix prune: prefix quality + cache hit rate → a_i, Work, Xfer.
+% (b) Decode prune: reward on the ToT → d_i after a t_0 probe.
+\begin{tikzpicture}[
+  x=1cm, y=1cm,
+  font=\sffamily,
+  >=Latex,
+  line cap=round, line join=round,
+  pool/.style={draw=#1!48, line width=0.7pt, rounded corners=2.4pt, fill=white},
+  head/.style={font=\scriptsize\bfseries\sffamily, text=white, anchor=west},
+  note/.style={font=\tiny\sffamily, align=center},
+  chip/.style={draw, rounded corners=1pt, inner sep=1.5pt, font=\tiny\sffamily,
+              align=center, line width=0.4pt},
+  act/.style={draw, rounded corners=1pt, inner sep=1pt, font=\tiny\sffamily\bfseries,
+              minimum width=0.68cm, minimum height=0.34cm, line width=0.35pt},
+  arr/.style={-{Latex[length=2.4mm,width=2mm]}, line width=1.05pt},
+  nodebox/.style={draw=#1!55, rounded corners=1.4pt, line width=0.45pt, fill=#1!6,
+                  align=center, font=\tiny\sffamily, inner sep=2.2pt},
+]
+\path (0,0) rectangle (16.45,8.05);
+
+% ===================== (a) Prefill / radix prune =====================
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.06,7.82)
+  {(a) Radix prune};
+\node[note, text=fsblue!80!black, anchor=east] at (16.38,7.82)
+  {objective: prefix quality $\land$ cache hit rate};
+
+% left: published radix
+\draw[pool=fsblue] (0.06,4.55) rectangle (4.55,7.52);
+\fill[fsblue] (0.06,7.16) rectangle (4.55,7.52);
+\node[head] at (0.18,7.34) {Published radix $H$};
+
+\node[note, text=fsblue, anchor=west] at (0.22,6.88) {full pages only};
+% radix tree sketch
+\fill[fsblue!75] (2.25,6.55) circle (0.14);
+\draw[fsblue!70, line width=0.55pt] (2.25,6.41) -- (1.35,5.85);
+\draw[fsblue!70, line width=0.55pt] (2.25,6.41) -- (3.15,5.85);
+\fill[fsblue!55] (1.35,5.72) circle (0.12);
+\fill[fsblue!55] (3.15,5.72) circle (0.12);
+\draw[fsblue!60, line width=0.5pt] (1.35,5.60) -- (0.85,5.05);
+\draw[fsblue!60, line width=0.5pt] (1.35,5.60) -- (1.85,5.05);
+\draw[fsblue!60, line width=0.5pt] (3.15,5.60) -- (2.75,5.05);
+\draw[fsblue!60, line width=0.5pt] (3.15,5.60) -- (3.55,5.05);
+\foreach \x in {0.85, 1.85, 2.75, 3.55} {
+  \fill[fsblue!35] (\x,4.92) circle (0.11);
+}
+\node[chip, draw=fsblue!50, fill=fslight] at (2.25,4.85)
+  {$m_i{=}\max\{jP{:}\rho_i[0{:}jP)\in H\}$};
+
+% middle: first-match actions
+\draw[arr, draw=fsblue!70] (4.70,6.15) -- (5.55,6.15);
+
+\draw[pool=fsorange] (5.70,4.55) rectangle (10.55,7.52);
+\fill[fsorange!85!black] (5.70,7.16) rectangle (10.55,7.52);
+\node[head] at (5.82,7.34) {First match $a_i$};
+
+\foreach \y/\name/\cond/\out/\ac/\af/\at in {
+  6.70/HS/$m_i{=}\ell_i$/$\Work{=}0$/fsblue!50/fslight/fsblue,
+  6.25/HP/$0{<}m_i{<}\ell_i$/$\ell_i{-}m_i$/fsblue!50/fslight/fsblue,
+  5.80/DS/$i\in\Lambda$/withheld/fsgray/black!5/fsgray,
+  5.35/EA/$F_i$/$\lceil\alpha\ell_i\rceil$/fsorange!70/fsspec/fsorange!85!black,
+  4.90/PF/else/$\ell_i$/fsgreen!55!black/fscommit/fsgreen!40!black} {
+  \node[act, draw=\ac, fill=\af, text=\at] at (6.35,\y) {\name};
+  \node[note, text=\at, anchor=west] at (6.85,\y) {\cond};
+  \node[note, text=fsgray, anchor=east] at (10.40,\y) {\out};
+}
+
+% right: connector / kernel
+\draw[arr, draw=fsgreen!45!black] (10.70,6.15) -- (11.55,6.15);
+
+\draw[pool=fsgreen] (11.70,4.55) rectangle (16.38,7.52);
+\fill[fsgreen!70!black] (11.70,7.16) rectangle (16.38,7.52);
+\node[head] at (11.82,7.34) {Kernel \& connector};
+
+\node[chip, draw=fsblue!55, fill=fslight, minimum width=3.8cm] at (14.05,6.70)
+  {quality: drop loop / low $F_i$};
+\node[chip, draw=fsblue!55, fill=white, minimum width=3.8cm] at (14.05,6.15)
+  {hit rate: prefer HS / HP};
+\node[chip, draw=fsgreen!55!black, fill=fscommit, minimum width=3.8cm] at (14.05,5.60)
+  {$\Work{=}\sum_i\Work_i$; $L\notin\Work_i$};
+\node[chip, draw=fsgreen!55!black, fill=white, minimum width=3.8cm] at (14.05,5.05)
+  {$\Xfer{=}\sum_i\Xfer_i$ miss of $\Keep$};
+
+% ===================== (b) Decode / ToT prune =====================
+\node[font=\scriptsize\bfseries\sffamily, anchor=west] at (0.06,4.20)
+  {(b) Decode prune};
+\node[note, text=fsgreen!35!black, anchor=east] at (16.38,4.20)
+  {objective: high reward on the ToT};
+
+% left: ToT fan-out
+\draw[pool=fsblue] (0.06,0.18) rectangle (5.20,3.90);
+\fill[fsblue] (0.06,3.54) rectangle (5.20,3.90);
+\node[head] at (0.18,3.72) {Retained fan-out $\Keep$};
+
+% trunk node
+\fill[fsblue!80] (2.60,3.15) circle (0.16);
+\node[font=\tiny\sffamily\bfseries, text=white] at (2.60,3.15) {$u$};
+\draw[fsblue!70, line width=0.7pt] (2.60,2.99) -- (1.00,2.35);
+\draw[fsblue!70, line width=0.7pt] (2.60,2.99) -- (2.60,2.35);
+\draw[fsblue!70, line width=0.7pt] (2.60,2.99) -- (4.20,2.35);
+\draw[fsgray, densely dashed, line width=0.55pt] (2.60,2.99) -- (3.40,2.55);
+\draw[fsred, line width=0.7pt] (3.20,2.65) -- (3.55,2.40);
+
+\node[nodebox=fsgreen] at (1.00,1.95) {$\rho_0$\\[-1pt]{\tiny spine}};
+\node[nodebox=fsorange] at (2.60,1.95) {$\rho_j$\\[-1pt]{\tiny probe}};
+\node[nodebox=fsgreen] at (4.20,1.95) {$\rho_k$\\[-1pt]{\tiny live}};
+\node[note, text=fsgray] at (3.55,2.85) {$\Lambda$ off};
+\node[note, text=fsblue!80!black] at (2.60,1.30)
+  {only $\Keep$ reaches decode};
+\node[note, text=fsgray] at (2.60,0.85)
+  {ToT / ESC / SR / DPTS rewrite $D^{+}$};
+
+% arrow
+\draw[arr, draw=fsorange!75!black] (5.35,2.10) -- (6.20,2.10);
+
+% middle: probe gate
+\draw[pool=fsorange] (6.35,0.18) rectangle (10.90,3.90);
+\fill[fsorange!85!black] (6.35,3.54) rectangle (10.90,3.90);
+\node[head] at (6.47,3.72) {Probe gate \eqref{eq:dec}};
+
+\node[chip, draw=fsorange!70, fill=fsspec, minimum width=3.6cm] at (8.62,2.95)
+  {$y_i=\mathrm{Dec}(x_u\Vert\rho_i,\,t_0)$};
+\node[chip, draw=fsorange!70, fill=white, minimum width=3.6cm] at (8.62,2.35)
+  {$s'_i=\mathrm{Score}_{\mathrm{dec}}(y_i)$};
+\node[chip, draw=fsgray, fill=black!4, text=fsgray, minimum width=3.6cm] at (8.62,1.75)
+  {$i\in\Lambda\Rightarrow d_i{=}0$};
+\node[chip, draw=fsgreen!55!black, fill=fscommit, minimum width=3.6cm] at (8.62,1.15)
+  {$i{=}0$ or $s_i{\ge}\tau_{\mathrm{dec}}\Rightarrow D$};
+\node[chip, draw=fsorange!70, fill=fsspec, minimum width=3.6cm] at (8.62,0.55)
+  {else probe $s'$ vs $\tau_{\mathrm{dec}}$};
+
+% arrow
+\draw[arr, draw=fsgreen!45!black] (11.05,2.10) -- (11.90,2.10);
+
+% right: outcomes
+\draw[pool=fsgreen] (12.05,0.18) rectangle (16.38,3.90);
+\fill[fsgreen!70!black] (12.05,3.54) rectangle (16.38,3.90);
+\node[head] at (12.17,3.72) {Decode length $d_i$};
+
+\node[chip, draw=fsgreen!55!black, fill=fscommit, minimum width=3.5cm] at (14.22,2.95)
+  {high $s'$: keep to $D$};
+\node[chip, draw=fsorange!70, fill=fsspec, minimum width=3.5cm] at (14.22,2.30)
+  {low $s'$: stop at $t_0$};
+\node[chip, draw=fsblue!55, fill=fslight, minimum width=3.5cm] at (14.22,1.65)
+  {$D^{+}=\sum_i d_i$};
+\node[chip, draw=fsgreen!55!black, fill=white, minimum width=3.5cm] at (14.22,1.00)
+  {abort $\to$ spine $b(L{+}\ell_\star)$};
+\node[note, text=fsgray] at (14.22,0.45)
+  {independent of $\Work$; hosts rewrite $D^{+}$};
+\end{tikzpicture}

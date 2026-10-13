@@ -1,0 +1,109 @@
+\section{Introduction}
+\label{sec:intro}
+
+% ---------------------------------------------------------------------------
+% §1 Background — multi-branch agentic execution
+% ---------------------------------------------------------------------------
+Agentic LLM applications interleave generation with branching.
+A coding agent proposes several edits or tool calls for one repository context and executes one~\cite{react,sweagent,openhands}; the same pattern appears when an inference-time controller expands a Tree-of-Thoughts frontier or a self-consistency pool~\cite{tot,selfconsistency,cot}.
+At each step a committed trunk fans out into $k$ residuals, and one becomes the next spine while the rest are discarded~\cite{gsm8k,math,esc}.
+
+% ---------------------------------------------------------------------------
+% §2 Why important — compute / communication cost under PD disaggregation
+% ---------------------------------------------------------------------------
+Branching improves search coverage, but it also multiplies serving cost.
+Under prefill--decode (PD) disaggregation, prompt processing and token generation run on separate instances, and the KV pages produced by prefill must cross a connector before decode can begin~\cite{distserve,splitwise}.
+Every admitted residual may therefore pay residual prefill, KV transfer, and decode before it is discarded, and that cost accumulates as the agent repeats the fan-out.
+
+% ---------------------------------------------------------------------------
+% §3 Existing gap — path pruning vs.\ KV optimization
+% ---------------------------------------------------------------------------
+Prior work improves efficiency mainly along two axes, and neither removes this cost.
+Decode-time path pruners act after generation has started~\cite{esc,specrej,dpts,stoploss}, so residual prefill and the connector transfer have often already been paid.
+Prefix caching shares the trunk when its pages are resident~\cite{vllm,sglang}, but neither rejects a residual nor controls which pages cross the connector.
+Even a fully shared trunk still pays for each residual suffix that is later discarded.
+Pruning therefore remains \emph{stage-local}: each stage can discard only work that has already reached it.
+The goal is a disaggregated design across prefill and decode, a hardware-algorithm co-design for efficient agentic LLM serving.
+
+\begin{figure*}[t]
+\centering
+\resizebox{0.78\textwidth}{!}{\input{fig/fig_core_arch}}
+\caption{\textbf{\sys{} runtime.}
+The controller reads the residency of each residual on the prefill instance ($m_i^{\Pin}$) and the decode instance ($m_i^{\Din}$) together with a lightweight model-free heuristic score $s_i$ (the prefill-side score), and assigns an action $a_i\in\{\Hit,\Admit,\Probe,\Reject\}$ before any kernel runs.
+The prefill instance computes only the non-resident suffix of admitted and probed residuals; the connector carries only the pages the decode instance lacks.
+The decode-side pruner extends a probed residual beyond $t_0$ tokens only if its generated prefix clears $\tau_{\mathrm{dec}}$.
+After commit, only the spine $x_\star$ is retained.}
+\label{fig:system}
+\end{figure*}
+
+% ---------------------------------------------------------------------------
+% §4 Challenges — First/Second/Third draft
+% ---------------------------------------------------------------------------
+% \paragraph{Challenges.}
+% Extending pruning beyond the decode stage in a disaggregated serving system introduces three intertwined challenges.
+% \textit{First}, identifying unnecessary work before execution is difficult because of limited information and distributed KV-cache residency.
+% Specifically, the value of a candidate remains uncertain before further generation, while its KV cache may reside on the prefill instance but be absent from the decode instance, so the missing pages still require cross-instance transfer.
+% This calls for lightweight decisions based on available candidate information and KV residency across both instances.
+% \textit{Second}, early pruning introduces a trade-off between efficiency and reasoning quality.
+% Aggressive pruning reduces computation and communication but risks discarding candidates that could eventually produce correct answers, whereas conservative pruning preserves such candidates at the cost of additional execution.
+% This trade-off motivates selective exploration of uncertain candidates to improve pruning reliability.
+% \textit{Third}, dynamic pruning complicates KV-cache management, because branches share KV state but have different lifetimes.
+% Discarding a branch requires reclaiming its private KV without affecting shared state, while the selected path needs to be retained for subsequent agent steps.
+% This highlights the need for coordinated KV sharing, reclamation, and reuse.
+
+% ---------------------------------------------------------------------------
+% §4 Challenges — pre-execution / efficiency / KV-lifetime draft
+% ---------------------------------------------------------------------------
+% Cutting a residual before its prefill and its connector transfer raises three challenges.
+%
+% \paragraph{Challenge 1: Low-overhead pre-execution decision.}
+% Before any kernel runs, the controller has only the residual text and the KV residency on the prefill and decode instances.
+% A page already resident on the prefill instance may still be missing on the decode instance, in which case the connector must transfer it.
+% From those signals the controller decides whether the residual is skipped, prefilled, transferred, or decoded, and that decision has to stay off the GPU critical path.
+%
+% \paragraph{Challenge 2: Efficiency versus reasoning quality.}
+% Rejecting a residual before prefill removes its prefill, its KV transfer, and its decode, but a weak pre-execution score can still belong to a residual that later reaches a correct answer.
+% Aggressive rejection therefore cuts cost and can lose committed-answer accuracy; retaining every residual preserves that accuracy and pays the full fan-out.
+% Residuals in between need a short subsequent generation before the system spends a full decode budget on them.
+%
+% \paragraph{Challenge 3: Shared KV with unequal lifetimes.}
+% Siblings alias the trunk's KV pages and own private residual pages, yet abort, commit, and the next agent step end those lifetimes at different times.
+% Reclamation must free an aborted residual's private pages while any live sibling still references the trunk.
+% After commit, the spine stays resident, because the next step uses it as the trunk.
+
+% ---------------------------------------------------------------------------
+Achieving this goal, however, presents two key challenges.
+
+\paragraph{Challenge 1: Disaggregated residency.}
+Prefill and decode maintain KV on separate instances, making cache residency inherently stage-specific.
+A page resident on the prefill instance may still be absent from decode and require connector transfer, while decode-side residency can eliminate that transfer.
+The challenge is therefore to efficiently coordinate residency information across the disaggregated prefill and decode instances.
+
+\paragraph{Challenge 2: Prefill-side admission.}
+Once the prefill kernel is launched, the uncached residual suffix is computed and decoder-missing KV pages enter the transfer path.
+Admission therefore needs to be decided beforehand, using only the residual text and the two residency lengths.
+The challenge is to enable reliable prefill-side admission under such limited information with minimal serving-system overhead.
+
+% \paragraph{Challenge 3: Efficiency--quality trade-off.}
+% Rejecting a low-scoring residual saves its prefill, its transfer, and its decode, yet that residual may still produce the committed answer.
+% Keeping the whole fan-out preserves committed-answer accuracy and pays for every sibling.
+% Residuals the pre-execution score leaves uncertain need a short subsequent generation before the system spends a full decode budget.
+
+% ---------------------------------------------------------------------------
+% §5 Disaggregated pruning + contributions
+% ---------------------------------------------------------------------------
+\paragraph{Disaggregated pruning.}
+Our key insight is to disaggregate pruning across the prefill and decode stages (\Cref{fig:system}).
+\sys admits or rejects residuals before prefill from dual-side KV residency and a lightweight score (\S\ref{sec:app}), refines uncertain residuals with a short decode-side probe (\S\ref{sec:split}), and uses a pruning-aware copy-on-write context tree to share the trunk, reclaim aborted pages, and retain the committed spine (\S\ref{sec:kvstate}).
+Existing decode-time pruners operate unchanged on the admitted set.
+
+\paragraph{Results.}
+On Qwen3 models, prefill-side admission reduces computed prefill by $23\%$ at matched committed-answer accuracy; on MATH-500, a $128$-token probe restores coverage to $20/32$ at $0.69\times$ the wall-clock of the full fan-out; and spine retention reduces median peak KV usage to $0.72\times$ that of APC (\S\ref{sec:eval}).
+
+\paragraph{Contributions.}
+Our contributions are summarized as follows:
+\begin{itemize}[leftmargin=*,itemsep=1pt,topsep=2pt]
+\item We formulate pruning in disaggregated agentic serving as a per-residual, cross-stage decision problem, and characterize cache regimes by trunk-amplification multiplicity on the prefill instance and on the connector (\S\ref{sec:problem}).
+\item We propose \emph{disaggregated pruning} and instantiate it in \sys{} with prefill-side admission and decode-side probing; lightweight KV state management supports branch reclamation and spine retention (\S\ref{sec:design}).
+\item We demonstrate that prefill-side admission composes with three existing decode-time pruning methods and reduces computed prefill, and that decode-side probing mitigates the coverage loss of aggressive prefill-side rejection, while preserving committed-answer accuracy (\S\ref{sec:eval}).
+\end{itemize}

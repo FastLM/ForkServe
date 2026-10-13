@@ -1,0 +1,10 @@
+Agentic LLM serving often expands one committed context into multiple candidate continuations, but only one is retained.
+Under prefill--decode disaggregation, every admitted candidate may incur residual prefill and KV transfer before existing decode-time pruning can act.
+Prefix caching removes repeated work on the shared trunk, but does not prevent wasted work on residuals that are later discarded.
+We present \sys, a cross-stage pruning framework that moves branch filtering to the earliest stage with sufficient information.
+Before prefill, \sys combines dual-side KV residency with a lightweight score to reject low-value residuals or admit them directly.
+Uncertain residuals are refined by a short decode-side probe, while a copy-on-write context tree shares the trunk, reclaims aborted pages, and retains the committed spine.
+We evaluate \sys on Qwen3 models and reasoning workloads against vLLM disaggregated serving.
+On GSM8K, prefill-side admission reduces computed prefill by $23\%$ at matched committed-answer accuracy.
+On MATH-500, a $128$-token probe reduces wall-clock to $0.69\times$ while maintaining reasoning quality.
+Spine retention reduces median peak KV usage to $0.72\times$.

@@ -1,10 +1,11 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-In disaggregated agentic serving, the cost of a discarded continuation is incurred at the prefill instance and the connector, whereas existing pruning signals are evaluated at the decode instance.
-\sys is a cross-stage pruning framework: it applies pre-kernel admission from residency and a prefill-side heuristic score, defers uncertain candidates to a decode-side probe with a separately calibrated threshold, and uses a pruning-aware copy-on-write context tree to manage the KV state created by these decisions, retaining only the committed spine.
-The accounting in \Cref{prop:acct} separates the savings that depend on the cache regime from those due to admission.
-Empirically, prefill-side admission is complementary to three decode-time pruners and reduces computed prefill by $23\%$ at matched committed-answer accuracy; at $k{=}16$, a $128$-token probe increases coverage to $20/32$ at $0.69\times$ the full-fan-out wall-clock; and retaining only the committed spine reduces median peak KV usage to $0.72\times$ that of APC.
+We presented \sys, a cross-stage pruning framework for disaggregated prefill--decode agentic serving.
+We move residual admission before any kernel and combine dual-side KV residency with a lightweight prefill-side heuristic score to support progressive pruning.
+\sys withholds rejected residuals from prefill and the connector, defers uncertain candidates to a short decode-side probe, and uses a pruning-aware copy-on-write context tree to retain only the committed spine.
+Across Qwen3-8B and Qwen3-14B on GSM8K and MATH-500, prefill-side admission reduces computed prefill by $23\%$ while maintaining reasoning performance; a $128$-token probe at $k{=}16$ increases coverage to $20/32$ at $0.69\times$ the full-fan-out wall-clock and spine retention reduces median peak KV usage to $0.72\times$ that of APC.
+These results demonstrate the benefit of pruning at the earliest informed stage and of retaining only the committed spine.
 
 \section*{Limitations}
 \label{sec:limitations}
