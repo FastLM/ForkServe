@@ -1,0 +1,10 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \sys, a cross-stage pruning framework for disaggregated prefill--decode agentic serving.
+On Qwen3 models and reasoning workloads, prefill-side admission reduces computed prefill by $23\%$ at matched committed-answer accuracy, a $128$-token probe restores MATH-500 coverage to $20/32$ at $0.69\times$ the full-fan-out wall-clock, and spine retention reduces median peak KV usage to $0.72\times$ that of APC.
+These results show the benefit of filtering branches at the earliest informed stage and of retaining only the committed spine.
+
+\paragraph{Limitations.}
+\label{sec:limitations}
+\sys scores residuals with heuristics fit to reasoning-oriented branches, so the separation we observe may not hold on heterogeneous agent traces, which is an important direction for our future work.
