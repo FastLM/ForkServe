@@ -18,7 +18,7 @@ Whether these engines share a trunk across concurrent siblings depends on the ca
 \sys uses their residency information as an input to admission and their connector as the channel whose volume admission reduces.
 
 \paragraph{Program-, workflow-, and conversation-level scheduling.}
-Autellix schedules by program-level attained service~\cite{autellix}; JITServe allocates just enough bandwidth under heterogeneous SLOs~\cite{jitserve}; Hermes, ThunderAgent, and SAGA schedule at program or workflow granularity~\cite{hermes,thunderagent,saga}; Parrot, Ayo, and Pythia exploit application structure~\cite{parrot,ayo,pythia}.
+Agentix schedules by program-level attained service~\cite{autellix}; JITServe allocates just enough bandwidth under heterogeneous SLOs~\cite{jitserve}; Hermes, ThunderAgent, and SAGA schedule at program or workflow granularity~\cite{hermes,thunderagent,saga}; Parrot, Ayo, and Pythia exploit application structure~\cite{parrot,ayo,pythia}.
 ConServe disaggregates prefill and decode scheduling at conversation granularity based on observed agent behavior~\cite{conserve}.
 These systems decide when and where requests run; \sys decides which sibling continuations become requests and at which stage a discarded one stops consuming resources.
 

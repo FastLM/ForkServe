@@ -62,6 +62,24 @@ On commit, the pages covered by $\mathrm{LCP}(x,x_{v^\star})$ become committed, 
 $\mathrm{Score}_{\mathrm{pre}}$ assigns $0.02$ to a residual containing a substring of $8$--$40$ characters repeated at least four times, $0.22$ to a residual containing malformed mathematical tokens (e.g., runs of asterisks or \texttt{nan}), and otherwise a weighted combination of alphanumeric fraction and character diversity, which is close to $1$ for natural prose.
 $\mathrm{Score}_{\mathrm{dec}}$ applies the same repetition and malformation tests to the generated prefix ($0.04$ and $0.16$), assigns $0.92$ once a finished answer marker (\texttt{\#\#\#\#} followed by a number, or \texttt{\textbackslash boxed\{}) appears, and otherwise uses a weighted combination that also rewards digits and operators.
 Both scorers run on the CPU and do not share parameters.
+\Cref{tab:scores} records the resulting scores on repetitive, malformed, and valid residuals.
+
+\begin{table}[t]
+\centering
+\caption{Scores of the heuristic scorers.
+$\mathrm{Score}_{\mathrm{pre}}$ reads the residual; $\mathrm{Score}_{\mathrm{dec}}$ reads a probe that has not yet produced (malformed) or has produced (valid) a finished answer marker.}
+\label{tab:scores}
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+ & repetitive & malformed & valid \\
+\midrule
+$\mathrm{Score}_{\mathrm{pre}}(\rho_i)$ & $0.02$ & $0.22$ & $1.00$ \\
+$\mathrm{Score}_{\mathrm{dec}}(y_i)$ & $0.04$ & $0.16$ & $0.92$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Ordering of the action.}
 \eqref{eq:action} reads decode-side residency first, because a residual already resident on $\Din$ costs neither prefill nor transfer.

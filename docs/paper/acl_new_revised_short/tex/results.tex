@@ -99,8 +99,8 @@ Probe $t_0{=}128$ & $9$, $24.7$ & $13$, $43.3$ & \win{$20$}, $72.2$ \\
 Stock P/D is request-local, $(\nu^{\Pin},\nu^{\Din}){=}(k,k)$, so both columns equal $10\bigl(kL+\sum_i\ell_i\bigr){=}11520$.
 Withholding the repetitive residual without aliasing leaves three request-local survivors, $(\nu^{\Pin},\nu^{\Din}){=}(3,3)$, and both columns fall to $8640$.
 Of that $2880$-token drop, $(4{-}3)\,L\times 10{=}2560$ is trunk-amplification reduction and $32\times 10{=}320$ is the rejected residual: the two terms of \eqref{eq:xacct}.
-Alias$+$gate shares the trunk and, in this counter, ships only the miss tail of $\Keep$, $10\times 3\times 32{=}960$ tokens ($0.08\times$ stock P/D).
-That column charges $X^{\mathrm{trunk}}{=}0$ rather than the single cold-trunk copy $\nu^{\Din}{=}1$ would transfer, so the $8640{\to}960$ gap is the whole request-local trunk, $3L$ per session, i.e.\ the trunk-transfer term of \eqref{eq:xacct} with nothing left to ship; the residual admission term does not change.
+Alias$+$gate is explicit fork, $(\nu^{\Pin},\nu^{\Din}){=}(1,1)$, so a cold trunk still contributes one copy: each session is $L+3\ell{=}352$, and ten sessions give $W{=}X{=}3520$ ($0.31\times$ stock P/D).
+The $8640{\to}3520$ gap is $(3{-}1)\,L\times 10{=}5120$, the trunk-transfer term of \eqref{eq:xacct}; the residual admission term does not change.
 The same ordering holds at $k\in\{8,16,32\}$ (Appendix~\ref{sec:ablate-idents}).
 
 \begin{table}[t]
@@ -115,12 +115,12 @@ Detailed rates and session parameters in Appendix~\ref{sec:eval-full}.}
 \toprule
  & APC & P/D & P/D$+$rep. & Alias$+$gate \\
 \midrule
-Prefill $\Work$ & $11520$ & \botn{$11520$} & \win{$8640$} & \win{$960$} \\
+Prefill $\Work$ & $11520$ & \botn{$11520$} & \win{$8640$} & \win{$3520$} \\
 \rowcolor{tblalt}
-Connector $\Xfer$ & $0$ & \botn{$11520$} & \win{$8640$} & \win{$960$} \\
-Transfer & $0$ & \botn{$23.0$\,ms} & \win{$17.3$\,ms} & \win{$1.9$\,ms} \\
+Connector $\Xfer$ & $0$ & \botn{$11520$} & \win{$8640$} & \win{$3520$} \\
+Transfer & $0$ & \botn{$23.0$\,ms} & \win{$17.3$\,ms} & \win{$7.0$\,ms} \\
 \rowcolor{tblalt}
-Fan-out & $138.2$\,ms & \botn{$161.3$\,ms} & \win{$121.0$\,ms} & \win{$13.4$\,ms} \\
+Fan-out & $138.2$\,ms & \botn{$161.3$\,ms} & \win{$121.0$\,ms} & \win{$49.3$\,ms} \\
 \bottomrule
 \end{tabular}
 \end{table}

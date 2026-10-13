@@ -8,8 +8,8 @@ Modes
 -----
 * APC              : no connector
 * P/D              : stock disagg, ships kL + sum ell
-* P/D + loop-only  : tau_pre=0.15 on stock prefiller (drop 1/4 residuals)
-* APP (alias+gate) : trunk aliased; connector = miss of Keep
+* P/D + loop-only  : tau_pre=0.15 on stock prefiller (drop one residual)
+* APP (alias+gate) : explicit fork, nu=1; one cold trunk plus the miss of Keep
 
 No GPU. Run:
   python -m experiments.connector_bench
@@ -38,8 +38,12 @@ def account(
     alias_trunk: bool,
     ship: bool,
 ) -> dict[str, Any]:
-    per = (0 if alias_trunk else trunk) + residual
-    work = sessions * kept * per
+    if alias_trunk:
+        # Explicit fork: one shared trunk when it is cold (nu=1).
+        # A warm trunk (trunk==0) contributes nothing, per §3.2.
+        work = sessions * (trunk + kept * residual)
+    else:
+        work = sessions * kept * (trunk + residual)
     xfer = work if ship else 0
     prefill_ms = work * PREFILL_US / 1000.0
     xfer_ms = xfer * XFER_US / 1000.0

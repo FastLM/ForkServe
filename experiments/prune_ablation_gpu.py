@@ -4,9 +4,11 @@ Same fan-out as ``experiments/prefill_prune_bench.py``, measured with vLLM
 instead of the 12 µs/token model.
 
 Each GSM8K question is one session. The trunk is the chat prompt. The k
-thoughts are the residuals: with ``mix=hopeless`` the first half are live
-strategies and the second half are loop / illegal strings a text draft can
-see; ``mix=clean`` is live strategies only. The winner is always thought 0.
+thoughts are the residuals. ``mix=hopeless`` uses one fixed composition for
+every method and threshold: the first ``k // 2`` residuals are live
+strategies, and the remaining ``k // 2`` alternate a repetition loop with
+malformed text (one quarter each when ``k`` is a multiple of 4).
+``mix=clean`` is live strategies only. The winner is always thought 0.
 
 Decoding pruners cut only after a generated prefix:
 
@@ -77,9 +79,12 @@ DEAD = (
 def build_thoughts(k: int, mix: str, family: str = "grade") -> list[str]:
     """k residuals. Winner is index 0, always a live strategy.
 
-    ``family=contest`` uses the contest strategy pack for the live half.
-    The dead half is still the loop string alternating with illegal text,
-    so a text draft can see both.
+    ``mix=hopeless`` keeps a fixed composition across methods and thresholds.
+    The first ``k // 2`` residuals are distinct live strategies. The remaining
+    ``k // 2`` alternate ``DEAD[0]`` (repetition loop) and ``DEAD[1]``
+    (syntactically malformed text), so a multiple of 4 is one half live,
+    one quarter repetitive, and one quarter malformed.
+    ``family=contest`` draws the live strategies from the contest pack.
     """
     if k < 1:
         raise ValueError("k must be positive")

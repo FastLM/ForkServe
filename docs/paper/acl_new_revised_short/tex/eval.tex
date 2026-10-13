@@ -27,7 +27,7 @@ Tree-of-Thoughts forests elsewhere use $k{=}4$ and $D{=}512$ ($2048$ for contest
 
 \paragraph{Connector microbenchmark.}
 \Cref{tab:connector} uses a control-plane accounting over $10$ sessions with $k{=}4$, $L{=}256$, and $\ell_i{=}32$, charging prefill at $12\,\mu\mathrm{s}/\mathrm{token}$ and transfer at $2\,\mu\mathrm{s}/\mathrm{token}$.
-``P/D$+$rep.'' is $\tau_{\mathrm{pre}}{=}0.15$ on a stock (non-aliased) prefiller and withholds repetitive residuals; ``Alias$+$gate'' aliases the trunk and ships only the miss of $\Keep$.
+``P/D$+$rep.'' is $\tau_{\mathrm{pre}}{=}0.15$ on a stock (non-aliased) prefiller and withholds repetitive residuals; ``Alias$+$gate'' aliases the trunk at multiplicity one and ships that cold-trunk copy with the miss of $\Keep$.
 These numbers are not GPU wall-clock.
 
 \subsection{GSM8K Forest on Qwen3-14B}

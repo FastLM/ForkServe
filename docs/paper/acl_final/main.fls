@@ -529,8 +529,6 @@ INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmrc8t.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmri8t.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmri8t.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/helvetic/phvro8t.tfm
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmr8t.vf
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmr8r.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmb8t.vf
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmb8r.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmr8t.vf
@@ -571,6 +569,8 @@ INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/helvetic/phvb8t.vf
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/helvetic/phvb8r.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmb8t.vf
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmb8r.tfm
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmr8t.vf
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmr8r.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmri8t.vf
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmri8r.tfm
 INPUT ./tex/conclusion.tex
@@ -616,8 +616,6 @@ INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/public/inconsolata/t1-zi4b-0.
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/omsptm.fd
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/omsptm.fd
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/omsptm.fd
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/helvetic/phvb8t.vf
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/helvetic/phvb8r.tfm
 INPUT ./fig/fig_pipeline.tex
 INPUT ./fig/fig_pipeline.tex
 INPUT ./fig/fig_pipeline.tex
@@ -633,6 +631,8 @@ INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/ts1phv.fd
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/ts1phv.fd
 INPUT /usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/ts1phv.fd
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/helvetic/phvr8c.tfm
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/helvetic/phvb8t.vf
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/helvetic/phvb8r.tfm
 INPUT ./tex/eval.tex
 INPUT ./tex/eval.tex
 INPUT ./tex/eval.tex
@@ -648,12 +648,12 @@ INPUT ./fig/fig_eval_stack.tex
 INPUT ./fig/fig_eval_stack.tex
 INPUT ./fig/fig_eval_stack.tex
 INPUT fig/fig_eval_stack.tex
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/helvetic/phvr8c.vf
 INPUT ./fig/fig_eval_grow.tex
 INPUT ./fig/fig_eval_grow.tex
 INPUT ./fig/fig_eval_grow.tex
 INPUT ./fig/fig_eval_grow.tex
 INPUT fig/fig_eval_grow.tex
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/helvetic/phvr8c.vf
 INPUT ./fig/fig_eval_admit.tex
 INPUT ./fig/fig_eval_admit.tex
 INPUT ./fig/fig_eval_admit.tex

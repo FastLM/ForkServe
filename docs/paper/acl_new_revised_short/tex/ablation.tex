@@ -7,8 +7,10 @@ GSM8K with $n{=}16$, $D{=}512$, and MATH-500 (first $32$ problems of level $\ge4
 We report computed prefill $W$ (prompt minus cache hits), decode tokens $D^{+}$, wall-clock $T_{\mathrm{e2e}}$ in seconds (trunk warm-up plus fan-out),
 committed accuracy (comm.), and any-finished coverage (any).
 
-\paragraph{Notation for this appendix.}
-\begin{center}
+\begin{table}[t]
+\centering
+\caption{Notation for this appendix.}
+\label{tab:notation}
 \scriptsize
 \begin{tabular}{@{}llp{0.38\columnwidth}@{}}
 \toprule
@@ -25,7 +27,7 @@ $T_{\mathrm{e2e}}$ & s & end-to-end wall-clock \\
 pruner & $\{\mathrm{ESC},\mathrm{SR},\mathrm{DPTS}\}$ & decode-time pruner \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table}
 
 %----------------------------------------------------------------------
 \subsection{Pruner $\times$ $\tau_{\mathrm{pre}}$ $\times$ $k$ (GSM8K)}
@@ -346,9 +348,11 @@ at $k{=}8$ the shorter probe $t_0{=}64$ is the accuracy-preserving point ($16/32
 
 Across \Cref{tab:ablate-thresh,tab:ablate-prefill}, the measured prefill satisfies the predictions of \Cref{prop:acct} for a warm trunk:
 at $k\le16$ the three pruners report identical $W$, and admission removes exactly the computed tokens of the rejected residuals.
-The control-plane connector table of \Cref{tab:connector} extends to wider fan-outs with the same $25\%$ repetitive-only cut on a stock prefiller and the same alias$+$gate reduction to the miss of $\Keep$ ($2240$/$4800$/$9920$ tokens at $k{=}8/16/32$).
+The control-plane connector table of \Cref{tab:connector} extends to wider fan-outs with the same cold trunk and the same one-residual repetitive cut.
+Alias$+$gate keeps $(\nu^{\Pin},\nu^{\Din}){=}(1,1)$, so both columns equal $10\bigl(L+(k{-}1)\ell\bigr)$: $4800$/$7360$/$12480$ tokens at $k{=}8/16/32$.
 Because residual lengths differ across classes, the reductions are not fixed fractions of $W$:
 \begin{center}
+\resizebox{\columnwidth}{!}{%
 \scriptsize
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
@@ -358,7 +362,7 @@ $W$, no admission & $1320$ & $2624$ & $5008$ & $10528$ \\
 $W$, $\tau_{\mathrm{pre}}{=}0.15$ & $1018$ ($0.77$) & $2020$ ($0.77$) & $3848$ ($0.77$) & $7968$ ($0.76$) \\
 $W$, $\tau_{\mathrm{pre}}{=}0.45$ & $732$ ($0.55$) & $1448$ ($0.55$) & $2768$ ($0.55$) & $5408$ ($0.51$) \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{center}
 Repetitive residuals therefore account for about $23\%$ of residual prefill and malformed residuals for a further $22\%$, although each class is a quarter of the residuals.
 Combined rows never exceed the prefill-only $W$ at the same $\tau_{\mathrm{pre}}$.

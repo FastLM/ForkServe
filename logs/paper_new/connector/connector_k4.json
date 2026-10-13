@@ -34,11 +34,11 @@
       "method": "APP (alias+gate)",
       "sessions": 10,
       "kept": 3,
-      "work_tokens": 960,
-      "xfer_tokens": 960,
-      "prefill_ms": 11.52,
-      "xfer_ms": 1.92,
-      "fanout_ms": 13.44
+      "work_tokens": 3520,
+      "xfer_tokens": 3520,
+      "prefill_ms": 42.24,
+      "xfer_ms": 7.04,
+      "fanout_ms": 49.28
     }
   ]
 }

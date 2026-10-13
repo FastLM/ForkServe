@@ -12,11 +12,12 @@ The trunk is warmed before every fan-out (regime R3), so prefill differences ref
 Models include Qwen3-14B, Qwen3-8B, Qwen3-4B, Qwen2.5-Math-1.5B, Llama-3-8B-Instruct, Mistral-7B-Instruct, and DeepSeek-R1-Distill-Llama-8B (R1-8B).
 
 \paragraph{Admission and probe workloads.}
-The admission experiments use Qwen3-8B at $\mathrm{tp}{=}1$ on a \emph{branching mix}: for each problem, half of the $k$ residuals are distinct solution strategies (valid), a quarter are repetitive (repetition loops), and a quarter are syntactically malformed.
+We evaluate Qwen3-8B on branching workloads containing diverse solution candidates together with repetitive and malformed residuals.
 GSM8K uses $n{=}16$ problems and $D{=}512$; MATH-500 uses the first $32$ problems of level $\ge4$ and $D{=}1024$.
 On GSM8K, ``Reject-only'' rejects $s_i{<}0.15$ and admits the rest; ``Blanket'' rejects $s_i{<}0.45$.
 On MATH-500 (no decode-time pruner), ``Probe'' uses $(\tau_{\mathrm{pre}},\tau_{\mathrm{dec}},t_0)=(0.15,0.45,128)$, and its $W$ includes $W^{\mathrm{ext}}$ from evicted probe pages; the committed residual is fixed to index $0$, so committed accuracy is insensitive to admission by construction and coverage is the informative metric.
 Prefill $W$ is identical across decode-time pruners because those pruners act after prefill.
+The residual categories are sampled using a fixed composition across all compared methods and thresholds.
 
 \paragraph{Metrics.}
 Our primary metric is \emph{committed-answer accuracy}: the answer of the candidate the branching controller commits (index $0$ for MATH-500, the pruner's selection for GSM8K) matches the reference.
@@ -27,7 +28,7 @@ Tree-of-Thoughts forests elsewhere use $k{=}4$ and $D{=}512$ ($2048$ for contest
 
 \paragraph{Connector microbenchmark.}
 \Cref{tab:connector} uses a control-plane accounting over $10$ sessions with $k{=}4$, $L{=}256$, and $\ell_i{=}32$, charging prefill at $12\,\mu\mathrm{s}/\mathrm{token}$ and transfer at $2\,\mu\mathrm{s}/\mathrm{token}$.
-``P/D$+$rep.'' is $\tau_{\mathrm{pre}}{=}0.15$ on a stock (non-aliased) prefiller and withholds repetitive residuals; ``Alias$+$gate'' aliases the trunk and ships only the miss of $\Keep$.
+``P/D$+$rep.'' is $\tau_{\mathrm{pre}}{=}0.15$ on a stock (non-aliased) prefiller and withholds repetitive residuals; ``Alias$+$gate'' aliases the trunk at multiplicity one and ships that cold-trunk copy with the miss of $\Keep$.
 These numbers are not GPU wall-clock.
 
 \subsection{GSM8K Forest on Qwen3-14B}
@@ -74,7 +75,6 @@ The same peak ordering ($0.58$--$0.80\times$ APC) holds on seven math datasets f
 \label{sec:eval-grow}
 
 The MATH-500 experiments use Qwen3-8B at $\mathrm{tp}{=}1$, the first $32$ problems of level $4$ or $5$, and $D{=}1024$.
-Half of the $k$ residuals are contest strategies; the other half alternate repetitive and malformed text.
 Coverage counts a problem when some branch that ran all $1024$ tokens is correct; the committed residual is index $0$.
 Aggressive prefill-side rejection (``Blanket'') lowers coverage from $12/32$ to $6/32$ at $k{=}4$ and from $20/32$ to $13/32$ at $k{=}16$, whereas no repetitive residual yields a correct answer at any $k$, so rejecting repetitive residuals does not reduce coverage.
 At $k{=}16$ a $128$-token probe increases coverage to $20/32$ in $72.2$\,s instead of $104.1$\,s.
@@ -94,7 +94,7 @@ Blanket rejection is fast but loses coverage; a $t_0{=}128$ probe increases cove
 \label{sec:eval-prefill}
 
 The GSM8K admission experiments use the branching mix with $n{=}16$ and $D{=}512$ on Qwen3-8B at $\mathrm{tp}{=}1$.
-Because the heuristic scores take three values on this mix (repetitive $0.02$, malformed $0.22$, valid $\approx1$), any $\tau_{\mathrm{pre}}\in(0.02,0.22]$ yields the same admission set as $0.15$, and any $\tau_{\mathrm{pre}}\in(0.22,1)$ yields the same set as $0.45$; a denser threshold sweep therefore adds no information on this workload.
+We additionally evaluate $\tau_{\mathrm{pre}}{=}0.15$ and $0.45$, corresponding to conservative and aggressive admission, respectively.
 \Cref{fig:eval-admit} plots ESC across widths and the three pruners at $k{=}16$.
 At $k{=}8$, reject-only admission keeps ESC at $16/16$ coverage ($10.84$ to $10.19$\,s) and raises Speculative Rejection and DPTS from $15/16$ to $16/16$.
 
@@ -119,7 +119,7 @@ At $\tau_{\mathrm{pre}}{=}0.45$ the pruners terminate no additional residuals, b
 \label{sec:eval-wide}
 
 Admitting only index $0$ is a different policy from scoring every residual.
-At $k{=}16$ and $\tau{=}0.45$, Top-1-only admission prefills $414$ tokens but lowers coverage to $11/16$ under ESC and $9/16$ under Speculative Rejection, while score-based admission of the eight residuals above $\tau$ prefills $2768$ tokens and retains $16/16$ (\Cref{tab:ablate-admit}).
+At $k{=}16$ and $\tau{=}0.45$, Top-1-only admission prefills $414$ tokens but lowers coverage to $11/16$ under ESC and $9/16$ under Speculative Rejection, while score-based admission of the residuals above $\tau$ prefills $2768$ tokens and retains $16/16$ (\Cref{tab:ablate-admit}).
 Committed accuracy is similar for both policies ($9$--$11$ of $16$), so the difference lies in the coverage available to a better selector.
 
 \paragraph{Capacity from measured peaks.}

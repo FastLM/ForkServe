@@ -19,7 +19,7 @@ Whether $k$ siblings share the trunk depends on the cache regime (\S\ref{sec:reg
 \sys uses residency on both instances as an admission input and treats the connector as the channel whose volume admission reduces.
 
 \paragraph{Agentic serving, retention, and copy-on-write.}
-Autellix and Hermes schedule at program granularity~\cite{autellix,hermes}; ThunderAgent and SAGA optimize workflows~\cite{thunderagent,saga}; Parrot, Ayo, and Pythia exploit application structure~\cite{parrot,ayo,pythia}; JITServe allocates bandwidth under heterogeneous SLOs~\cite{jitserve}.
+Agentix and Hermes schedule at program granularity~\cite{autellix,hermes}; ThunderAgent and SAGA optimize workflows~\cite{thunderagent,saga}; Parrot, Ayo, and Pythia exploit application structure~\cite{parrot,ayo,pythia}; JITServe allocates bandwidth under heterogeneous SLOs~\cite{jitserve}.
 InferCept, Continuum, and MORI retain KV across tool calls~\cite{infercept,continuum,mori}; ConServe disaggregates prefill and decode scheduling at conversation granularity from observed agent behavior~\cite{conserve}; Sutradhara overlaps tool execution with the prefill of a single tool-independent prefix~\cite{sutradhara}.
 ForkKV is closest in mechanism: it shares a base KV cache copy-on-write across LoRA agents~\cite{forkkv}.
 CachePrune edits attention state inside one request~\cite{cacheprune}; speculative decoding drafts \emph{output} tokens rather than a future prompt prefix~\cite{speculative,medusa,eagledraft}.

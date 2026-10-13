@@ -7,8 +7,10 @@ GSM8K with $n{=}16$, $D{=}512$, and MATH-500 (first $32$ problems of level $\ge4
 We report computed prefill $W$ (prompt minus cache hits), decode tokens $D^{+}$, wall-clock $T_{\mathrm{e2e}}$ in seconds (trunk warm-up plus fan-out),
 committed accuracy (comm.), and any-finished coverage (any).
 
-\paragraph{Notation for this appendix.}
-\begin{center}
+\begin{table}[t]
+\centering
+\caption{Notation for this appendix.}
+\label{tab:notation}
 \scriptsize
 \begin{tabular}{@{}llp{0.38\columnwidth}@{}}
 \toprule
@@ -25,7 +27,9 @@ $T_{\mathrm{e2e}}$ & s & end-to-end wall-clock \\
 pruner & $\{\mathrm{ESC},\mathrm{SR},\mathrm{DPTS}\}$ & decode-time pruner \\
 \bottomrule
 \end{tabular}
-\end{center}
+\end{table}
+$\tau_{\mathrm{pre}}{=}0$ admits every residual.
+$\tau_{\mathrm{pre}}{=}0.15$ rejects repetitive residuals, and $0.45$ also rejects malformed residuals.
 
 %----------------------------------------------------------------------
 \subsection{Pruner $\times$ $\tau_{\mathrm{pre}}$ $\times$ $k$ (GSM8K)}
@@ -33,9 +37,8 @@ pruner & $\{\mathrm{ESC},\mathrm{SR},\mathrm{DPTS}\}$ & decode-time pruner \\
 
 \Cref{tab:ablate-thresh} is the complete pruner $\times$ threshold $\times$ width matrix.
 At $k\le16$ the three base pruners report identical $W$, since pruners act after prefill (\S\ref{sec:accounting}); at $k{=}32$ measured $W$ diverges slightly across pruners ($10528$/$10176$/$9856$).
-Rejecting repetitive residuals ($\tau_{\mathrm{pre}}{=}0.15$) removes a quarter of the residuals
-and keeps coverage within one problem of the pruner-only baseline.
-Blanket, aggressive prefill-side rejection at $0.45$, removes half of the residuals and is faster, but
+Rejecting repetitive residuals ($\tau_{\mathrm{pre}}{=}0.15$) keeps coverage within one problem of the pruner-only baseline.
+Blanket, aggressive prefill-side rejection at $0.45$, is faster, but
 lowers coverage at $k{=}4$ and $k{=}8$ for ESC.
 
 \begin{table*}[t]
@@ -115,8 +118,7 @@ DPTS
 
 \paragraph{Analysis.}
 At $k\le16$, the three base pruners report identical $W$ and admit counts.
-Admission changes only that column: $3k/4$ residuals are admitted at $\tau_{\mathrm{pre}}{=}0.15$
-(valid and malformed; repetitive residuals rejected) and $k/2$ at $0.45$ (valid only).
+Admission changes only that column: $\tau_{\mathrm{pre}}{=}0.15$ rejects repetitive residuals, and $0.45$ additionally rejects malformed residuals.
 Relative $T_{\mathrm{e2e}}$ cuts under ESC${+}0.15$ grow with $k$:
 $5\%$, $6\%$, $12\%$, and $17\%$ at $k{=}4,8,16,32$.
 Because SR and DPTS already terminate repetitive residuals during decoding, the same threshold yields smaller relative reductions
@@ -127,7 +129,6 @@ Because SR and DPTS already terminate repetitive residuals during decoding, the 
 \label{sec:ablate-prefill}
 
 \Cref{tab:ablate-prefill} isolates the prefill-side score: no decode-time pruning criterion is applied, and every admitted residual is decoded to $D$.
-Since $\mathrm{Score}_{\mathrm{pre}}$ takes three values on the mix (repetitive $0.02$, malformed $0.22$, valid $\approx1$), any $\tau_{\mathrm{pre}}\in(0.02,0.22]$ matches $0.15$ and any $\tau_{\mathrm{pre}}\in(0.22,1)$ matches $0.45$.
 At $k{=}16$, the $\tau_{\mathrm{pre}}{=}0$ row coincides in configuration with the ESC baseline of \Cref{tab:ablate-thresh}; committed accuracy across such runs ranges from $8/16$ to $11/16$.
 
 \begin{table}[t]
@@ -216,7 +217,7 @@ Factor & Setting & admit & stopped & $\Work$ & $D^{+}$ & $T_{\mathrm{e2e}}$ & co
 \label{sec:ablate-admit}
 
 Two policies share $\tau{=}0.45$ but differ in how many residuals are admitted.
-\emph{Score} admits every $i$ with $s_i\ge\tau$ and index $0$ ($k/2$ residuals on the mix).
+\emph{Score} admits every $i$ with $s_i\ge\tau$, including index $0$.
 \emph{Top-1 only} admits index $0$ alone, the current highest-ranked candidate ($W{=}414$).
 \Cref{tab:ablate-admit} shows that Top-1-only admission lowers coverage
 (ESC $11/16$, Speculative Rejection $9/16$ at $k{=}16$), while score-based admission keeps $16/16$.
@@ -346,9 +347,11 @@ at $k{=}8$ the shorter probe $t_0{=}64$ is the accuracy-preserving point ($16/32
 
 Across \Cref{tab:ablate-thresh,tab:ablate-prefill}, the measured prefill satisfies the predictions of \Cref{prop:acct} for a warm trunk:
 at $k\le16$ the three pruners report identical $W$, and admission removes exactly the computed tokens of the rejected residuals.
-The control-plane connector table of \Cref{tab:connector} extends to wider fan-outs with the same $25\%$ repetitive-only cut on a stock prefiller and the same alias$+$gate reduction to the miss of $\Keep$ ($2240$/$4800$/$9920$ tokens at $k{=}8/16/32$).
+The control-plane connector table of \Cref{tab:connector} extends to wider fan-outs with the same cold trunk and the same one-residual repetitive cut.
+Alias$+$gate keeps $(\nu^{\Pin},\nu^{\Din}){=}(1,1)$, so both columns equal $10\bigl(L+(k{-}1)\ell\bigr)$: $4800$/$7360$/$12480$ tokens at $k{=}8/16/32$.
 Because residual lengths differ across classes, the reductions are not fixed fractions of $W$:
 \begin{center}
+\resizebox{\columnwidth}{!}{%
 \scriptsize
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
@@ -358,7 +361,7 @@ $W$, no admission & $1320$ & $2624$ & $5008$ & $10528$ \\
 $W$, $\tau_{\mathrm{pre}}{=}0.15$ & $1018$ ($0.77$) & $2020$ ($0.77$) & $3848$ ($0.77$) & $7968$ ($0.76$) \\
 $W$, $\tau_{\mathrm{pre}}{=}0.45$ & $732$ ($0.55$) & $1448$ ($0.55$) & $2768$ ($0.55$) & $5408$ ($0.51$) \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{center}
-Repetitive residuals therefore account for about $23\%$ of residual prefill and malformed residuals for a further $22\%$, although each class is a quarter of the residuals.
+Repetitive residuals therefore account for about $23\%$ of residual prefill and malformed residuals for a further $22\%$.
 Combined rows never exceed the prefill-only $W$ at the same $\tau_{\mathrm{pre}}$.
