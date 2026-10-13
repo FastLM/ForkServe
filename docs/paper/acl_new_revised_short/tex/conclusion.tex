@@ -7,6 +7,4 @@ These results show the benefit of filtering branches at the earliest informed st
 
 \paragraph{Limitations.}
 \label{sec:limitations}
-\sys currently relies on lightweight heuristic scores for admission and probing, evaluated primarily on reasoning-oriented branching workloads.
-Although the framework is agnostic to the scoring function, the separation observed in our experiments may not generalize directly to heterogeneous agent traces, tool-use trajectories, or less structured residuals.
-Evaluating learned or workload-adaptive scoring policies on large-scale production traces remains an important direction for future work.
+\sys scores residuals with heuristics fit to reasoning-oriented branches, so the separation we observe may not hold on heterogeneous agent traces, which is an important direction for our future work.

@@ -2,7 +2,7 @@
 \label{sec:design}
 
 \Cref{alg:app} instantiates the cross-stage policy.
-\S\ref{sec:app}--\S\ref{sec:kvstate} describe admission, probing, accounting, and KV state; Appendix~\ref{sec:pipeline} gives the multi-step pipeline.
+\S\ref{sec:app}--\S\ref{sec:kvstate} describe admission, probing, the prefill--transfer cost model, and KV state; Appendix~\ref{sec:pipeline} gives the multi-step pipeline.
 
 \subsection{Pre-Kernel Admission}
 \label{sec:app}
@@ -126,7 +126,7 @@ Actions follow \eqref{eq:action}; costs follow \eqref{eq:work}--\eqref{eq:dec}.}
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{Work and Transfer Accounting}
+\subsection{Prefill--Transfer Cost Model}
 \label{sec:accounting}
 
 We compare \sys with a baseline that serves the same fan-out without admission.
@@ -141,7 +141,7 @@ X_{\mathrm{B}}\ge \nu_{\mathrm{B}}^{\Din}\bar L_{\Din}+\textstyle\sum_i(\ell_i-m
 \end{equation}
 \end{assumption}
 
-\begin{proposition}[Accounting]
+\begin{proposition}[Cost Model]
 \label{prop:acct}
 Fix a fan-out and a cache state, and let $\Rej{=}\{i:a_i{=}\Reject\}$, $\mathcal{H}{=}\{i:a_i{=}\Hit\}$, and $\mathcal{E}{=}\{i:a_i{=}\Probe,e_i{=}1\}$.
 Let $(\nu_u^{\Pin},\nu_u^{\Din})$ be the multiplicities \sys uses on that fan-out.
@@ -185,7 +185,7 @@ C_{\mathrm{fan}}={}&C_{\mathrm{pre}}(W)+C_{\mathrm{transfer}}(X)+C_{\mathrm{dec}
 \end{aligned}
 \end{equation}
 where $C_{\mathrm{CoW}}$ and $C_{\mathrm{abort}}$ are page-table operations that alias metadata and do not copy trunk KV.
-This expression is an accounting abstraction rather than a wall-clock predictor, since execution and transfer may overlap; we therefore measure end-to-end latency directly.
+This expression is a cost model rather than a wall-clock predictor, since execution and transfer may overlap; we therefore measure end-to-end latency directly.
 
 \subsection{Pruning-Aware KV State}
 \label{sec:kvstate}

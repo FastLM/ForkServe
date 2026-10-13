@@ -578,14 +578,14 @@ INPUT ./tex/conclusion.tex
 INPUT ./tex/conclusion.tex
 INPUT ./tex/conclusion.tex
 INPUT tex/conclusion.tex
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmb8t.vf
-INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmb8r.tfm
 INPUT ./bibliography.tex
 INPUT ./bibliography.tex
 INPUT ./bibliography.tex
 INPUT ./bibliography.tex
 INPUT bibliography.tex
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmri8t.tfm
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmb8t.vf
+INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmb8r.tfm
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/vf/adobe/times/ptmri8t.vf
 INPUT /usr/local/texlive/2026/texmf-dist/fonts/tfm/adobe/times/ptmri8r.tfm
 INPUT ./tex/problem.tex

@@ -97,8 +97,8 @@ Our key insight is to disaggregate pruning across the prefill and decode stages 
 \sys admits or rejects residuals before prefill from dual-side KV residency and a lightweight score (\S\ref{sec:app}), refines uncertain residuals with a short decode-side probe (\S\ref{sec:split}), and uses a pruning-aware copy-on-write context tree to share the trunk, reclaim aborted pages, and retain the committed spine (\S\ref{sec:kvstate}).
 Existing decode-time pruners operate unchanged on the admitted set.
 
-\paragraph{Results.}
-On Qwen3 models, prefill-side admission reduces computed prefill by $23\%$ at matched committed-answer accuracy; on MATH-500, a $128$-token probe restores coverage to $20/32$ at $0.69\times$ the wall-clock of the full fan-out; and spine retention reduces median peak KV usage to $0.72\times$ that of APC (\S\ref{sec:eval}).
+% \paragraph{Results.}
+% On Qwen3 models, prefill-side admission reduces computed prefill by $23\%$ at matched committed-answer accuracy; on MATH-500, a $128$-token probe restores coverage to $20/32$ at $0.69\times$ the wall-clock of the full fan-out; and spine retention reduces median peak KV usage to $0.72\times$ that of APC (\S\ref{sec:eval}).
 
 \paragraph{Contributions.}
 Our contributions are summarized as follows:
